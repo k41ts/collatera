@@ -38,7 +38,7 @@ describe("Dispute", () => {
     expect(await manager.statusOf(note.noteId)).to.equal(Status.OVERDUE);
     await manager.connect(debtor).openDispute(note.noteId, REASON);
     expect(await manager.statusOf(note.noteId)).to.equal(Status.DISPUTED);
-    await manager.connect(admin).closeDispute(note.noteId, ethers.id("putusan"));
+    await manager.connect(admin).closeDispute(note.noteId, ethers.id("putusan"), false);
     expect(await manager.statusOf(note.noteId)).to.equal(Status.OVERDUE);
   });
 
@@ -74,7 +74,7 @@ describe("Dispute", () => {
     expect(await debtNote.ownerOf(BigInt(note.noteId))).to.equal(ctx.creditor.address); // belum di-burn
     await expect(f.payOnchain(ctx, note.noteId, 1)).to.be.revertedWithCustomError(manager, "AlreadyFullyPaid");
 
-    await expect(manager.connect(admin).closeDispute(note.noteId, ethers.id("putusan")))
+    await expect(manager.connect(admin).closeDispute(note.noteId, ethers.id("putusan"), false))
       .to.emit(manager, "DisputeClosed")
       .and.to.emit(manager, "NoteSettled");
     expect(await manager.statusOf(note.noteId)).to.equal(Status.PAID);
@@ -89,7 +89,7 @@ describe("Dispute", () => {
     await f.payOnchain(ctx, note.noteId, note.totalOwed); // sebelum jatuh tempo
     await time.increaseTo(note.dueDate + 10 * DAY);
     expect(await manager.remaining(note.noteId)).to.equal(0n);
-    await manager.connect(admin).closeDispute(note.noteId, ethers.id("putusan"));
+    await manager.connect(admin).closeDispute(note.noteId, ethers.id("putusan"), false);
     expect(await manager.statusOf(note.noteId)).to.equal(Status.PAID);
   });
 
@@ -97,15 +97,15 @@ describe("Dispute", () => {
     const ctx = await loadFixture(f.deployAll);
     const { manager, admin, creditor, freezer } = ctx;
     const note = await activeNote(ctx);
-    await expect(manager.connect(admin).closeDispute(note.noteId, REASON))
+    await expect(manager.connect(admin).closeDispute(note.noteId, REASON, false))
       .to.be.revertedWithCustomError(manager, "InvalidStatus")
       .withArgs(Status.ACTIVE);
     await manager.connect(creditor).openDispute(note.noteId, REASON);
-    await expect(manager.connect(creditor).closeDispute(note.noteId, REASON)).to.be.revertedWithCustomError(
+    await expect(manager.connect(creditor).closeDispute(note.noteId, REASON, false)).to.be.revertedWithCustomError(
       manager,
       "AccessControlUnauthorizedAccount"
     );
-    await expect(manager.connect(freezer).closeDispute(note.noteId, REASON)).to.be.revertedWithCustomError(
+    await expect(manager.connect(freezer).closeDispute(note.noteId, REASON, false)).to.be.revertedWithCustomError(
       manager,
       "AccessControlUnauthorizedAccount"
     );
@@ -178,7 +178,7 @@ describe("Freeze / integrity checker", () => {
       Status.DISPUTED
     );
     expect(await manager.statusOf(note.noteId)).to.equal(Status.DISPUTED);
-    await manager.connect(admin).closeDispute(note.noteId, REASON);
+    await manager.connect(admin).closeDispute(note.noteId, REASON, false);
     expect(await manager.statusOf(note.noteId)).to.equal(Status.PAID);
   });
 
@@ -369,7 +369,7 @@ describe("Meta-transaction untuk aksi pengguna (gasless seluruh alur)", () => {
     await exec(creditor, "cancelNonce", [123456n]);
     expect(await manager.nonceUsed(creditor.address, 123456n)).to.equal(true);
 
-    await manager.connect(ctx.admin).closeDispute(note.noteId, REASON);
+    await manager.connect(ctx.admin).closeDispute(note.noteId, REASON, false);
     await exec(creditor, "markPaid", [note.noteId]);
     expect(await manager.statusOf(note.noteId)).to.equal(Status.PAID);
   });

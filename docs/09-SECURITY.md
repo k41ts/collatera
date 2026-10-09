@@ -7,6 +7,7 @@
 | Replay signature EIP-712 | Mint ganda / tanda tangan dipakai ulang | Unordered nonce acak per signer (`nonceUsed[signer][nonce]`), `chainId`, `deadline`; nonce ditandai terpakai di contract; `cancelNonce` untuk membatalkan |
 | Replay konfirmasi bayar off-chain | Sisa utang terpotong berkali-kali | Struct `PaymentConfirmation` berisi `proofHash` (unik per piutang), `nonce`, `deadline`; nonce kreditur ditandai terpakai di contract; `settleFull` ikut ditandatangani, jadi penghapusan sisa denda hanya terjadi atas kehendak kreditur dan dibatasi toleransi 1 hari denda |
 | Signature kreditur dipakai ulang setelah refund escrow | Dana kreditur disetor ulang dan piutang yang sudah ditinggalkan jadi aktif | `refundEscrow` membatalkan `creditorNonce` |
+| Debitur membuka dispute saat OVERDUE agar denda berhenti | Denda terhindar tanpa batas waktu; hanya admin yang bisa menutup | Denda tetap berjalan saat DISPUTED; `closeDispute(..., waiveFee)` bisa menghapus porsi dispute; `closeExpiredDispute` bisa dipanggil siapa pun setelah `DISPUTE_WINDOW` 14 hari |
 | Denda dihapus dengan memanggil `accrue()` tiap blok | Denda kecil selalu dibulatkan ke 0 | Sisa pembulatan disimpan di `feeRemainder` dan dibawa ke checkpoint berikutnya |
 | Relayer memberi gas kurang ke forwarder | Permit di dalam try/catch sengaja dibuat gagal | `PiutangForwarder` membatalkan seluruh tx jika gas tersisa < `req.gas / 63` |
 | Double-mint dokumen sama | Satu piutang jadi dua token | `mapping(bytes32 => bool) usedDocHash` di contract + unique index `debt_notes.minted_doc_hash` di DB |

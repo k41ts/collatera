@@ -48,7 +48,7 @@ class User {
       `URI: ${BASE}`, "Version: 1", `Chain ID: ${dep.chainId}`, `Nonce: ${nonce}`, `Issued At: ${new Date().toISOString()}`].join("\n");
     await this.req("POST", "/api/auth/verify", { message, signature: await this.wallet.signMessage(message) });
     await this.req("PATCH", "/api/me", { name });
-    const { devCode } = await this.req("POST", "/api/me/otp", { action: "send", phone: "+6281234567890" });
+    const { devCode } = await this.req("POST", "/api/me/otp", { action: "send", phone: "+62812" + String(Math.floor(Math.random() * 1e8)).padStart(8, "0") });
     await this.req("POST", "/api/me/otp", { action: "verify", code: devCode });
   }
   signTyped(t) { return this.wallet.signTypedData(t.domain, t.types, t.message); }

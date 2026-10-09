@@ -363,6 +363,7 @@ describe("STRESS 4 · serangan signature, replay, dan meta-transaction", functio
       const now = await time.latest();
       const e = await openNote(ctx, { creditor, debtor, schedule: { dueDates: [now + 30 * DAY], amounts: [IDR(500_000)] } });
       const fake = await ethers.deployContract("PiutangForwarder");
+      await fake.setManager(manager.target); // T5: forwarder hanya ke manager; tiruan ini menunjuk manager yang sama
       const data = manager.interface.encodeFunctionData("openDispute", [e.note.noteId, REASON]);
 
       const viaFake = await request(ctx, debtor, data, {}, fake);
@@ -392,7 +393,7 @@ describe("STRESS 4 · serangan signature, replay, dan meta-transaction", functio
       const expired = await request(ctx, debtor, data, { deadline: now - 1 });
       await expect(forwarder.connect(relayer).execute(expired.r, expired.sig)).to.be.revertedWithCustomError(forwarder, "RequestExpired");
       const eoaTarget = await request(ctx, debtor, data, { to: stranger.address });
-      await expect(forwarder.connect(relayer).execute(eoaTarget.r, eoaTarget.sig)).to.be.revertedWithCustomError(forwarder, "TargetNotContract");
+      await expect(forwarder.connect(relayer).execute(eoaTarget.r, eoaTarget.sig)).to.be.revertedWithCustomError(forwarder, "TargetNotAllowed"); // T5: EOA bukan manager
 
       await forwarder.connect(relayer).execute(r, sig);
       await expect(forwarder.connect(relayer).execute(r, sig)).to.be.revertedWithCustomError(forwarder, "InvalidNonce");

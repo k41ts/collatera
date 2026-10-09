@@ -10,6 +10,7 @@ import { txUrl } from "@/lib/chain/config";
 import { splitSig } from "@/lib/chain/eip712";
 import RevisionModal from "./RevisionModal";
 import { useConfirm } from "@/components/Dialog";
+import { NoteDetailSkeleton } from "@/components/Skeleton";
 
 type Payment = { id: string; method: string; amount: string; installment: number; status: string; proofName: string | null; rejectReason: string | null; txHash: string | null; createdAt: string };
 type Detail = {
@@ -43,7 +44,7 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
   const [confirm, confirmDialog] = useConfirm();
 
   if (error) return <Notice tone="error">{error}</Notice>;
-  if (!data) return <p className="text-muted">Memuat…</p>;
+  if (!data) return <NoteDetailSkeleton />;
   const { note: n, me, chain } = data;
   const role = me.role;
   const isLive = LIVE.includes(n.status);

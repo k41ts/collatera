@@ -5,6 +5,7 @@ import { api } from "@/lib/client";
 import { useApi, type Me } from "@/lib/hooks";
 import { fmtRp } from "@/lib/money";
 import { ADDR, txUrl } from "@/lib/chain/config";
+import { ProfileSkeleton } from "@/components/Skeleton";
 
 export default function ProfilePage() {
   const { data, refresh } = useApi<Me>("/api/me");
@@ -24,7 +25,7 @@ export default function ProfilePage() {
     setPhone(data.user.phone ?? "");
   }, [data]);
 
-  if (!data) return <p className="text-muted">Memuat…</p>;
+  if (!data) return <ProfileSkeleton />;
   const u = data.user;
 
   async function run(key: string, fn: () => Promise<unknown>, ok: string, tx?: (r: unknown) => string | undefined) {

@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { LinkButton, StatusPill, fmtDate } from "@/components/ui";
 import { fmtRp } from "@/lib/money";
+import { ActionCardSkeleton, Loading, NoteRowsSkeleton, TileSkeleton } from "@/components/Skeleton";
 import { needsMySignature, useApi, type Me, type NoteSummary } from "@/lib/hooks";
 
 const LIVE = ["ACTIVE", "OVERDUE", "DISPUTED", "FROZEN"];
@@ -38,12 +39,21 @@ export default function Dashboard() {
         </Link>
       )}
 
+      {loading ? (
+        <Loading label="Memuat ringkasan…" className="grid grid-cols-2 gap-3 sm:gap-3.5 xl:grid-cols-4">
+          <TileSkeleton wide big />
+          <TileSkeleton wide />
+          <TileSkeleton />
+          <TileSkeleton />
+        </Loading>
+      ) : (
       <div className="grid grid-cols-2 gap-3 sm:gap-3.5 xl:grid-cols-4">
         <Tile wide big title="Piutang aktif (kamu kreditur)" value={fmtRp(sum(asCreditor))} sub={`${asCreditor.length} piutang · ${asCreditor.filter((n) => n.status === "OVERDUE").length} terlambat`} />
         <Tile wide title="Utang kamu (debitur)" value={fmtRp(sum(asDebtor))} sub={`${asDebtor.length} piutang`} />
         <Tile title="Jatuh tempo 7 hari ke depan" value={String(dueSoon.length)} sub="cicilan" />
         <Tile alert={actions > 0} title="Perlu tindakanmu" value={String(actions)} sub={`${toSign.length} tanda tangan · ${toConfirm.length} konfirmasi dana`} />
       </div>
+      )}
 
       <div className="flex flex-wrap items-start gap-5">
         <section aria-labelledby="judul-daftar" className="flex min-w-0 flex-[999_1_560px] flex-col gap-4 rounded-[20px] border border-line bg-card p-4 sm:p-5">
@@ -52,7 +62,7 @@ export default function Dashboard() {
             <Link href="/app/piutang" className="text-[13px] font-medium text-lav">Lihat semua →</Link>
           </div>
           {loading ? (
-            <p className="text-sm text-muted">Memuat…</p>
+            <NoteRowsSkeleton />
           ) : notes.length === 0 ? (
             <div className="flex flex-col items-start gap-3 py-6">
               <p className="text-sm text-muted">Belum ada surat piutang. Buat yang pertama, atau minta pihak lawan mengundang wallet kamu.</p>
@@ -116,7 +126,13 @@ export default function Dashboard() {
 
         <section aria-labelledby="judul-tindakan" className="flex min-w-0 flex-[1_1_300px] flex-col gap-3">
           <h2 id="judul-tindakan" className="text-lg font-semibold">Perlu tindakan</h2>
-          {actions === 0 && <p className="rounded-2xl border border-line bg-card p-4 text-sm text-muted">Tidak ada yang perlu kamu lakukan sekarang.</p>}
+          {loading && (
+            <Loading label="Memuat tindakan…" className="flex flex-col gap-3">
+              <ActionCardSkeleton />
+              <ActionCardSkeleton />
+            </Loading>
+          )}
+          {!loading && actions === 0 && <p className="rounded-2xl border border-line bg-card p-4 text-sm text-muted">Tidak ada yang perlu kamu lakukan sekarang.</p>}
           {toRevise.map((n) => (
             <ActionCard key={n.id} href={`/app/piutang/${n.id}/ubah`} tag="REVISI DIMINTA" tagCls="bg-butter text-butter-ink" title={n.title} sub={`${n.party}: “${n.revisionNote}”`} cta="Perbaiki draft →" />
           ))}

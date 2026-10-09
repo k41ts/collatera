@@ -10,7 +10,8 @@
     "size": "node scripts/size.js",
     "node": "hardhat node",
     "deploy:local": "hardhat run scripts/deploy.js --network hardhat",
-    "deploy:sepolia": "hardhat run scripts/deploy.js --network sepolia"
+    "deploy:sepolia": "hardhat run scripts/deploy.js --network sepolia",
+    "smoke:sepolia": "hardhat run scripts/smoke.js --network sepolia"
   },
   "devDependencies": {
     "@nomicfoundation/hardhat-toolbox": "^6.1.0",

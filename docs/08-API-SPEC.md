@@ -2,7 +2,9 @@
 
 Base URL: `/api/v1` · Format: JSON · Auth: cookie `session` (JWT httpOnly) hasil SIWE.
 Semua endpoint `/notes/:id/*` hanya untuk kreditur/debitur piutang itu (atau admin saat piutang DISPUTED/FROZEN, lihat [04-ROLE-MATRIX](04-ROLE-MATRIX.md)).
-Nominal dikirim sebagai string rupiah utuh (mis. `"5000000"`); backend mengonversi ke 18 desimal (`× 10^18`) sebelum disimpan dan dikirim ke contract.
+Nominal dikirim sebagai string rupiah utuh (mis. `"5000000"`); backend mengonversi ke satuan terkecil MockIDRX (2 desimal: `× 100`) sebelum disimpan dan dikirim ke contract.
+
+Aksi on-chain yang dilakukan pengguna sendiri (bayar, dispute, markPaid, refund, aksi admin) dikirim sebagai `forwardRequest: { from, to, gas, nonce, deadline, data, signature }` yang ditandatangani pengguna untuk `PiutangForwarder`; backend memeriksa `data` cocok dengan aksi dan piutangnya sebelum relayer memanggil `execute`.
 
 ## Auth
 
@@ -14,7 +16,7 @@ Nominal dikirim sebagai string rupiah utuh (mis. `"5000000"`); backend mengonver
 | POST | `/auth/otp/send` | `{ phone }` | Kirim OTP |
 | POST | `/auth/otp/verify` | `{ phone, code }` | Tandai HP terverifikasi |
 | GET | `/me` | — | Profil + status verifikasi |
-| POST | `/faucet` | — | Testnet saja: relayer mengirim MockIDR ke wallet user (gasless), dibatasi rate limit |
+| POST | `/faucet` | — | Testnet saja: backend memanggil `MockIDRX.mint(user, jumlah)` dengan key owner (deployer), maks 1x per 24 jam per user. (`faucet()` di contract memakai `msg.sender`, jadi tidak gasless) |
 
 ## Surat Piutang
 
@@ -30,20 +32,24 @@ Nominal dikirim sebagai string rupiah utuh (mis. `"5000000"`); backend mengonver
 | POST | `/notes/:id/revise` | Buat versi baru, batalkan signature lama |
 | POST | `/notes/:id/reject` | `{ reason }` → REJECTED |
 | POST | `/notes/:id/cancel` | → CANCELLED |
-| GET | `/notes/:id/typed-data` | Payload EIP-712 untuk ditandatangani |
-| POST | `/notes/:id/sign` | `{ signature, permit? }` → simpan signature; jika lengkap: on-chain → enqueue mint, off-chain → AWAITING_DISBURSEMENT |
-| POST | `/notes/:id/confirm-disbursement` | Debitur konfirmasi terima dana (hanya AWAITING_DISBURSEMENT) → enqueue mint → ACTIVE |
+| GET | `/notes/:id/typed-data` | Payload EIP-712 `Note` + `Schedule` (dan typed data permit untuk kreditur jika pencairan on-chain) |
+| POST | `/notes/:id/sign` | `{ signature, permit? }` → simpan signature. Kreditur on-chain: enqueue `depositEscrow`. Jika dua signature lengkap: on-chain → enqueue `activateOnchain`; off-chain → AWAITING_DISBURSEMENT |
+| GET | `/notes/:id/receipt/typed-data` | Payload `DisbursementReceipt` untuk debitur (pencairan off-chain) |
+| POST | `/notes/:id/confirm-disbursement` | Debitur `{ signature, proofHash }` (hanya AWAITING_DISBURSEMENT) → enqueue `activateOffchain` → ACTIVE |
+| POST | `/notes/:id/escrow/refund` | Kreditur `{ forwardRequest }` → `refundEscrow` (juga dipicu saat cancel/reject/revisi) |
+| POST | `/notes/:id/amendments` | Revisi setelah aktif: `{ signature }` per pihak; jika dua lengkap → enqueue `amend` |
+| POST | `/notes/:id/mark-paid` | Kreditur `{ forwardRequest }` → `markPaid` (mengikhlaskan sisa) |
 
 ## Pembayaran
 
 | Method | Path | Keterangan |
 |--------|------|------------|
-| GET | `/notes/:id/outstanding` | Sisa cicilan, late fee berjalan, total (dibaca dari contract `outstanding()`) |
-| GET | `/notes/:id/repay/typed-data?amount=` | Typed data permit MockIDR + domain & `nonce` Forwarder + `deadline` (lihat [11-BLOCKCHAIN-SPEC](11-BLOCKCHAIN-SPEC.md#bayar-on-chain-lewat-forwarder)) |
-| POST | `/notes/:id/payments/onchain` | `{ amount, permit: { deadline, v, r, s }, forwardRequest: { from, to, value, gas, deadline, data, signature } }` → backend cek `data` = `repay(tokenId, amount, permit)` → enqueue `Forwarder.execute` |
+| GET | `/notes/:id/outstanding` | Sisa utang, tunggakan, denda berjalan (dibaca dari `remaining()`, `overdueAmount()`, `lateFeeOf()`) |
+| GET | `/notes/:id/repay/typed-data?amount=` | Typed data permit MockIDRX + domain & `nonce` PiutangForwarder + `deadline` (lihat [11-BLOCKCHAIN-SPEC](11-BLOCKCHAIN-SPEC.md#gasless)) |
+| POST | `/notes/:id/payments/onchain` | `{ amount, installmentIndex, permit: { deadline, v, r, s }, forwardRequest }` → backend cek `data` = `payOnchain(noteId, amount, installmentIndex, permit)` → enqueue `PiutangForwarder.execute`. `amount` = batas maksimal; contract hanya menarik sisa utang |
 | POST | `/notes/:id/payments/offchain` | Multipart `{ amount, proof }` → PENDING |
-| GET | `/payments/:id/typed-data` | Payload EIP-712 `OffchainPayment` untuk konfirmasi kreditur |
-| POST | `/payments/:id/confirm` | Kreditur `{ signature }` → CONFIRMED |
+| GET | `/payments/:id/typed-data` | Payload EIP-712 `PaymentConfirmation` (noteId, amount, proofHash, installmentIndex, nonce, deadline) untuk konfirmasi kreditur |
+| POST | `/payments/:id/confirm` | Kreditur `{ signature }` → enqueue `recordOffchainPayment` → CONFIRMED setelah event `PaymentRecorded` |
 | POST | `/payments/:id/reject` | Kreditur `{ reason }` → REJECTED |
 
 ## Integrity, Dispute, Admin
@@ -51,11 +57,11 @@ Nominal dikirim sebagai string rupiah utuh (mis. `"5000000"`); backend mengonver
 | Method | Path | Keterangan |
 |--------|------|------------|
 | POST | `/notes/:id/integrity-check` | Hitung ulang → `VERIFIED|TAMPERED` |
-| POST | `/notes/:id/disputes` | `{ reason, evidence[] }` → DISPUTED |
+| POST | `/notes/:id/disputes` | `{ reason, evidence[], forwardRequest }` → `openDispute(noteId, reasonHash)` → DISPUTED |
 | GET | `/admin/disputes` | Admin: daftar dispute |
-| POST | `/admin/disputes/:id/close` | `{ resolution }` → enqueue `setDisputed(false)`; status dihitung ulang (PAID + burn jika sisa nol) |
-| POST | `/admin/notes/:id/freeze` | `{ reason }` |
-| POST | `/admin/notes/:id/unfreeze` | Hanya jika integrity VERIFIED |
+| POST | `/admin/disputes/:id/close` | `{ resolution, forwardRequest }` ditandatangani wallet `ADMIN_ROLE` → `closeDispute`; PAID + burn jika sudah lunas |
+| POST | `/admin/notes/:id/freeze` | `{ reason, forwardRequest }` → `freeze` (piutang belum aktif: DB saja) |
+| POST | `/admin/notes/:id/unfreeze` | `{ resolution, forwardRequest }` → `unfreeze`; hanya jika integrity VERIFIED |
 | GET | `/admin/audit-logs?noteId=` | Audit log |
 | GET | `/notifications` | Daftar notifikasi in-app |
 | POST | `/notifications/:id/read` | Tandai sudah dibaca |

@@ -5,7 +5,7 @@ Durasi target: **5–7 menit**. Dua browser: kiri **Kreditur (Andi)**, kanan **D
 ## Persiapan
 
 - [ ] Dua akun sudah login & OTP terverifikasi.
-- [ ] Wallet Andi punya MockIDR dari faucet (min. Rp10.000.000).
+- [ ] Wallet Andi punya MockIDRX dari faucet (min. Rp10.000.000).
 - [ ] Saldo relayer Sepolia ETH cukup.
 - [ ] Tab Sepolia Etherscan siap.
 - [ ] Satu piutang cadangan sudah ACTIVE (jaga-jaga jika jaringan lambat).

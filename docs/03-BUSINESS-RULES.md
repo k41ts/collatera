@@ -23,14 +23,16 @@ stateDiagram-v2
     OVERDUE --> DISPUTED
     DISPUTED --> ACTIVE: admin tutup (dihitung ulang)
     DISPUTED --> OVERDUE: admin tutup (dihitung ulang)
-    DISPUTED --> PAID: admin tutup, sisa nol (burn di tx setDisputed)
+    DISPUTED --> PAID: admin tutup, sisa nol (burn di tx closeDispute)
     note right of PAID: token di-burn
 ```
 
 **FROZEN** bisa terjadi dari status apa pun saat integrity check menghasilkan TAMPERED. Hanya admin yang bisa membukanya setelah data diperbaiki; piutang kembali ke DISPUTED jika sebelumnya DISPUTED, selain itu status dihitung ulang (ACTIVE/OVERDUE/PAID).
 
-- **Sebelum mint** (DRAFT, PENDING_SIGNATURE, AWAITING_DISBURSEMENT): belum ada token, jadi freeze **hanya di DB** (`status_before_freeze` disimpan, job `mintNote` yang antre dibatalkan). Unfreeze mengembalikan status DB sebelumnya; signature yang sudah lewat `deadline` harus ditandatangani ulang.
-- **Setelah mint**: freeze di DB **dan** on-chain lewat `freeze(tokenId)`; status DB mengikuti event `StatusChanged`.
+- **Sebelum mint** (DRAFT, PENDING_SIGNATURE, AWAITING_DISBURSEMENT): belum ada token, jadi freeze **hanya di DB** (`status_before_freeze` disimpan, job aktivasi yang antre dibatalkan; escrow yang sudah disetor bisa ditarik kreditur dengan `refundEscrow`). Unfreeze mengembalikan status DB sebelumnya; signature yang sudah lewat `deadline` harus ditandatangani ulang.
+- **Setelah mint**: freeze di DB **dan** on-chain lewat `freeze(noteId)`; status DB mengikuti event `StatusChanged`.
+
+OVERDUE **tidak disimpan** di contract: `statusOf()` menghitungnya saat dibaca dan tidak ada event. Backend menyinkronkan status OVERDUE ke DB dengan membaca `statusOf()` secara berkala (tanpa transaksi).
 
 `AWAITING_DISBURSEMENT` hanya ada di DB (belum ada token). Status sejak ACTIVE mengikuti contract lewat indexer.
 
@@ -59,13 +61,13 @@ stateDiagram-v2
 ## Pencairan
 
 - **BR-14** On-chain: kreditur menyetor stablecoin ke escrow saat tanda tangan; dana dilepas ke debitur saat mint.
-- **BR-15** Off-chain: setelah dua tanda tangan, piutang berstatus AWAITING_DISBURSEMENT (hanya di DB). Kreditur mentransfer sendiri; setelah debitur mengonfirmasi terima dana, relayer memanggil `mintNote` dan piutang menjadi ACTIVE. Jika signature kedaluwarsa (14 hari) sebelum konfirmasi, kedua pihak tanda tangan ulang.
-- **BR-16** Penarikan escrow (permit) dan pelepasan ke debitur terjadi atomik dalam satu tx `mintNote`. Jika piutang batal sebelum mint, permit tidak pernah dieksekusi sehingga dana kreditur tidak berpindah.
+- **BR-15** Off-chain: setelah dua tanda tangan, piutang berstatus AWAITING_DISBURSEMENT (hanya di DB). Kreditur mentransfer sendiri; debitur mengonfirmasi terima dana dengan menandatangani `DisbursementReceipt`, lalu relayer memanggil `activateOffchain` (mint) dan piutang menjadi ACTIVE. Jika signature kedaluwarsa (14 hari) sebelum konfirmasi, kedua pihak tanda tangan ulang.
+- **BR-16** Escrow dua langkah: saat kreditur tanda tangan, relayer memanggil `depositEscrow` (dana kreditur pindah ke contract lewat permit). Dana baru dilepas ke debitur saat `activateOnchain`. Jika piutang batal sebelum aktif, kreditur menarik dananya dengan `refundEscrow`, yang sekaligus membatalkan signature kreditur. Backend memicu refund otomatis saat draft dibatalkan, ditolak, atau direvisi.
 
 ## Pembayaran
 
 - **BR-17** Pembayaran on-chain langsung mengurangi sisa utang tanpa input manual.
-- **BR-18** Pembayaran off-chain tercatat hanya setelah kreditur konfirmasi dengan signature EIP-712 (`OffchainPayment`, ber-`nonce` dan `deadline`); kreditur boleh menolak dengan alasan.
+- **BR-18** Pembayaran off-chain tercatat hanya setelah kreditur konfirmasi dengan signature EIP-712 (`PaymentConfirmation`, ber-`nonce`, `deadline`, dan `proofHash` unik); kreditur boleh menolak dengan alasan.
 - **BR-19** Pembayaran sebagian diperbolehkan; dialokasikan berurutan: (1) tunggakan cicilan yang sudah jatuh tempo, tertua dulu, (2) late fee, (3) cicilan berikutnya yang belum jatuh tempo.
 - **BR-20** Sisa utang = sisa cicilan (pokok + bunga) + late fee berjalan. Pembayaran tidak boleh melebihi sisa utang.
 - **BR-21** Ada cicilan lewat jatuh tempo yang belum lunas → OVERDUE (dicek per cicilan, on-chain); kembali ACTIVE setelah tunggakan **dan** late fee dibayar.
@@ -75,7 +77,7 @@ stateDiagram-v2
 ## Dispute & Integrity
 
 - **BR-23** Dispute hanya dari ACTIVE atau OVERDUE, wajib alasan dan bukti.
-- **BR-24** Saat DISPUTED: pembayaran on-chain tetap diterima; burn dan konfirmasi off-chain ditahan. Saat admin menutup dispute, sistem mengirim tx `setDisputed(false)`; jika sisa utang nol, PAID + burn terjadi di tx itu.
+- **BR-24** Saat DISPUTED: pembayaran on-chain tetap diterima; burn dan konfirmasi off-chain ditahan. Dispute dibuka on-chain oleh kreditur/debitur (`openDispute`) dan ditutup admin (`closeDispute`); jika sisa utang nol, PAID + burn terjadi di tx penutupan itu.
 - **BR-25** Admin tidak bisa mengubah nominal atau isi perjanjian; perubahan hanya lewat revisi yang ditandatangani ulang kedua pihak.
 - **BR-26** Hash DB ≠ hash on-chain → TAMPERED → FROZEN otomatis.
 - **BR-27** Piutang FROZEN menolak pembayaran baru, perubahan, dan burn sampai admin membukanya.

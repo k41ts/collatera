@@ -1,141 +1,175 @@
 # 11 — Blockchain Specification
 
-Chain: **Ethereum Sepolia** (`chainId 11155111`) · Solidity `^0.8.24` · OpenZeppelin v5.
+Chain: **Ethereum Sepolia** (`chainId 11155111`) · Solidity `0.8.28` · Hardhat 2 · **tanpa OpenZeppelin** (ECDSA, EIP-712, AccessControl, Pausable, ReentrancyGuard, ERC-721, ERC-2612, ERC-2771, ERC-1271 ditulis sendiri di `piutangchain-contracts/contracts/utils` dan `libraries`).
+
+> Kode ada di [`piutangchain-contracts/`](../piutangchain-contracts/). Dokumen ini mengikuti kode; kalau berbeda, **kode yang benar** dan dokumen perlu diperbarui.
+> Belum diaudit. Primitif kripto tulisan sendiri adalah risiko terbesar; cocok untuk Sepolia/prototipe saja.
 
 ## Contracts
 
-| Contract | Standar | Fungsi |
-|----------|---------|--------|
-| `PiutangNote` | ERC-721, EIP-712, ERC-2771 | Token piutang, escrow, repayment, freeze |
-| `MockIDR` | ERC-20 + EIP-2612 permit | Stablecoin IDR tiruan, 18 desimal, `faucet(to)` khusus `MINTER_ROLE` (relayer) |
-| `Forwarder` | ERC2771Forwarder | Meta-tx gasless lewat relayer |
+| Contract | Fungsi |
+|----------|--------|
+| `DebtManager` | Inti: verifikasi 2 signature EIP-712, escrow, aktivasi + mint, jadwal cicilan, denda, pembayaran, PAID + burn, dispute, freeze, revisi |
+| `DebtNote` | Token piutang ERC-721 **non-transferable** (juga ERC-5192 `locked`). `tokenId = uint256(noteId)`. Hanya `DebtManager` yang boleh mint/burn. `tokenURI` berisi metadata on-chain (noteId, docHash, pokok, jatuh tempo, kreditur, debitur, status) |
+| `MockIDRX` | Stablecoin IDR tiruan: ERC-20 + permit (EIP-2612). **2 desimal** (default deploy). `faucet()` publik, sekali per 24 jam per alamat; `mint()` khusus owner |
+| `PiutangForwarder` | Forwarder ERC-2771 untuk gasless. Mendukung EOA dan smart account (ERC-1271). Seluruh tx batal jika relayer memberi gas kurang dari `req.gas` |
 
-## Data On-chain per Token
+## Status
 
 ```solidity
-enum Status { ACTIVE, OVERDUE, DISPUTED, FROZEN, PAID }
-
-struct Note {
-    bytes32   noteId;
-    bytes32   termsHash;          // EIP-712 struct hash DebtNote
-    bytes32   docHash;
-    address   creditor;
-    address   debtor;
-    uint256   principal;
-    uint64[]  dueDates;           // jadwal cicilan, urut naik, maks 24
-    uint256[] amounts;            // Σ amounts = principal + interestAmount
-    uint256   scheduledPaid;      // total yang sudah dialokasikan ke cicilan
-    uint16    lateFeeBps;         // 0 atau 200 (2% per 30 hari)
-    uint256   lateFeeAccrued;     // late fee yang belum dibayar
-    uint64    lastAccrualAt;      // checkpoint perhitungan late fee
-    Status    status;
-    Status    statusBeforeFreeze;
-}
-
-mapping(uint256 => Note) internal notes;         // tokenId → Note, dibaca lewat getter
-mapping(bytes32 => bool) public usedDocHash;
-mapping(address => mapping(uint256 => bool)) public usedNonces; // unordered nonce, dipakai DebtNote & OffchainPayment
+enum Status { NONE, ACTIVE, OVERDUE, PAID, DISPUTED, FROZEN }
 ```
 
-Tidak ada nama, email, HP, atau isi dokumen di contract.
+- Yang **disimpan**: `ACTIVE`, `PAID`, `DISPUTED`, `FROZEN`. `NONE` = belum ada.
+- **OVERDUE tidak disimpan**: `statusOf()` mengembalikan OVERDUE bila status tersimpan ACTIVE, belum lunas, dan ada tunggakan cicilan **atau** denda belum dibayar. Tidak butuh keeper atau tx `markOverdue`, dan **tidak ada event** saat sebuah piutang menjadi OVERDUE.
+- `DRAFT`, `PENDING_SIGNATURE`, `AWAITING_DISBURSEMENT`, `REJECTED`, `CANCELLED` hanya ada di backend: piutang baru lahir on-chain saat aktivasi.
 
-Turunan yang dihitung contract (view):
+## Struct yang Ditandatangani (EIP-712)
 
-- `dueBy(t)` = Σ `amounts[i]` dengan `dueDates[i] ≤ t` (cicilan yang sudah jatuh tempo).
-- `overdueAmount()` = `max(0, dueBy(now) − scheduledPaid)`.
-- `outstanding()` = `Σ amounts − scheduledPaid + lateFeeAccrued + pendingLateFee()`.
+Domain: `{ name: "PiutangChain", version: "1", chainId, verifyingContract: <DebtManager> }`. Backend dan frontend **wajib** memakai `piutangchain-contracts/helpers/eip712.js` (urutan dan tipe field menentukan hash).
 
-## Status OVERDUE per Cicilan
+```solidity
+struct Note {               // ditandatangani kreditur DAN debitur (pesan identik)
+    bytes32 noteId;         // keccak256(uuid) dari backend
+    uint32  version;
+    address creditor;
+    address debtor;
+    bytes32 docHash;        // canonical payload + hash dokumen pendukung (lihat 05-TECH-SPEC)
+    bytes32 scheduleHash;   // keccak256(abi.encode(uint64[] dueDates, uint256[] amounts))
+    uint256 principal;      // pokok, satuan terkecil token
+    uint256 totalOwed;      // pokok + bunga = jumlah semua cicilan
+    uint16  lateFeeBps;     // 0 atau 200 (2% per 30 hari)
+    uint64  dueDate;        // jatuh tempo cicilan terakhir
+    uint8   disbursement;   // 0 = ONCHAIN (escrow), 1 = OFFCHAIN
+    uint64  deadline;       // batas aktivasi
+    uint256 creditorNonce;  // acak, sekali pakai per signer
+    uint256 debtorNonce;    // acak, sekali pakai per signer
+}
 
-Jadwal cicilan disimpan on-chain saat mint (`dueDates[]`, `amounts[]`, dicek terhadap `scheduleHash` di `terms`), sehingga contract dan DB memakai definisi yang sama:
+struct DisbursementReceipt { bytes32 noteHash; bytes32 proofHash; uint256 amount; uint256 nonce; uint64 deadline; } // debitur
+struct PaymentConfirmation { bytes32 noteId; uint256 amount; bytes32 proofHash; uint32 installmentIndex; uint256 nonce; uint64 deadline; } // kreditur
+struct Amendment { bytes32 noteId; uint32 newVersion; bytes32 newDocHash; bytes32 newScheduleHash; uint256 newTotalOwed; uint16 newLateFeeBps; uint64 newDueDate; uint64 deadline; uint256 creditorNonce; uint256 debtorNonce; } // keduanya
 
-- **OVERDUE** jika `overdueAmount() > 0` atau `lateFeeAccrued > 0` (tunggakan atau late fee belum dibayar).
-- `markOverdue(tokenId)` mengubah ACTIVE → OVERDUE bila kondisi di atas terpenuhi. Cron memanggilnya tiap hari untuk setiap cicilan yang baru lewat jatuh tempo; tx-nya **diantrekan ke relayer worker dan dikirim dengan wallet relayer** (`CHAIN_TXS.kind = overdue`), supaya nonce tx wallet relayer tetap dikelola satu `NonceManager`.
-- Setelah `repay`/`confirmOffchainPayment`, jika kondisi OVERDUE tidak lagi terpenuhi, status kembali OVERDUE → ACTIVE otomatis.
-- Status di DB **tidak** diset sendiri oleh cron; DB mengikuti event `StatusChanged` dari indexer. `INSTALLMENTS.status` di DB hanya tampilan per cicilan.
+struct Schedule { uint64[] dueDates; uint256[] amounts; } // TIDAK ditandatangani; dicocokkan dengan scheduleHash
+```
 
-## Late Fee (2% per Bulan)
+**Nonce unordered:** `nonceUsed[signer][nonce]`. Satu wallet boleh punya banyak piutang menunggu tanda tangan dan banyak konfirmasi sekaligus. `cancelNonce(nonce)` membatalkan signature yang belum dipakai. `receipt.nonce` harus berbeda dari `debtorNonce` (keduanya milik debitur).
 
-- Tarif tetap **2% per 30 hari** (`lateFeeBps = 200`) dari cicilan yang terlambat, **tidak berbunga majemuk**. Nilai `lateFeeBps` hanya boleh `0` (tidak disepakati) atau `200`; selain itu `mintNote` revert `InvalidTerms`.
-- Dihitung pro-rata per detik:
-  `fee = Σ_segmen overdueAmount_segmen × lateFeeBps × durasi_segmen / (10_000 × 30 days)`,
-  dengan segmen dipotong di setiap `dueDate` di antara `lastAccrualAt` dan `now` (maks 24 iterasi, hasilnya tepat walau cron telat).
-- `_accrue()` dijalankan di awal `repay`, `confirmOffchainPayment`, `markOverdue`, `setDisputed`, `freeze`, `unfreeze`, dan fungsi publik `accrue(tokenId)`; lalu `lastAccrualAt = now`.
-- Late fee **tidak bertambah** selama DISPUTED atau FROZEN (segmen itu dilewati).
-- Contoh: cicilan Rp2.500.000 terlambat 15 hari → `2.500.000 × 2% × 15/30` = Rp25.000.
+**Jadwal** (`_validateSchedule`): 1–24 cicilan, panjang `dueDates` = `amounts`, cocok dengan `scheduleHash`, tanggal urut naik, nominal > 0, Σ `amounts` = `totalOwed`, tanggal terakhir = `dueDate`. Saat aktivasi, cicilan pertama harus di masa depan; saat revisi boleh ada tanggal lampau.
+
+## Alur → Fungsi
+
+| Alur (PRD) | Fungsi | Pemanggil |
+|------------|--------|-----------|
+| Kreditur tanda tangan + setor pokok ke escrow | `depositEscrow(note, sigCreditor, permit)` | siapa saja (relayer); otorisasi = signature Note + permit kreditur |
+| Kreditur menarik escrow sebelum aktif | `refundEscrow(note)` | kreditur. **Ikut membatalkan `creditorNonce`**, supaya signature lama tidak bisa dipakai menyetor ulang |
+| Debitur tanda tangan → mint, escrow cair, ACTIVE | `activateOnchain(note, schedule, sigC, sigD)` | siapa saja (relayer) |
+| Pencairan off-chain: debitur konfirmasi terima dana → mint, ACTIVE | `activateOffchain(note, schedule, sigC, sigD, receipt, sigReceipt)` | siapa saja (relayer) |
+| Bayar on-chain | `payOnchain(noteId, amount, installmentIndex, permit)` | debitur (langsung atau lewat forwarder) |
+| Bayar off-chain, dikonfirmasi kreditur | `recordOffchainPayment(confirmation, sigCreditor)` | siapa saja (relayer) |
+| Kreditur mengikhlaskan sisa | `markPaid(noteId)` | kreditur |
+| Revisi setelah aktif | `amend(amendment, schedule, sigC, sigD)` | siapa saja (relayer) |
+| Ajukan / tutup sengketa | `openDispute(noteId, reasonHash)` / `closeDispute(noteId, resolutionHash)` | kreditur atau debitur / `ADMIN_ROLE` |
+| Bekukan / buka | `freeze(noteId, reasonHash)` / `unfreeze(noteId, resolutionHash)` | `ADMIN_ROLE` atau `FREEZER_ROLE` / `ADMIN_ROLE` |
+| Batalkan signature | `cancelNonce(nonce)` | signer itu sendiri |
+| Darurat | `pause()` / `unpause()` | `ADMIN_ROLE` |
+
+### Aturan per fungsi
+
+- **Aktivasi** (dua-duanya): `deadline` belum lewat, field valid (`creditor ≠ debtor`, `principal > 0`, `totalOwed ≥ principal`, `lateFeeBps` 0 atau 200, `dueDate` di masa depan), `noteId` dan `docHash` belum pernah dipakai, dua signature valid, kedua nonce dipakai, jadwal valid. On-chain: escrow harus = `principal`, lalu dana dikirim ke debitur di tx yang sama. Off-chain: `receipt.noteHash` = struct hash Note dan `receipt.amount` = `principal`.
+- **`payOnchain`**: status tersimpan ACTIVE atau DISPUTED. `amount` adalah **batas maksimal**: jika melebihi sisa utang, yang ditarik hanya sisa utang (denda bertambah per detik, jadi "bayar lunas" tidak bisa ditebak tepat). Permit cukup sebesar `amount`.
+- **`recordOffchainPayment`**: status tersimpan ACTIVE (termasuk yang terhitung OVERDUE). `proofHash` unik per piutang. Kelebihan bayar **ditolak** (`Overpayment`), karena kreditur menandatangani nominal yang benar-benar diterima.
+- **`markPaid`**: hanya ACTIVE. Denda dihitung dulu, sisa diikhlaskan (`NoteMarkedPaid.waived`), lalu PAID + burn.
+- **`amend`**: ACTIVE atau DISPUTED; `newVersion` = versi + 1; `newDocHash` belum pernah dipakai; pokok tidak bisa diubah. Denda yang sudah berjalan dihitung dengan syarat lama dan tetap terutang. Jika total baru ≤ yang sudah dibayar dan tidak ada denda → lunas.
+- **`openDispute`**: hanya dari status tersimpan ACTIVE (termasuk OVERDUE). **`closeDispute`** mengembalikan ke ACTIVE (OVERDUE lagi bila masih ada tunggakan); jika lunas selama sengketa, PAID + burn di tx itu.
+- **`freeze`**: dari ACTIVE atau DISPUTED (PAID sudah final). **`unfreeze`** mengembalikan status sebelum beku; jika ACTIVE dan sudah lunas, PAID + burn. Piutang yang belum aktif tidak ada on-chain, jadi freeze sebelum mint hanya di DB (BR, [03-BUSINESS-RULES](03-BUSINESS-RULES.md)).
+- **Pause** menahan deposit, aktivasi, pembayaran, revisi, dan markPaid. Refund escrow, dispute, dan freeze tetap jalan.
+
+| Saat status… | Bayar on-chain | Konfirmasi off-chain | markPaid | Revisi | Dispute baru | Burn |
+|---|:-:|:-:|:-:|:-:|:-:|:-:|
+| ACTIVE / OVERDUE | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ saat lunas |
+| DISPUTED | ✅ | ❌ | ❌ | ✅ | ❌ | ditahan sampai `closeDispute` |
+| FROZEN | ❌ | ❌ | ❌ | ❌ | ❌ | ditahan sampai `unfreeze` |
+| PAID | ❌ | ❌ | ❌ | ❌ | ❌ | sudah |
+
+## Denda (2% per Bulan)
+
+- Tarif tetap **2% per 30 hari** (`LATE_FEE_BPS = 200`, `LATE_FEE_PERIOD = 30 days`) dari **tunggakan** (cicilan yang lewat jatuh tempo dan belum dibayar), tidak majemuk. `lateFeeBps` hanya boleh 0 atau 200 (`InvalidLateFee`).
+- Pro-rata per detik, dipotong per jatuh tempo:
+  `denda = Σ tunggakan_segmen × durasi_segmen × 200 / (10.000 × 30 hari)`.
+- Disimpan di checkpoint (`_accrue`) setiap kali pembayaran, markPaid, revisi, dispute, freeze/unfreeze, atau `accrue(noteId)` publik dipanggil. **Sisa pembagian disimpan di `feeRemainder`** dan dibawa ke checkpoint berikutnya, jadi totalnya sama berapa kali pun `accrue` dipanggil.
+- Denda **tidak berjalan** saat DISPUTED atau FROZEN.
+- Contoh: cicilan Rp400.000 terlambat 15 hari → `400.000 × 2% × 15/30` = Rp4.000.
 
 ## Alokasi Pembayaran
 
-Setiap pembayaran (on-chain atau off-chain) dialokasikan berurutan, sesuai BR-19:
+Setiap pembayaran (on-chain atau off-chain) dialokasikan berurutan (BR-19):
 
-1. **Tunggakan**: cicilan yang sudah jatuh tempo dan belum lunas, tertua dulu (sampai `overdueAmount()`, menambah `scheduledPaid`).
-2. **Late fee**: `lateFeeAccrued`.
-3. **Cicilan berikutnya** yang belum jatuh tempo, tertua dulu (menambah `scheduledPaid`).
+1. **Tunggakan** cicilan yang sudah jatuh tempo, tertua dulu (menambah `scheduledPaid`).
+2. **Denda** (`lateFeeAccrued`).
+3. **Cicilan berikutnya** yang belum jatuh tempo.
 
-Dengan urutan ini late fee lunas sebelum debitur bisa membayar di muka, sehingga status tidak tertahan OVERDUE karena sisa late fee di akhir tenor.
+Sisa utang = `totalOwed − scheduledPaid + denda`. Jika jadi 0 → `fullyPaid`; PAID + burn di tx yang sama, kecuali sedang DISPUTED (burn menunggu `closeDispute`).
 
-`amount` tidak boleh melebihi `outstanding()` setelah `_accrue()` (BR-20). Jika `outstanding()` menjadi 0 → status PAID + burn dalam tx yang sama, kecuali sedang DISPUTED.
+## View
 
-## Fungsi
-
-| Fungsi | Pemanggil | Aturan |
-|--------|-----------|--------|
-| `mintNote(DebtNote terms, uint64[] dueDates, uint256[] amounts, bytes sigCreditor, bytes sigDebtor, Permit escrowPermit)` | `RELAYER_ROLE` | Verifikasi 2 signature, deadline, `usedNonces[creditor][nonce]` dan `usedNonces[debtor][nonce]` belum terpakai lalu ditandai terpakai; `keccak256(abi.encode(dueDates, amounts)) == terms.scheduleHash`; `Σ amounts == principal + interestAmount`; `docHash` belum dipakai; jika `disbursement` on-chain: tarik escrow via permit lalu transfer ke debitur; mint ke kreditur dengan status ACTIVE |
-| `repay(uint256 tokenId, uint256 amount, Permit permit)` | debitur lewat `Forwarder` (ERC-2771, `_msgSender()` = debitur, tx dikirim relayer) | Status ACTIVE/OVERDUE/DISPUTED; `_accrue()`; `amount ≤ outstanding()`; transfer IDR debitur → kreditur; alokasi; perbarui status; jika 0 dan bukan DISPUTED → PAID + burn |
-| `confirmOffchainPayment(OffchainPayment p, bytes sigCreditor)` | `RELAYER_ROLE` | Signature EIP-712 kreditur valid, belum lewat `deadline`, `usedNonces[creditor][nonce]` belum terpakai lalu ditandai terpakai; status ACTIVE/OVERDUE; `_accrue()`; `amount ≤ outstanding()`; alokasi; perbarui status; jika 0 → PAID + burn |
-| `markOverdue(uint256 tokenId)` | siapa saja; dalam praktik cron lewat wallet relayer | `_accrue()`; status ACTIVE dan kondisi OVERDUE terpenuhi |
-| `accrue(uint256 tokenId)` | siapa saja | Checkpoint late fee (untuk tampilan sisa utang yang akurat) |
-| `setDisputed(uint256 tokenId, bool open)` | `GUARDIAN_ROLE` | Buka: `_accrue()`, status ACTIVE/OVERDUE → DISPUTED. Tutup: status dihitung ulang → PAID + burn jika `outstanding() == 0`, OVERDUE jika kondisi OVERDUE terpenuhi, selain itu ACTIVE |
-| `freeze(uint256 tokenId)` / `unfreeze` | `GUARDIAN_ROLE` | Freeze token dari status apa pun selain PAID, simpan `statusBeforeFreeze`. Piutang yang belum di-mint (DRAFT, PENDING_SIGNATURE, AWAITING_DISBURSEMENT) dibekukan di DB saja, lihat [03-BUSINESS-RULES](03-BUSINESS-RULES.md). Unfreeze: jika sebelumnya DISPUTED kembali DISPUTED; selain itu status dihitung ulang seperti saat dispute ditutup |
-| `getNote(uint256 tokenId) view` / `outstanding(uint256 tokenId) view` | siapa saja | Data note termasuk jadwal; sisa utang termasuk late fee berjalan |
-| `verify(uint256 tokenId, bytes32 termsHash, bytes32 docHash) view` | siapa saja | Return `true` jika cocok |
-| `pause()` / `unpause()` | `DEFAULT_ADMIN_ROLE` | Darurat |
-
-Saat DISPUTED: `repay` tetap jalan, tapi burn ditunda; `confirmOffchainPayment` ditolak.
-
-### Bayar on-chain lewat Forwarder
-
-`repay` dipanggil lewat `Forwarder.execute(ForwardRequest)` sehingga debitur menandatangani **dua** pesan EIP-712, keduanya tanpa gas:
-
-1. **Permit** MockIDR (`owner` = debitur, `spender` = PiutangNote, `value` = `amount`, `deadline`).
-2. **ForwardRequest** (`from` = debitur, `to` = PiutangNote, `data` = calldata `repay(tokenId, amount, permit)` yang sudah berisi signature permit, `nonce` = `Forwarder.nonces(debitur)`, `deadline`).
-
-Urutannya harus permit dulu, karena calldata ForwardRequest memuat signature permit. Backend memeriksa bahwa `data` benar-benar `repay` untuk piutang dan nominal yang diminta sebelum relayer mengirim `execute`.
-
-### Siapa memicu burn setelah dispute
-
-Burn yang tertunda dijalankan **di dalam** `setDisputed(tokenId, false)`. Alurnya: admin menutup dispute di `POST /admin/disputes/:id/close` → backend mengantrekan tx `setDisputed(false)` (`CHAIN_TXS.kind = dispute`) → worker mengirimnya dengan wallet `GUARDIAN_PRIVATE_KEY` → jika `outstanding() == 0`, contract set PAID dan burn di tx yang sama, memancarkan `StatusChanged` dan `NoteBurned` → indexer memperbarui DB dan notifier mengirim bukti lunas.
-
-### Pencairan off-chain
-
-Contract **tidak** punya status "menunggu pencairan". Untuk `disbursement = off-chain`, `mintNote` baru dipanggil **setelah** debitur mengonfirmasi terima dana; sebelum itu piutang hanya ada di DB dengan status `AWAITING_DISBURSEMENT` (lihat [03-BUSINESS-RULES](03-BUSINESS-RULES.md)). Karena itu `deadline` signature untuk pencairan off-chain diset 14 hari; jika lewat sebelum dikonfirmasi, kedua pihak menandatangani ulang.
+| Fungsi | Isi |
+|--------|-----|
+| `getNote(noteId)` | `NoteView`: pihak, hash, pokok, total, `lateFeeBps`, `lateFeeAccrued` (termasuk berjalan), `scheduledPaid`, `paid`, `dueDate`, status terhitung, `fullyPaid` |
+| `getSchedule(noteId)` | `dueDates[]`, `amounts[]` |
+| `statusOf(noteId)` | Status termasuk OVERDUE terhitung |
+| `remaining(noteId)` / `requiredAmount(noteId)` | Sisa utang sekarang / sudah dibayar + sisa |
+| `overdueAmount(noteId)` / `lateFeeOf(noteId)` | Tunggakan / denda belum dibayar |
+| `verifyHash(noteId, docHash)` | `true` jika `docHash` hasil hitung ulang sama dengan on-chain |
+| `noteHash(note)` | Struct hash Note (kunci escrow, isi `receipt.noteHash`) |
+| `nonceUsed(signer, nonce)`, `escrowOf(noteHash)`, `noteIdOfDocHash(docHash)`, `proofUsed(noteId, proofHash)` | Mapping publik |
 
 ## Events
 
-```solidity
-event NoteMinted(uint256 indexed tokenId, bytes32 indexed noteId, address creditor, address debtor, bytes32 termsHash, bytes32 docHash);
-event Repaid(uint256 indexed tokenId, uint256 amount, uint256 toInstallments, uint256 toLateFee, uint256 outstanding, bool onchain);
-event LateFeeAccrued(uint256 indexed tokenId, uint256 amount, uint256 totalAccrued);
-event StatusChanged(uint256 indexed tokenId, Status from, Status to);
-event NoteBurned(uint256 indexed tokenId);
-```
-
-## Non-transferable
+Semua event memakai `noteId` (ter-index); **setiap perubahan status tersimpan** memancarkan `StatusChanged`. Kunci idempotency indexer: `(txHash, logIndex)`.
 
 ```solidity
-function _update(address to, uint256 tokenId, address auth) internal override returns (address) {
-    address from = _ownerOf(tokenId);
-    if (from != address(0) && to != address(0)) revert NonTransferable();
-    return super._update(to, tokenId, auth);
-}
+event StatusChanged(bytes32 indexed noteId, Status from, Status to, address indexed actor);
+event EscrowDeposited(bytes32 indexed noteId, bytes32 indexed noteHash, address indexed creditor, uint256 amount);
+event EscrowRefunded(bytes32 indexed noteId, bytes32 indexed noteHash, address indexed creditor, uint256 amount);
+event NoteActivated(bytes32 indexed noteId, address indexed creditor, address indexed debtor, bytes32 noteHash, bytes32 docHash, uint256 principal, uint256 totalOwed, uint64 dueDate, Disbursement disbursement);
+event PaymentRecorded(bytes32 indexed noteId, uint256 amount, uint256 paidTotal, uint256 remaining, bool onchain, uint32 installmentIndex, bytes32 proofHash, uint256 toLateFee);
+event LateFeeAccrued(bytes32 indexed noteId, uint256 amount, uint256 totalAccrued);
+event NoteSettled(bytes32 indexed noteId, uint256 paidTotal);           // PAID + burn
+event NoteMarkedPaid(bytes32 indexed noteId, address indexed creditor, uint256 waived);
+event NoteAmended(bytes32 indexed noteId, uint32 newVersion, bytes32 oldDocHash, bytes32 newDocHash, bytes32 newScheduleHash, uint256 newTotalOwed, uint16 newLateFeeBps, uint64 newDueDate);
+event DisputeOpened(bytes32 indexed noteId, address indexed by, bytes32 reasonHash);
+event DisputeClosed(bytes32 indexed noteId, address indexed by, bytes32 resolutionHash);
+event NoteFrozen(bytes32 indexed noteId, address indexed by, bytes32 reasonHash);
+event NoteUnfrozen(bytes32 indexed noteId, address indexed by, bytes32 resolutionHash, Status restoredTo);
+event NonceCancelled(address indexed signer, uint256 nonce);
 ```
+
+`DebtNote` memancarkan `Transfer` (mint/burn) dan `Locked(tokenId)`.
 
 ## Gasless
 
-- Tanda tangan perjanjian & konfirmasi: **EIP-712 off-chain**, dikirim relayer.
-- Pergerakan stablecoin: **EIP-2612 permit**, sehingga debitur/kreditur tidak perlu `approve` (tx bergas).
-- Relayer membayar gas Sepolia ETH; antrean + retry di BullMQ.
+- Semua aksi pengguna (bayar, dispute, markPaid, cancelNonce, refund) bisa dikirim lewat `PiutangForwarder.execute(ForwardRequest, signature)`: pengguna menandatangani `ForwardRequest { from, to, gas, nonce, deadline, data }`, relayer membayar gas, `_msgSender()` = pengguna. Nonce forwarder berurutan per alamat (`forwarder.nonces(from)`).
+- Aksi yang otorisasinya sudah dari signature (aktivasi, deposit escrow, konfirmasi off-chain, revisi) dikirim relayer langsung, tanpa forwarder.
+- Stablecoin bergerak lewat **permit** (EOA). Permit dibungkus try/catch: kalau di-front-run, transaksi tetap jalan selama allowance cukup. Smart account membayar dengan `approve` dulu lalu `permit.deadline = 0`.
+- Bayar on-chain lewat forwarder: tanda tangani permit dulu, lalu ForwardRequest yang `data`-nya `payOnchain(noteId, amount, installmentIndex, permit)` (calldata memuat signature permit).
 
-## Custom Errors
+## Role
 
-`InvalidSignature`, `SignatureExpired`, `NonceUsed`, `InvalidTerms`, `ScheduleMismatch`, `DocHashUsed`, `NoteFrozen`, `InvalidStatus`, `NotOverdue`, `AmountExceedsOutstanding`, `NonTransferable`.
+| Role | Pemegang | Boleh |
+|------|----------|-------|
+| `DEFAULT_ADMIN_ROLE` | Multisig tim (default: deployer) | Grant/revoke role |
+| `ADMIN_ROLE` | Admin platform | `closeDispute`, `freeze`, `unfreeze`, `pause`, `unpause` |
+| `FREEZER_ROLE` | Wallet integrity checker | **Hanya** `freeze` (kalau bocor, paling buruk piutang dibekukan lalu dibuka admin) |
+
+Tidak ada role relayer: fungsi yang dikirim relayer diotorisasi oleh signature pengguna. Tidak ada fungsi admin untuk mengubah isi perjanjian atau memindahkan dana.
+
+## Errors
+
+`ZeroAddress`, `NoteNotFound`, `NoteAlreadyExists`, `DocHashAlreadyUsed`, `InvalidParties`, `InvalidAmount`, `InvalidDueDate`, `WrongDisbursement`, `SignatureExpired`, `InvalidSignature(signer)`, `NonceAlreadyUsed(signer, nonce)`, `EscrowMissing`, `EscrowAlreadyDeposited`, `NotParty`, `NotCreditor`, `NotDebtor`, `InvalidStatus(current)`, `AlreadyFullyPaid`, `Overpayment(remaining)`, `ProofAlreadyUsed`, `ReceiptMismatch`, `InvalidVersion(expected)`, `UnexpectedTransferAmount`, `InvalidLateFee`, `InvalidSchedule`, `ScheduleMismatch`, plus `AccessControlUnauthorizedAccount`, `EnforcedPause`, dan `Soulbound` (DebtNote).
+
+## Keterbatasan
+
+- Kalau kreditur tidak mau menandatangani konfirmasi padahal debitur sudah transfer, kontrak tidak bisa memaksa. Jalurnya dispute lalu revisi bertanda tangan.
+- Stablecoin fee-on-transfer ditolak (`UnexpectedTransferAmount`). Kontrak tidak upgradeable. ERC-4337/paymaster tidak diimplementasikan.
+- Satu key `ADMIN_ROLE` bisa membekukan piutang mana pun: pakai multisig.

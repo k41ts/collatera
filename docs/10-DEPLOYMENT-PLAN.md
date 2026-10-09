@@ -14,11 +14,11 @@ Target: **Ethereum Sepolia testnet** (mainnet out of scope).
 
 1. **Contract**
    ```bash
-   npx hardhat ignition deploy ignition/modules/PiutangChain.ts --network sepolia --verify
+   cd piutangchain-contracts && npm run deploy:sepolia
    ```
-   Urutan di module Ignition: `MockIDR` → `Forwarder` → `PiutangNote(forwarder, mockIDR)`. Alamat otomatis tersimpan di `ignition/deployments/chain-11155111/deployed_addresses.json`.
-2. **Grant role:** `RELAYER_ROLE` ke wallet relayer, `GUARDIAN_ROLE` ke wallet integrity service dan wallet admin (sesuai [04-ROLE-MATRIX](04-ROLE-MATRIX.md)), `MINTER_ROLE` MockIDR ke wallet relayer (untuk faucet gasless).
-3. **Verifikasi** di Sepolia Etherscan (sudah lewat flag `--verify`); salin alamat ke env frontend & backend.
+   `scripts/deploy.js` men-deploy `MockIDRX` → `PiutangForwarder` → `DebtNote` → `DebtManager(debtNote, idrx, forwarder, admin)`, lalu `DebtNote.setManager(DebtManager)`. Alamat, desimal, dan constructor args tersimpan di `deployments/sepolia.json`.
+2. **Role:** `ADMIN_ADDRESS` mendapat `DEFAULT_ADMIN_ROLE` + `ADMIN_ROLE` (default deployer; pakai multisig untuk produksi). `FREEZER_ADDRESS` (key integrity checker) mendapat `FREEZER_ROLE` otomatis jika admin = deployer; selain itu admin melakukan `grantRole` manual. Tidak ada role untuk relayer.
+3. **Verifikasi** di Sepolia Etherscan: `npx hardhat verify --network sepolia <alamat> <args>` (args dari `deployments/sepolia.json`); salin alamat ke env frontend & backend.
 4. **Database:** `npx prisma migrate deploy`, lalu `npx prisma db seed` untuk akun admin.
 5. **Backend + worker:** deploy API, relayer worker, cron worker, indexer (start block = block deploy).
 6. **Frontend:** set alamat contract + env publik, deploy.
@@ -31,10 +31,12 @@ Target: **Ethereum Sepolia testnet** (mainnet out of scope).
 |----------|--------------|
 | `SEPOLIA_RPC_URL` | backend, worker, script |
 | `CHAIN_ID=11155111` | semua |
-| `PIUTANG_NOTE_ADDRESS`, `MOCK_IDR_ADDRESS`, `FORWARDER_ADDRESS` | backend, worker (frontend memakai versi `NEXT_PUBLIC_*`) |
-| `NEXT_PUBLIC_CHAIN_ID`, `NEXT_PUBLIC_PIUTANG_NOTE_ADDRESS`, `NEXT_PUBLIC_MOCK_IDR_ADDRESS`, `NEXT_PUBLIC_FORWARDER_ADDRESS` | frontend |
+| `DEBT_MANAGER_ADDRESS`, `DEBT_NOTE_ADDRESS`, `MOCK_IDRX_ADDRESS`, `FORWARDER_ADDRESS` | backend, worker (frontend memakai versi `NEXT_PUBLIC_*`) |
+| `NEXT_PUBLIC_CHAIN_ID`, `NEXT_PUBLIC_DEBT_MANAGER_ADDRESS`, `NEXT_PUBLIC_MOCK_IDRX_ADDRESS`, `NEXT_PUBLIC_FORWARDER_ADDRESS` | frontend |
+| `DEPLOYER_PRIVATE_KEY`, `ADMIN_ADDRESS`, `FREEZER_ADDRESS` | `scripts/deploy.js` (lihat `piutangchain-contracts/.env.example`) |
 | `RELAYER_PRIVATE_KEY` | relayer worker (secret) |
-| `GUARDIAN_PRIVATE_KEY` | cron worker / integrity service (secret) |
+| `FREEZER_PRIVATE_KEY` | integrity checker, hanya untuk `freeze` (secret) |
+| `IDRX_OWNER_PRIVATE_KEY` | backend faucet: `MockIDRX.mint` (secret, testnet saja) |
 | `DATABASE_URL`, `REDIS_URL` | backend, worker |
 | `JWT_SECRET`, `STORAGE_ENC_KEY` | backend (secret) |
 | `NEXT_PUBLIC_PRIVY_APP_ID`, `NEXT_PUBLIC_WALLETCONNECT_ID` | frontend |
@@ -51,7 +53,7 @@ Target: **Ethereum Sepolia testnet** (mainnet out of scope).
 ## Smoke Test Setelah Deploy
 
 - [ ] Login SIWE dan login email (embedded wallet) berhasil.
-- [ ] Faucet MockIDR bisa diklaim.
+- [ ] Faucet MockIDRX bisa diklaim.
 - [ ] Buat draft → undang → dua tanda tangan → token ter-mint.
 - [ ] Bayar cicilan on-chain → sisa utang berkurang.
 - [ ] Integrity check menghasilkan VERIFIED.

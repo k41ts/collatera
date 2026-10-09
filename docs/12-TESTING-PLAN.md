@@ -4,7 +4,7 @@
 
 | Level | Tool | Target |
 |-------|------|--------|
-| Smart contract unit | Hardhat 3 + Mocha + Chai + ethers (`npx hardhat test`, `npx hardhat test --coverage`) | Coverage ≥ 90% |
+| Smart contract unit | Hardhat 2 + Mocha + Chai + ethers (`npm test`, `npm run coverage` di `piutangchain-contracts/`) | Semua lulus, coverage ≥ 90% |
 | Static analysis | Slither | Tanpa high/medium |
 | Backend unit & integration | Vitest + Supertest, Postgres test container | Service & endpoint utama |
 | E2E | Playwright + Hardhat Network lokal | Flow utama end-to-end |
@@ -12,34 +12,40 @@
 
 ## Smart Contract
 
+Test ada di `piutangchain-contracts/test/` (81 test, semua lulus per 9 Okt 2026). Helper bersama di `fixture.js`.
+
+| File | Yang dicakup |
+|------|--------------|
+| `00-primitives.test.js` | Hash EIP-712 contract = hash ethers (`helpers/eip712.js`); MockIDRX (ERC-20, permit, tolak signature malleable, faucet cooldown); DebtNote non-transferable (`Soulbound`) dan `tokenURI`; PiutangForwarder (pemanggil asli, replay, revert diteruskan, anti-spoof) |
+| `10-lifecycle.test.js` | Alur penuh: escrow → aktivasi on-chain → bayar → PAID + burn; pencairan off-chain dengan receipt; pembayaran campuran; `markPaid`; OVERDUE dan denda; gasless lewat forwarder |
+| `20-security.test.js` | Satu docHash = satu token, replay nonce, signature salah/kedaluwarsa/domain lain, validasi field, escrow (refund, deposit ganda), batas pembayaran, smart account (ERC-1271), pause dan role |
+| `30-dispute-freeze-amend.test.js` | Dispute (buka/tutup, lunas saat dispute), freeze/unfreeze (termasuk dari DISPUTED), integrity check end-to-end, revisi `amend`, aksi pengguna lewat forwarder |
+| `40-hostile-token.test.js` | Token tanpa return value, token yang return false, fee-on-transfer ditolak, re-entrancy diblok |
+| `50-late-fee-schedule.test.js` | Jadwal on-chain, OVERDUE per cicilan, denda 2%/30 hari per segmen, alokasi tunggakan → denda → cicilan berikutnya, denda berhenti saat DISPUTED/FROZEN, validasi jadwal (maks 24), cek gas forwarder |
+| `60-regressions.test.js` | `refundEscrow` membatalkan signature kreditur; denda tidak bisa dihapus dengan `accrue()` tiap blok (`feeRemainder`) |
+
+Skenario wajib yang harus tetap ada di suite:
+
 | ID | Skenario | Ekspektasi |
 |----|----------|-----------|
-| SC-01 | Mint dengan 2 signature valid | Token ke kreditur, `NoteMinted` |
-| SC-02 | Mint dengan 1 signature / signature salah | Revert `InvalidSignature` |
-| SC-03 | Mint dengan `docHash` yang sudah dipakai | Revert `DocHashUsed` |
+| SC-01 | Aktivasi dengan 2 signature valid | DebtNote ter-mint ke kreditur, `NoteActivated`, status ACTIVE |
+| SC-02 | Satu signature salah / milik akun lain | Revert `InvalidSignature` |
+| SC-03 | `docHash` yang sudah dipakai (termasuk hash lama hasil revisi) | Revert `DocHashAlreadyUsed` |
 | SC-04 | Signature lewat `deadline` | Revert `SignatureExpired` |
-| SC-05 | Replay signature yang sama | Revert (nonce terpakai) |
-| SC-06 | Escrow on-chain saat mint | Saldo debitur bertambah sebesar pokok |
-| SC-07 | `repay` sebagian | `outstanding` berkurang |
-| SC-08 | `repay` melebihi sisa | Revert `AmountExceedsOutstanding` |
-| SC-09 | `repay` sampai nol | Token di-burn, status PAID |
-| SC-09a | `mintNote` dengan jadwal tidak cocok `scheduleHash` / Σ ≠ pokok + bunga / `lateFeeBps` selain 0 atau 200 | Revert `ScheduleMismatch` / `InvalidTerms` |
-| SC-10 | `transferFrom` token | Revert `NonTransferable` |
-| SC-11 | `markOverdue` sebelum/sesudah jatuh tempo cicilan **pertama** | Revert `NotOverdue` / OVERDUE |
-| SC-11a | OVERDUE lalu bayar tunggakan cicilan 1 (cicilan 2 belum jatuh tempo) | Status kembali ACTIVE |
-| SC-11b | Cicilan Rp2.500.000 terlambat 15 hari, `lateFeeBps = 200` | Late fee = Rp25.000 (`outstanding()` bertambah) |
-| SC-11c | Late fee saat DISPUTED/FROZEN | Tidak bertambah selama periode itu |
-| SC-11d | Bayar saat ada late fee, nominal > tunggakan | Urutan alokasi: tunggakan → late fee → cicilan berikutnya (`Repaid.toInstallments/toLateFee`) |
-| SC-12 | `repay` saat FROZEN | Revert `NoteFrozen` |
-| SC-13 | Freeze oleh non-guardian | Revert AccessControl |
-| SC-14 | DISPUTED: repay sampai nol, lalu `setDisputed(false)` | Outstanding 0, burn ditunda; saat ditutup → PAID + `NoteBurned` |
-| SC-15 | Loop 100x jumlah repay acak | Total bayar tidak pernah > pokok + bunga + late fee |
-| SC-16 | `mintNote` sebelum deadline, lalu `time.increaseTo` lewat jatuh tempo (hardhat-network-helpers) | `markOverdue` berhasil |
-| SC-17 | `confirmOffchainPayment` dengan signature yang sama dua kali | Revert (nonce terpakai) |
-| SC-18 | Freeze saat DISPUTED lalu unfreeze | Status kembali DISPUTED |
-| SC-19 | Kreditur punya 2 piutang menunggu tanda tangan; mint piutang A, lalu mint piutang B | Keduanya berhasil (nonce tidak saling membatalkan) |
-| SC-20 | `mintNote` ulang dengan nonce yang sudah terpakai | Revert `NonceUsed` |
-| SC-21 | `repay` lewat `Forwarder.execute` dengan ForwardRequest debitur | Berhasil, `_msgSender()` = debitur; ForwardRequest dari wallet lain ditolak |
+| SC-05 | Nonce dipakai ulang / dibatalkan `cancelNonce` | Revert `NonceAlreadyUsed` |
+| SC-06 | Aktivasi on-chain tanpa escrow | Revert `EscrowMissing` |
+| SC-07 | Refund lalu setor ulang dengan signature lama | Revert `NonceAlreadyUsed` |
+| SC-08 | Bayar on-chain melebihi sisa | Yang ditarik hanya sisa utang; off-chain → revert `Overpayment` |
+| SC-09 | Bayar sampai nol | PAID + burn di tx yang sama |
+| SC-10 | `transferFrom` / `approve` DebtNote | Revert `Soulbound` |
+| SC-11 | Cicilan pertama lewat jatuh tempo | `statusOf` = OVERDUE; bayar tunggakan + denda → ACTIVE lagi |
+| SC-12 | Cicilan Rp400.000 terlambat 15 hari | Denda Rp4.000 |
+| SC-13 | Denda saat DISPUTED/FROZEN | Tidak bertambah |
+| SC-14 | Lunas saat DISPUTED | Burn ditahan; `closeDispute` → PAID + burn |
+| SC-15 | Bayar, konfirmasi off-chain, revisi saat FROZEN | Revert `InvalidStatus` |
+| SC-16 | `freeze` oleh akun tanpa role / `unfreeze` oleh FREEZER | Revert `AccessControlUnauthorizedAccount` |
+| SC-17 | Jadwal tidak cocok `scheduleHash` / Σ ≠ total / > 24 cicilan | Revert `ScheduleMismatch` / `InvalidSchedule` |
+| SC-18 | `accrue()` dipanggil tiap blok | Denda sama dengan tanpa `accrue` |
 
 ## Backend
 
@@ -50,15 +56,16 @@
 | BE-03 | Revisi draft | Versi baru, signature lama `is_valid=false` |
 | BE-04 | Sign dengan HP belum terverifikasi | 403 |
 | BE-05 | Upload file > 10 MB / tipe salah | 422 |
-| BE-06 | Event `Repaid` diproses dua kali | Payment hanya tercatat sekali |
+| BE-06 | Event `PaymentRecorded` diproses dua kali | Payment hanya tercatat sekali (`txHash + logIndex`) |
 | BE-07 | Kreditur konfirmasi bayar off-chain | Payment CONFIRMED, alokasi ke cicilan tertua |
-| BE-08 | Cron overdue | `markOverdue` diantrekan ke relayer; status DB OVERDUE hanya setelah event `StatusChanged` + notifikasi ke kedua pihak |
+| BE-08 | Cron overdue | Membaca `statusOf()`; status DB berubah ke OVERDUE (tanpa tx) + notifikasi ke kedua pihak tepat sekali |
 | BE-09 | Cron reminder | Notifikasi H-3 dan H-0 terkirim tepat sekali |
 | BE-10 | Admin coba PATCH nominal | 403 |
-| BE-11 | Pencairan off-chain | Setelah 2 signature → AWAITING_DISBURSEMENT, belum ada mint; setelah `confirm-disbursement` → mint → ACTIVE |
+| BE-11 | Pencairan off-chain | Setelah 2 signature → AWAITING_DISBURSEMENT, belum ada mint; setelah debitur menandatangani receipt → `activateOffchain` → ACTIVE |
 | BE-12 | `confirm-disbursement` oleh kreditur / di status lain | 403 / 409 |
 | BE-13 | `payments/onchain` dengan `forwardRequest.data` untuk piutang/nominal lain | 422 `FORWARD_REQUEST_INVALID` |
-| BE-14 | TAMPERED saat PENDING_SIGNATURE | FROZEN di DB saja, job mint dibatalkan, tidak ada tx `freeze` |
+| BE-14 | TAMPERED saat PENDING_SIGNATURE | FROZEN di DB saja, job aktivasi dibatalkan, tidak ada tx `freeze` |
+| BE-15 | Draft on-chain dibatalkan/ditolak/direvisi setelah kreditur setor escrow | `refundEscrow` dikirim, dana kembali, signature lama tidak bisa dipakai |
 
 ## Integrity / Tamper Detection
 

@@ -135,7 +135,7 @@ erDiagram
     CHAIN_TXS {
         uuid id PK
         uuid note_id FK
-        string kind "mint|repay|confirm|overdue|dispute|freeze|unfreeze|faucet"
+        string kind "deposit|refund|activate|pay|confirm|amend|mark_paid|dispute_open|dispute_close|freeze|unfreeze|faucet"
         string status "QUEUED|SENT|MINED|FAILED"
         string tx_hash
         int attempts
@@ -169,7 +169,8 @@ erDiagram
 
 - `NOTE_VERSIONS` immutable: revisi = baris baru, `is_current` dipindah. `doc_hash` **tidak** unik di tabel ini karena revisi yang hanya mengubah jadwal memakai dokumen yang sama.
 - Anti double-mint di DB: `DEBT_NOTES.minted_doc_hash` unik, diisi dari versi yang di-mint (cermin `usedDocHash` di contract).
-- Burn terjadi di dalam tx `repay`/`confirm` (atau saat dispute ditutup), jadi tidak ada `kind` burn terpisah di `CHAIN_TXS`.
+- Burn terjadi di dalam tx pembayaran/konfirmasi/`markPaid` (atau saat dispute ditutup / unfreeze), jadi tidak ada `kind` burn terpisah di `CHAIN_TXS`.
+- `DEBT_NOTES.token_id` = `uint256(chain_note_id)`.
 - `PAYMENTS (tx_hash, log_index)` unik untuk idempotency event on-chain.
-- `DEBT_NOTES.status` ACTIVE/OVERDUE/PAID dan `INSTALLMENTS.paid_amount` diperbarui indexer dari event (`StatusChanged`, `Repaid`), bukan dari cron.
+- `DEBT_NOTES.status` ACTIVE/PAID/DISPUTED/FROZEN diperbarui indexer dari `StatusChanged`; OVERDUE disinkronkan cron dengan membaca `statusOf()` (contract tidak memancarkan event untuk OVERDUE). `INSTALLMENTS.paid_amount` diturunkan dari `scheduledPaid` di `getNote()` (alokasi tertua dulu) setelah event `PaymentRecorded`.
 - `AUDIT_LOGS` append-only (tanpa UPDATE/DELETE lewat RLS atau trigger).

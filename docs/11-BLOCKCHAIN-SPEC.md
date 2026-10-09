@@ -12,7 +12,7 @@ Chain: **Ethereum Sepolia** (`chainId 11155111`) · Solidity `0.8.28` · Hardhat
 | `DebtManager` | Inti: verifikasi 2 signature EIP-712, escrow, aktivasi + mint, jadwal cicilan, denda, pembayaran, PAID + burn, dispute, freeze, revisi |
 | `DebtNote` | Token piutang ERC-721 **non-transferable** (juga ERC-5192 `locked`). `tokenId = uint256(noteId)`. Hanya `DebtManager` yang boleh mint/burn. `tokenURI` berisi metadata on-chain (noteId, docHash, pokok, jatuh tempo, kreditur, debitur, status) |
 | `MockIDRX` | Stablecoin IDR tiruan: ERC-20 + permit (EIP-2612). **2 desimal** (default deploy). `faucet()` publik, sekali per 24 jam per alamat; `mint()` khusus owner |
-| `PiutangForwarder` | Forwarder ERC-2771 untuk gasless. Mendukung EOA dan smart account (ERC-1271). Seluruh tx batal jika relayer memberi gas kurang dari `req.gas` |
+| `PiutangForwarder` | Forwarder ERC-2771 untuk gasless. Mendukung EOA dan smart account (ERC-1271). Seluruh tx batal jika relayer memberi gas kurang dari `req.gas`. Hanya meneruskan ke `DebtManager` (`manager`, diset **satu kali** oleh deployer lewat `setManager`; `to` lain → `TargetNotAllowed`). Data return/revert target yang disalin dibatasi `MAX_RETURN_BYTES` = 4096 |
 
 ## Status
 
@@ -169,7 +169,7 @@ Tidak ada role relayer: fungsi yang dikirim relayer diotorisasi oleh signature p
 
 ## Errors
 
-`ZeroAddress`, `NoteNotFound`, `NoteAlreadyExists`, `DocHashAlreadyUsed`, `InvalidParties`, `InvalidAmount`, `InvalidDueDate`, `WrongDisbursement`, `SignatureExpired`, `InvalidSignature(signer)`, `NonceAlreadyUsed(signer, nonce)`, `EscrowMissing`, `EscrowAlreadyDeposited`, `NotParty`, `NotCreditor`, `NotDebtor`, `InvalidStatus(current)`, `AlreadyFullyPaid`, `Overpayment(remaining)`, `ProofAlreadyUsed`, `ReceiptMismatch`, `InvalidVersion(expected)`, `UnexpectedTransferAmount`, `InvalidLateFee`, `InvalidSchedule`, `ScheduleMismatch`, `SettleToleranceExceeded(shortfall, tolerance)`, `DisputeWindowNotElapsed(availableAt)`, plus `AccessControlUnauthorizedAccount`, `EnforcedPause`, dan `Soulbound` (DebtNote).
+`ZeroAddress`, `NoteNotFound`, `NoteAlreadyExists`, `DocHashAlreadyUsed`, `InvalidParties`, `InvalidAmount`, `InvalidDueDate`, `WrongDisbursement`, `SignatureExpired`, `InvalidSignature(signer)`, `NonceAlreadyUsed(signer, nonce)`, `EscrowMissing`, `EscrowAlreadyDeposited`, `NotParty`, `NotCreditor`, `NotDebtor`, `InvalidStatus(current)`, `AlreadyFullyPaid`, `Overpayment(remaining)`, `ProofAlreadyUsed`, `ReceiptMismatch`, `InvalidVersion(expected)`, `UnexpectedTransferAmount`, `InvalidLateFee`, `InvalidSchedule`, `ScheduleMismatch`, `SettleToleranceExceeded(shortfall, tolerance)`, `DisputeWindowNotElapsed(availableAt)`, forwarder: `TargetNotAllowed`, `NotDeployer`, `ManagerAlreadySet`, plus `AccessControlUnauthorizedAccount`, `EnforcedPause`, dan `Soulbound` (DebtNote).
 
 ## Keterbatasan
 

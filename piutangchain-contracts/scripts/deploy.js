@@ -29,6 +29,8 @@ async function main() {
   await manager.waitForDeployment();
 
   await (await debtNote.setManager(manager.target)).wait();
+  // Forwarder hanya boleh meneruskan ke DebtManager (diset sekali).
+  await (await forwarder.setManager(manager.target)).wait();
 
   if (process.env.FREEZER_ADDRESS) {
     if (admin !== deployer.address) {

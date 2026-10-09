@@ -35,6 +35,8 @@ contract DebtManager is IDebtManager, EIP712, AccessControl, ReentrancyGuard, Pa
     uint16 public constant LATE_FEE_BPS = 200;
     uint256 public constant LATE_FEE_PERIOD = 30 days;
     uint256 public constant MAX_INSTALLMENTS = 24;
+    /// @dev Toleransi `settleFull`: sisa denda yang boleh dihapus paling banyak sebesar denda 1 hari dari tunggakan saat ini.
+    uint256 public constant SETTLE_TOLERANCE = 1 days;
     /// @dev Batas nominal (jauh di atas kebutuhan nyata). Mencegah overflow di perhitungan denda
     ///      (tunggakan × detik × bps) yang bisa membuat freeze, dispute, dan pembayaran selalu revert.
     uint256 public constant MAX_AMOUNT = type(uint128).max;
@@ -49,7 +51,7 @@ contract DebtManager is IDebtManager, EIP712, AccessControl, ReentrancyGuard, Pa
         keccak256("DisbursementReceipt(bytes32 noteHash,bytes32 proofHash,uint256 amount,uint256 nonce,uint64 deadline)");
     bytes32 public constant PAYMENT_TYPEHASH =
         keccak256(
-            "PaymentConfirmation(bytes32 noteId,uint256 amount,bytes32 proofHash,uint32 installmentIndex,uint256 nonce,uint64 deadline)"
+            "PaymentConfirmation(bytes32 noteId,uint256 amount,bytes32 proofHash,uint32 installmentIndex,uint256 nonce,uint64 deadline,bool settleFull)"
         );
     bytes32 public constant AMENDMENT_TYPEHASH =
         keccak256(
@@ -83,6 +85,7 @@ contract DebtManager is IDebtManager, EIP712, AccessControl, ReentrancyGuard, Pa
     error InvalidLateFee();
     error InvalidSchedule();
     error ScheduleMismatch();
+    error SettleToleranceExceeded(uint256 shortfall, uint256 tolerance);
 
     // ----------------------------------------------------------------- events
     /// @dev Satu event untuk SEMUA perubahan status (audit log / indexer). Detail ada di event spesifik.
@@ -111,6 +114,8 @@ contract DebtManager is IDebtManager, EIP712, AccessControl, ReentrancyGuard, Pa
         uint256 toLateFee
     );
     event LateFeeAccrued(bytes32 indexed noteId, uint256 amount, uint256 totalAccrued);
+    /// @dev Sisa denda yang dihapus karena kreditur menandatangani `settleFull` (pelunasan off-chain).
+    event LateFeeWaived(bytes32 indexed noteId, uint256 amount);
     event NoteSettled(bytes32 indexed noteId, uint256 paidTotal);
     event NoteMarkedPaid(bytes32 indexed noteId, address indexed creditor, uint256 waived);
     event NoteAmended(
@@ -311,8 +316,26 @@ contract DebtManager is IDebtManager, EIP712, AccessControl, ReentrancyGuard, Pa
         );
         _useNonce(r.creditor, c.nonce);
         proofUsed[c.noteId][c.proofHash] = true;
+        if (c.settleFull) _waiveSettleShortfall(c.noteId, r, c.amount);
 
         _recordPayment(c.noteId, r, c.amount, c.installmentIndex, false, c.proofHash, r.creditor);
+    }
+
+    /// @dev `settleFull`: konfirmasi yang ditandatangani senilai remaining() tertinggal beberapa detik saat dieksekusi,
+    ///      sehingga denda yang bertambah di antaranya menyisakan sisa kecil. Jika `amount` menutup SELURUH sisa cicilan
+    ///      dan selisih ke total sisa (hanya berupa denda) ≤ toleransi, selisih itu dihapus supaya pembayaran ini melunasi.
+    ///      Pokok/cicilan tidak pernah dihapus. Jika syarat tidak terpenuhi → revert (kreditur sudah menyatakan lunas penuh).
+    function _waiveSettleShortfall(bytes32 noteId, Record storage r, uint256 amount) private {
+        _accrue(noteId, r); // setelah ini denda berjalan = 0, jadi seluruh denda ada di lateFeeAccrued
+        uint256 left = _outstanding(r);
+        if (amount >= left) return; // sudah menutup semuanya (kelebihan tetap ditolak oleh _recordPayment)
+        uint256 shortfall = left - amount;
+        uint256 tolerance = (_arrears(r) * r.lateFeeBps * SETTLE_TOLERANCE) / (BPS * LATE_FEE_PERIOD);
+        if (amount < r.totalOwed - r.scheduledPaid || shortfall > tolerance) {
+            revert SettleToleranceExceeded(shortfall, tolerance);
+        }
+        r.lateFeeAccrued -= shortfall;
+        emit LateFeeWaived(noteId, shortfall);
     }
 
     /// @notice Kreditur menandai lunas (mengikhlaskan sisa). Hanya saat ACTIVE.

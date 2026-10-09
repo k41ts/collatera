@@ -122,3 +122,167 @@ describe("T2: pelunasan off-chain dengan settleFull", () => {
     ).to.be.revertedWithCustomError(manager, "InvalidSignature");
   });
 });
+
+describe("T3: dispute tidak boleh menjadi alat menghindari denda (BR-21a)", () => {
+  const REASON = ethers.id("alasan");
+  const RES = ethers.id("putusan");
+  const DEN = 10_000n * 30n * 86400n;
+  // denda murni dari satu cicilan Rp1.100.000 (110.000.000 satuan) yang sudah jatuh tempo, selama `secs` detik
+  const feeFor = (secs) => (110_000_000n * 200n * BigInt(secs)) / DEN;
+
+  /** Note satu cicilan; waktu dimajukan ke `lateDays` hari setelah jatuh tempo. */
+  async function overdue(ctx, lateDays) {
+    const note = await f.buildNote(ctx);
+    await f.activateOnchain(ctx, note);
+    await time.increaseTo(Number(note.dueDate) + lateDays * DAY);
+    return note;
+  }
+  async function openAt(ctx, note, who, t) {
+    await time.setNextBlockTimestamp(t);
+    await ctx.manager.connect(who).openDispute(note.noteId, REASON);
+  }
+
+  it("debitur membuka dispute saat OVERDUE lalu diam 100 hari: denda TERUS naik", async () => {
+    const ctx = await loadFixture(f.deployAll);
+    const { manager, debtor } = ctx;
+    const note = await overdue(ctx, 5);
+    const t0 = (await time.latest()) + 1;
+    await openAt(ctx, note, debtor, t0);
+    expect(await manager.statusOf(note.noteId)).to.equal(Status.DISPUTED);
+    const before = await manager.lateFeeOf(note.noteId);
+
+    await time.increase(100 * DAY);
+    const now = await time.latest();
+    const after = await manager.lateFeeOf(note.noteId);
+    expect(after).to.be.gt(before + feeFor(99 * DAY));
+    const elapsed = now - Number(note.dueDate);
+    expect(after).to.be.gte(feeFor(elapsed));
+    expect(after).to.be.lte(feeFor(elapsed + 3));
+  });
+
+  it("admin menutup dengan waiveFee: tepat porsi periode dispute dihapus, denda sebelum dispute utuh", async () => {
+    const ctx = await loadFixture(f.deployAll);
+    const { manager, creditor, admin } = ctx;
+    const note = await overdue(ctx, 15);
+    const t0 = (await time.latest()) + 10;
+    await openAt(ctx, note, creditor, t0);
+    const preFee = await manager.lateFeeOf(note.noteId);
+    expect(preFee).to.be.gte(feeFor(15 * DAY));
+
+    const t1 = t0 + 40 * DAY;
+    await time.setNextBlockTimestamp(t1);
+    const tx = manager.connect(admin).closeDispute(note.noteId, RES, true);
+    const totalAtClose = feeFor(t1 - Number(note.dueDate));
+    await expect(tx).to.emit(manager, "LateFeeWaived").withArgs(note.noteId, totalAtClose - preFee);
+    await expect(tx).to.emit(manager, "DisputeClosed");
+
+    expect(await manager.lateFeeOf(note.noteId)).to.equal(preFee);
+    expect(await manager.statusOf(note.noteId)).to.equal(Status.OVERDUE);
+  });
+
+  it("closeDispute tanpa waiveFee: denda periode dispute tetap terutang", async () => {
+    const ctx = await loadFixture(f.deployAll);
+    const { manager, debtor, admin } = ctx;
+    const note = await overdue(ctx, 15);
+    const t0 = (await time.latest()) + 10;
+    await openAt(ctx, note, debtor, t0);
+    const t1 = t0 + 40 * DAY;
+    await time.setNextBlockTimestamp(t1);
+    await expect(manager.connect(admin).closeDispute(note.noteId, RES, false)).to.not.emit(manager, "LateFeeWaived");
+    expect(await manager.lateFeeOf(note.noteId)).to.equal(feeFor(t1 - Number(note.dueDate)));
+  });
+
+  it("waiveFee dibatasi sisa denda: denda yang sudah dibayar debitur tidak dihapus dua kali", async () => {
+    const ctx = await loadFixture(f.deployAll);
+    const { manager, debtor, admin } = ctx;
+    const note = await overdue(ctx, 15);
+    const t0 = (await time.latest()) + 10;
+    await openAt(ctx, note, debtor, t0);
+    const preFee = await manager.lateFeeOf(note.noteId);
+
+    await time.setNextBlockTimestamp(t0 + 30 * DAY);
+    await manager.accrue(note.noteId);
+    const total = await manager.lateFeeOf(note.noteId);
+    const disputeFee = total - preFee;
+    const pay = note.totalOwed + preFee + disputeFee / 2n;
+    await f.payOnchain(ctx, note.noteId, pay);
+    const leftFee = await manager.lateFeeOf(note.noteId);
+    expect(leftFee).to.be.gt(0n);
+
+    await manager.connect(admin).closeDispute(note.noteId, RES, true);
+    expect(await manager.lateFeeOf(note.noteId)).to.equal(0n);
+    // tunggakan nol + denda nol setelah waive → langsung lunas (tidak tertahan di ACTIVE dengan sisa 0)
+    expect(await manager.statusOf(note.noteId)).to.equal(Status.PAID);
+  });
+
+  it("closeExpiredDispute: ditolak sebelum 14 hari, berhasil sesudahnya oleh siapa pun, tanpa waive", async () => {
+    const ctx = await loadFixture(f.deployAll);
+    const { manager, creditor, stranger } = ctx;
+    expect(await manager.DISPUTE_WINDOW()).to.equal(14n * 86400n);
+    const note = await overdue(ctx, 5);
+    const t0 = (await time.latest()) + 10;
+    await openAt(ctx, note, creditor, t0);
+
+    await expect(manager.connect(stranger).closeExpiredDispute(note.noteId)).to.be.revertedWithCustomError(manager, "DisputeWindowNotElapsed");
+    await time.setNextBlockTimestamp(t0 + 14 * DAY - 1);
+    await expect(manager.connect(stranger).closeExpiredDispute(note.noteId)).to.be.revertedWithCustomError(manager, "DisputeWindowNotElapsed");
+
+    await time.setNextBlockTimestamp(t0 + 14 * DAY + 5);
+    const tx = manager.connect(stranger).closeExpiredDispute(note.noteId);
+    await expect(tx).to.emit(manager, "DisputeClosed").withArgs(note.noteId, stranger.address, ethers.ZeroHash);
+    await expect(tx).to.not.emit(manager, "LateFeeWaived");
+    expect(await manager.statusOf(note.noteId)).to.equal(Status.OVERDUE);
+    expect(await manager.lateFeeOf(note.noteId)).to.be.gte(feeFor(t0 + 14 * DAY - Number(note.dueDate)));
+
+    await expect(manager.connect(stranger).closeExpiredDispute(note.noteId)).to.be.revertedWithCustomError(manager, "InvalidStatus");
+  });
+
+  it("closeExpiredDispute pada sengketa yang sudah dibayar penuh → PAID + burn", async () => {
+    const ctx = await loadFixture(f.deployAll);
+    const { manager, debtor, stranger, debtNote } = ctx;
+    const note = await overdue(ctx, 5);
+    await manager.connect(debtor).openDispute(note.noteId, REASON);
+    await f.payOnchain(ctx, note.noteId, note.totalOwed * 2n); // dipotong ke sisa utang
+    expect(await manager.statusOf(note.noteId)).to.equal(Status.DISPUTED);
+    await time.increase(15 * DAY);
+    await manager.connect(stranger).closeExpiredDispute(note.noteId);
+    expect(await manager.statusOf(note.noteId)).to.equal(Status.PAID);
+    await expect(debtNote.ownerOf(BigInt(note.noteId))).to.be.reverted;
+  });
+
+  it("dispute kedua pada note yang sama: boleh, tapi tidak mereset denda yang sudah ada", async () => {
+    const ctx = await loadFixture(f.deployAll);
+    const { manager, debtor, creditor, admin, stranger } = ctx;
+    const note = await overdue(ctx, 5);
+    const t0 = (await time.latest()) + 10;
+    await openAt(ctx, note, debtor, t0);
+    await time.setNextBlockTimestamp(t0 + 14 * DAY);
+    await manager.connect(stranger).closeExpiredDispute(note.noteId); // tanpa waive: denda dispute #1 tetap
+
+    const t2 = t0 + 20 * DAY;
+    await openAt(ctx, note, creditor, t2);
+    const feeAtSecondOpen = await manager.lateFeeOf(note.noteId);
+    expect(feeAtSecondOpen).to.be.gte(feeFor(t2 - Number(note.dueDate)));
+
+    await time.setNextBlockTimestamp(t2 + 30 * DAY);
+    await manager.connect(admin).closeDispute(note.noteId, RES, true);
+    // hanya porsi dispute #2 yang dihapus; denda sampai dispute #2 dibuka (termasuk periode dispute #1) utuh
+    expect(await manager.lateFeeOf(note.noteId)).to.equal(feeAtSecondOpen);
+  });
+
+  it("FROZEN tetap menghentikan denda (aturan lama), termasuk dibekukan dari DISPUTED", async () => {
+    const ctx = await loadFixture(f.deployAll);
+    const { manager, debtor, admin } = ctx;
+    const note = await overdue(ctx, 5);
+    await manager.connect(debtor).openDispute(note.noteId, REASON);
+    await time.increase(2 * DAY);
+    await manager.connect(admin).freeze(note.noteId, REASON);
+    const frozenFee = await manager.lateFeeOf(note.noteId);
+    await time.increase(30 * DAY);
+    expect(await manager.lateFeeOf(note.noteId)).to.equal(frozenFee);
+    await manager.connect(admin).unfreeze(note.noteId, REASON);
+    expect(await manager.statusOf(note.noteId)).to.equal(Status.DISPUTED);
+    await time.increase(DAY);
+    expect(await manager.lateFeeOf(note.noteId)).to.be.gt(frozenFee);
+  });
+});

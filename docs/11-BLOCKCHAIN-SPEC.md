@@ -69,7 +69,8 @@ struct Schedule { uint64[] dueDates; uint256[] amounts; } // TIDAK ditandatangan
 | Bayar off-chain, dikonfirmasi kreditur | `recordOffchainPayment(confirmation, sigCreditor)` | siapa saja (relayer) |
 | Kreditur mengikhlaskan sisa | `markPaid(noteId)` | kreditur |
 | Revisi setelah aktif | `amend(amendment, schedule, sigC, sigD)` | siapa saja (relayer) |
-| Ajukan / tutup sengketa | `openDispute(noteId, reasonHash)` / `closeDispute(noteId, resolutionHash)` | kreditur atau debitur / `ADMIN_ROLE` |
+| Ajukan / tutup sengketa | `openDispute(noteId, reasonHash)` / `closeDispute(noteId, resolutionHash, waiveFee)` | kreditur atau debitur / `ADMIN_ROLE` |
+| Tutup dispute kedaluwarsa | `closeExpiredDispute(noteId)` | siapa saja, setelah `DISPUTE_WINDOW` (14 hari) sejak `disputeOpenedAt` |
 | Bekukan / buka | `freeze(noteId, reasonHash)` / `unfreeze(noteId, resolutionHash)` | `ADMIN_ROLE` atau `FREEZER_ROLE` / `ADMIN_ROLE` |
 | Batalkan signature | `cancelNonce(nonce)` | signer itu sendiri |
 | Darurat | `pause()` / `unpause()` | `ADMIN_ROLE` |
@@ -82,14 +83,14 @@ struct Schedule { uint64[] dueDates; uint256[] amounts; } // TIDAK ditandatangan
   - **`settleFull`** (ditandatangani kreditur): konfirmasi senilai `remaining()` saat tanda tangan baru dieksekusi beberapa detik kemudian, sehingga denda yang bertambah menyisakan sisa kecil dan piutang tetap OVERDUE. Bila `settleFull = true`, `amount` harus menutup **seluruh sisa cicilan** dan selisih ke total sisa (hanya berupa denda) harus ≤ `SETTLE_TOLERANCE` (denda 1 hari dari tunggakan saat itu: `tunggakan × 200 × 1 hari / (10.000 × 30 hari)`). Selisih itu dihapus (`LateFeeWaived`), lalu pembayaran melunasi (PAID + burn). Kalau syarat tidak terpenuhi → revert `SettleToleranceExceeded(shortfall, tolerance)`. Pokok/cicilan tidak pernah dihapus. `settleFull = false` = perilaku lama.
 - **`markPaid`**: hanya ACTIVE. Denda dihitung dulu, sisa diikhlaskan (`NoteMarkedPaid.waived`), lalu PAID + burn.
 - **`amend`**: ACTIVE atau DISPUTED; `newVersion` = versi + 1; `newDocHash` belum pernah dipakai; pokok tidak bisa diubah. Denda yang sudah berjalan dihitung dengan syarat lama dan tetap terutang. Jika total baru ≤ yang sudah dibayar dan tidak ada denda → lunas.
-- **`openDispute`**: hanya dari status tersimpan ACTIVE (termasuk OVERDUE). **`closeDispute`** mengembalikan ke ACTIVE (OVERDUE lagi bila masih ada tunggakan); jika lunas selama sengketa, PAID + burn di tx itu.
+- **`openDispute`**: hanya dari status tersimpan ACTIVE (termasuk OVERDUE). **`closeDispute`** mengembalikan ke ACTIVE (OVERDUE lagi bila masih ada tunggakan); jika lunas selama sengketa, PAID + burn di tx itu. Dengan `waiveFee = true`, denda yang menumpuk sejak `disputeOpenedAt` dihapus (`LateFeeWaived`), dibatasi sisa denda yang belum dibayar (denda yang sudah dibayar debitur tidak dikembalikan); bila setelah itu semua lunas, PAID + burn. **`closeExpiredDispute`** bisa dipanggil siapa pun setelah 14 hari: status kembali ke ACTIVE **tanpa** waive (`DisputeClosed` dengan `resolutionHash = 0`, `by` = pemanggil). Revert `DisputeWindowNotElapsed(availableAt)` jika belum waktunya. Dispute kedua pada piutang yang sama diperbolehkan; porsi yang bisa di-waive dihitung ulang dari dispute yang sedang berjalan, denda sebelumnya tidak berubah.
 - **`freeze`**: dari ACTIVE atau DISPUTED (PAID sudah final). **`unfreeze`** mengembalikan status sebelum beku; jika ACTIVE dan sudah lunas, PAID + burn. Piutang yang belum aktif tidak ada on-chain, jadi freeze sebelum mint hanya di DB (BR, [03-BUSINESS-RULES](03-BUSINESS-RULES.md)).
 - **Pause** menahan deposit, aktivasi, pembayaran, revisi, dan markPaid. Refund escrow, dispute, dan freeze tetap jalan.
 
 | Saat status… | Bayar on-chain | Konfirmasi off-chain | markPaid | Revisi | Dispute baru | Burn |
 |---|:-:|:-:|:-:|:-:|:-:|:-:|
 | ACTIVE / OVERDUE | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ saat lunas |
-| DISPUTED | ✅ | ❌ | ❌ | ✅ | ❌ | ditahan sampai `closeDispute` |
+| DISPUTED | ✅ | ❌ | ❌ | ✅ | ❌ | ditahan sampai `closeDispute` / `closeExpiredDispute` |
 | FROZEN | ❌ | ❌ | ❌ | ❌ | ❌ | ditahan sampai `unfreeze` |
 | PAID | ❌ | ❌ | ❌ | ❌ | ❌ | sudah |
 
@@ -99,7 +100,7 @@ struct Schedule { uint64[] dueDates; uint256[] amounts; } // TIDAK ditandatangan
 - Pro-rata per detik, dipotong per jatuh tempo:
   `denda = Σ tunggakan_segmen × durasi_segmen × 200 / (10.000 × 30 hari)`.
 - Disimpan di checkpoint (`_accrue`) setiap kali pembayaran, markPaid, revisi, dispute, freeze/unfreeze, atau `accrue(noteId)` publik dipanggil. **Sisa pembagian disimpan di `feeRemainder`** dan dibawa ke checkpoint berikutnya, jadi totalnya sama berapa kali pun `accrue` dipanggil.
-- Denda **tidak berjalan** saat DISPUTED atau FROZEN.
+- Denda **tetap berjalan** saat DISPUTED (BR-21a); hanya **FROZEN** yang menghentikannya (checkpoint digeser saat unfreeze). Selama DISPUTED kontrak mencatat `disputeFeeAccrued` (denda sejak `disputeOpenedAt`) sebagai porsi yang bisa di-waive.
 - Contoh: cicilan Rp400.000 terlambat 15 hari → `400.000 × 2% × 15/30` = Rp4.000.
 
 ## Alokasi Pembayaran
@@ -141,7 +142,7 @@ event NoteSettled(bytes32 indexed noteId, uint256 paidTotal);           // PAID 
 event NoteMarkedPaid(bytes32 indexed noteId, address indexed creditor, uint256 waived);
 event NoteAmended(bytes32 indexed noteId, uint32 newVersion, bytes32 oldDocHash, bytes32 newDocHash, bytes32 newScheduleHash, uint256 newTotalOwed, uint16 newLateFeeBps, uint64 newDueDate);
 event DisputeOpened(bytes32 indexed noteId, address indexed by, bytes32 reasonHash);
-event DisputeClosed(bytes32 indexed noteId, address indexed by, bytes32 resolutionHash);
+event DisputeClosed(bytes32 indexed noteId, address indexed by, bytes32 resolutionHash); // resolutionHash = 0 untuk closeExpiredDispute
 event NoteFrozen(bytes32 indexed noteId, address indexed by, bytes32 reasonHash);
 event NoteUnfrozen(bytes32 indexed noteId, address indexed by, bytes32 resolutionHash, Status restoredTo);
 event NonceCancelled(address indexed signer, uint256 nonce);
@@ -168,7 +169,7 @@ Tidak ada role relayer: fungsi yang dikirim relayer diotorisasi oleh signature p
 
 ## Errors
 
-`ZeroAddress`, `NoteNotFound`, `NoteAlreadyExists`, `DocHashAlreadyUsed`, `InvalidParties`, `InvalidAmount`, `InvalidDueDate`, `WrongDisbursement`, `SignatureExpired`, `InvalidSignature(signer)`, `NonceAlreadyUsed(signer, nonce)`, `EscrowMissing`, `EscrowAlreadyDeposited`, `NotParty`, `NotCreditor`, `NotDebtor`, `InvalidStatus(current)`, `AlreadyFullyPaid`, `Overpayment(remaining)`, `ProofAlreadyUsed`, `ReceiptMismatch`, `InvalidVersion(expected)`, `UnexpectedTransferAmount`, `InvalidLateFee`, `InvalidSchedule`, `ScheduleMismatch`, `SettleToleranceExceeded(shortfall, tolerance)`, plus `AccessControlUnauthorizedAccount`, `EnforcedPause`, dan `Soulbound` (DebtNote).
+`ZeroAddress`, `NoteNotFound`, `NoteAlreadyExists`, `DocHashAlreadyUsed`, `InvalidParties`, `InvalidAmount`, `InvalidDueDate`, `WrongDisbursement`, `SignatureExpired`, `InvalidSignature(signer)`, `NonceAlreadyUsed(signer, nonce)`, `EscrowMissing`, `EscrowAlreadyDeposited`, `NotParty`, `NotCreditor`, `NotDebtor`, `InvalidStatus(current)`, `AlreadyFullyPaid`, `Overpayment(remaining)`, `ProofAlreadyUsed`, `ReceiptMismatch`, `InvalidVersion(expected)`, `UnexpectedTransferAmount`, `InvalidLateFee`, `InvalidSchedule`, `ScheduleMismatch`, `SettleToleranceExceeded(shortfall, tolerance)`, `DisputeWindowNotElapsed(availableAt)`, plus `AccessControlUnauthorizedAccount`, `EnforcedPause`, dan `Soulbound` (DebtNote).
 
 ## Keterbatasan
 

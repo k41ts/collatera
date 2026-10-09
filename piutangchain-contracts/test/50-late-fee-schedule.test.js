@@ -118,7 +118,10 @@ describe("Jadwal cicilan on-chain dan OVERDUE per cicilan", () => {
     expect(feeA).to.be.gte(feeB);
   });
 
-  it("denda berhenti selama DISPUTED dan FROZEN, lalu berjalan lagi", async () => {
+  it("denda TETAP berjalan selama DISPUTED (BR-21a baru), berhenti hanya saat FROZEN", async () => {
+    // Aturan lama: denda berhenti saat DISPUTED. Diubah karena debitur bisa membuka dispute saat OVERDUE
+    // dan menghentikan denda tanpa batas (hanya admin yang bisa menutup). Kini denda jalan terus;
+    // admin bisa menghapus porsi periode dispute lewat closeDispute(..., waiveFee=true). FROZEN tidak berubah.
     const ctx = await loadFixture(f.deployAll);
     const { manager, creditor, admin } = ctx;
     const { note, d } = await threeInstallments(ctx);
@@ -127,8 +130,8 @@ describe("Jadwal cicilan on-chain dan OVERDUE per cicilan", () => {
     await manager.connect(creditor).openDispute(note.noteId, REASON);
     expect(await manager.lateFeeOf(note.noteId)).to.equal(IDR(4_000));
     await time.increase(20 * DAY);
-    expect(await manager.lateFeeOf(note.noteId)).to.equal(IDR(4_000));
-    await manager.connect(admin).closeDispute(note.noteId, REASON);
+    expect(await manager.lateFeeOf(note.noteId)).to.be.gt(IDR(4_000) + IDR(5_000));
+    await manager.connect(admin).closeDispute(note.noteId, REASON, true); // waive: kembali ke denda sebelum dispute
     expect(await manager.statusOf(note.noteId)).to.equal(Status.OVERDUE);
     const afterDispute = await manager.lateFeeOf(note.noteId);
     expect(afterDispute).to.equal(IDR(4_000));

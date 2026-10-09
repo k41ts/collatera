@@ -20,6 +20,7 @@ import {TransferHelper} from "./libraries/TransferHelper.sol";
 ///
 /// Status on-chain: NONE → ACTIVE → (OVERDUE dihitung per cicilan) → PAID; ACTIVE ↔ DISPUTED; ACTIVE|DISPUTED ↔ FROZEN.
 /// Denda: 2% per 30 hari (pro-rata per detik, tidak majemuk) dari cicilan yang terlambat, jika disepakati.
+/// Denda tetap berjalan saat DISPUTED (bisa di-waive admin saat closeDispute); berhenti hanya saat FROZEN.
 /// DRAFT / PENDING_SIGNATURE / REJECTED / CANCELLED tidak ada on-chain: piutang baru lahir saat aktivasi.
 contract DebtManager is IDebtManager, EIP712, AccessControl, ReentrancyGuard, Pausable, ERC2771Context {
     using TransferHelper for address;
@@ -35,6 +36,8 @@ contract DebtManager is IDebtManager, EIP712, AccessControl, ReentrancyGuard, Pa
     uint16 public constant LATE_FEE_BPS = 200;
     uint256 public constant LATE_FEE_PERIOD = 30 days;
     uint256 public constant MAX_INSTALLMENTS = 24;
+    /// @dev Jendela dispute: setelah ini siapa pun boleh menutupnya (`closeExpiredDispute`), tanpa menunggu admin.
+    uint256 public constant DISPUTE_WINDOW = 14 days;
     /// @dev Toleransi `settleFull`: sisa denda yang boleh dihapus paling banyak sebesar denda 1 hari dari tunggakan saat ini.
     uint256 public constant SETTLE_TOLERANCE = 1 days;
     /// @dev Batas nominal (jauh di atas kebutuhan nyata). Mencegah overflow di perhitungan denda
@@ -86,6 +89,7 @@ contract DebtManager is IDebtManager, EIP712, AccessControl, ReentrancyGuard, Pa
     error InvalidSchedule();
     error ScheduleMismatch();
     error SettleToleranceExceeded(uint256 shortfall, uint256 tolerance);
+    error DisputeWindowNotElapsed(uint256 availableAt);
 
     // ----------------------------------------------------------------- events
     /// @dev Satu event untuk SEMUA perubahan status (audit log / indexer). Detail ada di event spesifik.
@@ -146,12 +150,14 @@ contract DebtManager is IDebtManager, EIP712, AccessControl, ReentrancyGuard, Pa
         bool fullyPaid; //            sudah dibayar lunas (burn bisa tertahan saat DISPUTED)
         uint16 lateFeeBps;
         uint64 lastAccrualAt; //      checkpoint perhitungan denda
+        uint64 disputeOpenedAt; //    kapan dispute yang sedang berjalan dibuka (0 jika tidak ada)
         bytes32 docHash;
         bytes32 scheduleHash;
         uint256 principal;
         uint256 totalOwed; //         = jumlah semua cicilan
         uint256 scheduledPaid; //     pembayaran yang dialokasikan ke cicilan (≤ totalOwed)
         uint256 lateFeeAccrued; //    denda yang sudah dihitung dan belum dibayar
+        uint256 disputeFeeAccrued; // denda yang menumpuk sejak disputeOpenedAt (porsi yang bisa di-waive)
         uint256 feeRemainder; //      sisa pembulatan denda (pembilang, < BPS × LATE_FEE_PERIOD), dibawa ke checkpoint berikutnya
         uint256 paid; //              total semua pembayaran (cicilan + denda)
         uint64[] dueDates;
@@ -428,18 +434,45 @@ contract DebtManager is IDebtManager, EIP712, AccessControl, ReentrancyGuard, Pa
         address caller = _msgSender();
         if (caller != r.creditor && caller != r.debtor) revert NotParty();
         if (r.status != Status.ACTIVE) revert InvalidStatus(r.status);
-        _accrue(noteId, r); // denda berhenti selama DISPUTED
+        _accrue(noteId, r); // denda sebelum dispute dicatat dulu; denda tetap berjalan selama DISPUTED (BR-21a)
+        r.disputeOpenedAt = uint64(block.timestamp);
+        r.disputeFeeAccrued = 0; // dispute baru tidak mereset denda yang sudah ada, hanya memulai porsi baru
         _setStatus(noteId, r, Status.DISPUTED, caller);
         emit DisputeOpened(noteId, caller, reasonHash);
     }
 
     /// @notice Admin menutup dispute. Status kembali ke ACTIVE (OVERDUE otomatis jika lewat jatuh tempo).
-    ///         Jika sudah lunas selama dispute, token di-burn sekarang.
-    function closeDispute(bytes32 noteId, bytes32 resolutionHash) external onlyRole(ADMIN_ROLE) {
+    ///         `waiveFee` true: denda yang menumpuk sejak `disputeOpenedAt` dihapus (dibatasi sisa denda yang belum
+    ///         dibayar). Jika sudah lunas selama dispute (atau jadi nol karena waive), token di-burn sekarang.
+    function closeDispute(bytes32 noteId, bytes32 resolutionHash, bool waiveFee) external onlyRole(ADMIN_ROLE) {
         Record storage r = _get(noteId);
         if (r.status != Status.DISPUTED) revert InvalidStatus(r.status);
-        address caller = _msgSender();
-        _accrue(noteId, r); // geser checkpoint: periode sengketa tidak kena denda
+        _closeDispute(noteId, r, _msgSender(), resolutionHash, waiveFee);
+    }
+
+    /// @notice Siapa pun boleh menutup dispute setelah `DISPUTE_WINDOW` (14 hari) sejak dibuka, supaya sengketa
+    ///         tidak menggantung bila admin tidak bertindak. Tanpa waive: denda periode dispute tetap terutang.
+    function closeExpiredDispute(bytes32 noteId) external nonReentrant {
+        Record storage r = _get(noteId);
+        if (r.status != Status.DISPUTED) revert InvalidStatus(r.status);
+        uint256 availableAt = uint256(r.disputeOpenedAt) + DISPUTE_WINDOW;
+        if (block.timestamp < availableAt) revert DisputeWindowNotElapsed(availableAt);
+        _closeDispute(noteId, r, _msgSender(), bytes32(0), false);
+    }
+
+    function _closeDispute(bytes32 noteId, Record storage r, address caller, bytes32 resolutionHash, bool waiveFee) private {
+        _accrue(noteId, r); // denda sampai detik ini masih tercatat sebagai porsi dispute
+        if (waiveFee) {
+            uint256 waived = r.disputeFeeAccrued < r.lateFeeAccrued ? r.disputeFeeAccrued : r.lateFeeAccrued;
+            if (waived != 0) {
+                r.lateFeeAccrued -= waived;
+                emit LateFeeWaived(noteId, waived);
+                // Cicilan sudah terbayar semua dan denda jadi nol: lunas (kalau tidak, tertahan ACTIVE dengan sisa 0).
+                if (r.scheduledPaid == r.totalOwed && r.lateFeeAccrued == 0) r.fullyPaid = true;
+            }
+        }
+        r.disputeFeeAccrued = 0;
+        r.disputeOpenedAt = 0;
         _setStatus(noteId, r, Status.ACTIVE, caller);
         emit DisputeClosed(noteId, caller, resolutionHash);
         if (r.fullyPaid) _settle(noteId, r, caller);
@@ -631,10 +664,10 @@ contract DebtManager is IDebtManager, EIP712, AccessControl, ReentrancyGuard, Pa
     ///      Segmen dipotong di setiap jatuh tempo, jadi hasilnya tepat walau tidak ada yang memanggil accrue.
     ///      Sisa pembagian dibawa lewat `feeRemainder`, jadi seberapa sering pun accrue dipanggil, totalnya sama
     ///      dengan satu kali hitung (tidak bisa dihapus dengan memanggil accrue tiap blok).
-    ///      Hanya berjalan saat ACTIVE (berhenti saat DISPUTED/FROZEN/PAID).
+    ///      Berjalan saat ACTIVE dan DISPUTED (BR-21a: dispute tidak menghentikan denda); berhenti saat FROZEN/PAID.
     function _pendingFeeParts(Record storage r) private view returns (uint256 fee, uint256 remainder) {
         remainder = r.feeRemainder;
-        if (r.lateFeeBps == 0 || r.status != Status.ACTIVE) return (0, remainder);
+        if (r.lateFeeBps == 0 || (r.status != Status.ACTIVE && r.status != Status.DISPUTED)) return (0, remainder);
         uint256 segStart = r.lastAccrualAt;
         if (block.timestamp <= segStart) return (0, remainder);
         uint256 paidSched = r.scheduledPaid;
@@ -662,6 +695,7 @@ contract DebtManager is IDebtManager, EIP712, AccessControl, ReentrancyGuard, Pa
         r.feeRemainder = remainder;
         if (fee != 0) {
             r.lateFeeAccrued += fee;
+            if (r.status == Status.DISPUTED) r.disputeFeeAccrued += fee;
             emit LateFeeAccrued(noteId, fee, r.lateFeeAccrued);
         }
     }

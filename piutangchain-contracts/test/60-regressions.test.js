@@ -68,19 +68,24 @@ describe("Regresi: denda tidak bisa dihapus dengan memanggil accrue() terus-mene
     expect(feeSpam).to.equal(feeControl);
   });
 
-  it("sisa pembulatan terbawa lintas checkpoint dan tidak menambah denda saat DISPUTED", async () => {
+  it("sisa pembulatan terbawa lintas checkpoint; denda DISPUTED sama dengan tanpa dispute (BR-21a baru)", async () => {
+    // Aturan lama: denda diam saat DISPUTED. Kini denda jalan, jadi total harus sama dengan note kontrol
+    // yang tidak pernah disengketakan, dan waive menghapus persis porsi periode dispute.
     const ctx = await loadFixture(f.deployAll);
     const { manager, debtor, admin } = ctx;
-    const note = await f.buildNote(ctx, { principal: IDR(100_000), totalOwed: IDR(100_000) });
+    const mk = () => f.buildNote(ctx, { principal: IDR(100_000), totalOwed: IDR(100_000) });
+    const note = await mk();
+    const control = await mk();
     await f.activateOnchain(ctx, note);
-    await time.increaseTo(Number(note.dueDate) + 5);
+    await f.activateOnchain(ctx, control);
+    await time.increaseTo(Math.max(Number(note.dueDate), Number(control.dueDate)) + 5);
     await manager.accrue(note.noteId);
 
     await manager.connect(debtor).openDispute(note.noteId, ethers.id("alasan"));
     const during = await manager.lateFeeOf(note.noteId);
     await time.increase(10 * DAY);
-    expect(await manager.lateFeeOf(note.noteId)).to.equal(during);
-    await manager.connect(admin).closeDispute(note.noteId, ethers.id("selesai"));
+    expect(await manager.lateFeeOf(note.noteId)).to.be.gt(during);
+    await manager.connect(admin).closeDispute(note.noteId, ethers.id("selesai"), true);
     expect(await manager.lateFeeOf(note.noteId)).to.equal(during);
   });
 });

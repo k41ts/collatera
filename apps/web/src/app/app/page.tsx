@@ -26,27 +26,27 @@ export default function Dashboard() {
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div className="flex flex-col gap-1.5">
           <span className="text-[13px] text-faint">{new Date().toLocaleDateString("id-ID", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "Asia/Jakarta" })}</span>
-          <h1 className="text-[32px] font-semibold tracking-tight">Halo{name ? `, ${name}` : ""}</h1>
+          <h1 className="text-[26px] font-semibold tracking-tight sm:text-[32px]">Halo{name ? `, ${name}` : ""}</h1>
         </div>
-        <LinkButton href="/app/piutang/baru">+ Buat surat piutang</LinkButton>
+        <LinkButton href="/app/piutang/baru" className="max-sm:hidden">+ Buat surat piutang</LinkButton>
       </div>
 
       {me && !me.user.phoneVerifiedAt && (
-        <Link href="/app/profil" className="rounded-2xl border border-butter/40 bg-[#3a3017] px-4 py-3 text-sm text-butter no-underline">
+        <Link href="/app/profil" className="rounded-2xl border border-butter/40 bg-[#3a3017] px-4 py-3 text-sm leading-relaxed text-butter no-underline">
           Verifikasi nomor HP dulu sebelum membuat atau menandatangani surat piutang → <span className="underline">ke Profil</span>
         </Link>
       )}
 
-      <div className="grid grid-cols-[repeat(auto-fit,minmax(210px,1fr))] gap-3.5">
-        <Tile big title="Piutang aktif (kamu kreditur)" value={fmtRp(sum(asCreditor))} sub={`${asCreditor.length} piutang · ${asCreditor.filter((n) => n.status === "OVERDUE").length} terlambat`} />
-        <Tile title="Utang kamu (debitur)" value={fmtRp(sum(asDebtor))} sub={`${asDebtor.length} piutang`} />
+      <div className="grid grid-cols-2 gap-3 sm:gap-3.5 xl:grid-cols-4">
+        <Tile wide big title="Piutang aktif (kamu kreditur)" value={fmtRp(sum(asCreditor))} sub={`${asCreditor.length} piutang · ${asCreditor.filter((n) => n.status === "OVERDUE").length} terlambat`} />
+        <Tile wide title="Utang kamu (debitur)" value={fmtRp(sum(asDebtor))} sub={`${asDebtor.length} piutang`} />
         <Tile title="Jatuh tempo 7 hari ke depan" value={String(dueSoon.length)} sub="cicilan" />
         <Tile alert={actions > 0} title="Perlu tindakanmu" value={String(actions)} sub={`${toSign.length} tanda tangan · ${toConfirm.length} konfirmasi dana`} />
       </div>
 
       <div className="flex flex-wrap items-start gap-5">
-        <section aria-labelledby="judul-daftar" className="flex min-w-0 flex-[999_1_560px] flex-col gap-4 rounded-[20px] border border-line bg-card p-5">
-          <div className="flex items-baseline gap-3">
+        <section aria-labelledby="judul-daftar" className="flex min-w-0 flex-[999_1_560px] flex-col gap-4 rounded-[20px] border border-line bg-card p-4 sm:p-5">
+          <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 sm:justify-start">
             <h2 id="judul-daftar" className="text-lg font-semibold">Surat piutang terbaru</h2>
             <Link href="/app/piutang" className="text-[13px] font-medium text-lav">Lihat semua →</Link>
           </div>
@@ -58,8 +58,32 @@ export default function Dashboard() {
               <LinkButton href="/app/piutang/baru">Buat surat piutang</LinkButton>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[640px] border-collapse text-sm">
+            <>
+            {/* Layar kecil: daftar kartu */}
+            <ul className="-mx-1 flex flex-col md:hidden">
+              {notes.slice(0, 6).map((n) => (
+                <li key={n.id} className="border-t border-line first:border-t-0">
+                  <Link href={`/app/piutang/${n.id}`} className="flex flex-col gap-2 rounded-xl px-1 py-3.5 text-white no-underline active:bg-raised">
+                    <span className="flex items-start justify-between gap-3">
+                      <span className="min-w-0">
+                        <span className="block font-medium leading-snug [overflow-wrap:anywhere]">{n.title}</span>
+                        <span className="mt-0.5 block truncate text-xs text-faint">{n.code} · {n.party}</span>
+                      </span>
+                      <StatusPill status={n.status} />
+                    </span>
+                    <span className="flex items-baseline justify-between gap-3 text-[13px]">
+                      <span className="text-soft">
+                        {n.role === "creditor" ? "Kreditur" : n.role === "debtor" ? "Debitur" : "-"}
+                        {n.nextDue && LIVE.includes(n.status) ? ` · jatuh tempo ${fmtDate(n.nextDue)}` : ""}
+                      </span>
+                      <span className="flex-none font-semibold tabular-nums">{fmtRp(left(n) > BigInt(0) ? left(n) : BigInt(0))}</span>
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+            <div className="hidden overflow-x-auto md:block">
+              <table className="w-full border-collapse text-sm">
                 <thead>
                   <tr className="text-left text-xs text-faint">
                     <th className="px-3 py-2.5 font-medium">Piutang</th>
@@ -85,10 +109,11 @@ export default function Dashboard() {
                 </tbody>
               </table>
             </div>
+            </>
           )}
         </section>
 
-        <section aria-labelledby="judul-tindakan" className="flex min-w-0 flex-[1_1_300px] flex-col gap-3.5">
+        <section aria-labelledby="judul-tindakan" className="flex min-w-0 flex-[1_1_300px] flex-col gap-3">
           <h2 id="judul-tindakan" className="text-lg font-semibold">Perlu tindakan</h2>
           {actions === 0 && <p className="rounded-2xl border border-line bg-card p-4 text-sm text-muted">Tidak ada yang perlu kamu lakukan sekarang.</p>}
           {toSign.map((n) => (
@@ -103,11 +128,11 @@ export default function Dashboard() {
   );
 }
 
-function Tile({ title, value, sub, big, alert }: { title: string; value: string; sub: string; big?: boolean; alert?: boolean }) {
+function Tile({ title, value, sub, big, alert, wide }: { title: string; value: string; sub: string; big?: boolean; alert?: boolean; wide?: boolean }) {
   return (
-    <div className={`flex flex-col gap-2.5 rounded-[18px] p-5 ${big ? "bg-brand" : `border bg-card ${alert ? "border-rasp" : "border-line"}`}`}>
-      <span className={`text-[13px] ${big ? "text-brand-tint" : alert ? "text-pink" : "text-muted"}`}>{title}</span>
-      <span className="text-[28px] font-semibold tabular-nums">{value}</span>
+    <div className={`flex min-w-0 flex-col gap-2 rounded-[18px] p-4 sm:gap-2.5 sm:p-5 ${wide ? "col-span-2 sm:col-span-1" : ""} ${big ? "bg-brand" : `border bg-card ${alert ? "border-rasp" : "border-line"}`}`}>
+      <span className={`text-[13px] leading-snug ${big ? "text-brand-tint" : alert ? "text-pink" : "text-muted"}`}>{title}</span>
+      <span className="text-[24px] font-semibold leading-tight tabular-nums sm:text-[clamp(20px,2.4vw,28px)]">{value}</span>
       <span className={`text-xs ${big ? "text-brand-tint" : "text-muted"}`}>{sub}</span>
     </div>
   );

@@ -31,7 +31,6 @@ type Detail = {
 
 const TYPES: Record<string, string> = { personal: "Pinjaman pribadi", business: "Bisnis", invoice: "Invoice", other: "Lainnya" };
 const LIVE = ["ACTIVE", "OVERDUE", "DISPUTED", "FROZEN"];
-const DISPUTE_WINDOW_MS = 14 * 24 * 3600 * 1000;
 
 export default function NoteDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -44,8 +43,6 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
   const { note: n, me, chain } = data;
   const role = me.role;
   const isLive = LIVE.includes(n.status);
-  const disputedAt = n.events.find((e) => e.action === "DISPUTE")?.createdAt;
-  const disputeExpired = !!disputedAt && Date.now() - new Date(disputedAt).getTime() > DISPUTE_WINDOW_MS;
 
   /** Jalankan aksi dengan status sibuk + pesan hasil. */
   async function run(key: string, fn: () => Promise<{ txHash?: string } | unknown>, okText: string) {
@@ -114,7 +111,7 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
         <span>{n.code}</span>
       </nav>
 
-      <header className="flex flex-wrap items-start justify-between gap-5">
+      <header className="flex flex-wrap items-start justify-between gap-4 sm:gap-5">
         <div className="flex min-w-0 flex-col gap-2.5">
           <div className="flex flex-wrap gap-2">
             <StatusPill status={n.status} />
@@ -123,14 +120,14 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
             )}
             <span className="rounded-md bg-raised px-2.5 py-1 text-[11px] font-medium text-soft">{TYPES[n.debtType]} · versi {n.version}</span>
           </div>
-          <h1 className="text-[34px] font-semibold tracking-tight">{n.title}</h1>
-          <span className="text-sm text-muted">
+          <h1 className="text-[26px] font-semibold leading-tight tracking-tight [overflow-wrap:anywhere] sm:text-[34px]">{n.title}</h1>
+          <span className="text-sm leading-relaxed text-muted">
             Kamu <strong className="font-semibold text-white">{role === "creditor" ? "kreditur" : role === "debtor" ? "debitur" : "pengamat"}</strong>
             {data.other ? ` · ${data.other.name} ${role === "creditor" ? "debitur" : "kreditur"}` : n.counterpartyWallet ? ` · menunggu ${short(n.counterpartyWallet)} bergabung` : ""}
             {n.activatedAt ? ` · aktif sejak ${fmtDate(n.activatedAt)}` : ` · dibuat ${fmtDate(n.createdAt)}`}
           </span>
         </div>
-        <div className="flex flex-wrap gap-2.5">
+        <div className="flex w-full flex-wrap gap-2.5 max-sm:[&>*]:flex-[1_1_40%] sm:w-auto">
           <LinkButton href={`/app/chat?note=${n.id}`}>Chat{data.other ? ` dengan ${data.other.name.split(" ")[0]}` : ""}</LinkButton>
           {isLive && (
             <Button variant="secondary" disabled={!!busy} onClick={() => run("integrity", () => api(`/api/notes/${id}/integrity`, { method: "POST" }), "Cek integritas selesai.")}>
@@ -154,15 +151,8 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
             <Button variant="secondary" disabled={!!busy} onClick={() => {
               const r = ask("Ringkasan keputusan admin:");
               if (!r) return;
-              const waive = window.confirm("Hapus denda yang menumpuk selama sengketa? OK = hapus denda, Batal = denda tetap terutang.");
-              run("close", () => forwardAction({ noteId: id, wallet: me.wallet, fn: "closeDispute", args: [n.chainNoteId, keccak256(toUtf8Bytes(r)), waive], purpose: "closeDispute", reason: r }), "Sengketa ditutup.");
+              run("close", () => forwardAction({ noteId: id, wallet: me.wallet, fn: "closeDispute", args: [n.chainNoteId, keccak256(toUtf8Bytes(r))], purpose: "closeDispute" }), "Sengketa ditutup.");
             }}>Tutup sengketa (admin)</Button>
-          )}
-          {n.status === "DISPUTED" && role && disputeExpired && (
-            <Button variant="secondary" disabled={!!busy} onClick={() => {
-              if (!window.confirm("Sengketa sudah lewat 14 hari tanpa keputusan admin. Tutup sekarang? Denda selama sengketa tetap terutang.")) return;
-              run("expire", () => api(`/api/notes/${id}/action`, { method: "POST", json: { action: "closeExpiredDispute" } }), "Sengketa ditutup.");
-            }}>Tutup sengketa (lewat 14 hari)</Button>
           )}
           {me.isAdmin && n.status === "FROZEN" && (
             <Button variant="secondary" disabled={!!busy} onClick={() => {
@@ -190,7 +180,7 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
               <h2 className="text-lg font-semibold">Draft versi {n.version} belum dikirim</h2>
               <p className="text-sm text-muted">Periksa isi, jadwal, dan dokumen. Setelah dikirim, {n.counterpartyWallet ? short(n.counterpartyWallet) : "pihak lawan"} bisa menandatangani, minta revisi, atau menolak.</p>
               {!me.phoneVerified && <Notice tone="warn">Verifikasi nomor HP dulu di <Link href="/app/profil" className="underline">Profil</Link>.</Notice>}
-              <div className="flex flex-wrap gap-2.5">
+              <div className="flex flex-col gap-2.5 sm:flex-row sm:flex-wrap">
                 <Button disabled={!!busy || !me.phoneVerified} onClick={() => run("send", () => action({ action: "send" }), "Terkirim. Sekarang tanda tangani dari halaman ini.")}>
                   {busy === "send" && <Spinner />} Kirim untuk tanda tangan
                 </Button>
@@ -207,7 +197,7 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
       {n.status === "PENDING_SIGNATURE" && (
         <Card className="flex flex-col gap-4 border-peach/50">
           <h2 className="text-lg font-semibold">Menunggu tanda tangan · versi {n.version}</h2>
-          <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-3 text-sm">
+          <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,220px),1fr))] gap-3 text-sm">
             <SignState label="Kreditur" who={n.creditor?.name ?? short(n.counterpartyWallet)} done={n.creditorSigned} extra={n.disbursement === "onchain" ? (n.escrowIsCurrent ? "Dana sudah di escrow" : "Setor escrow saat tanda tangan") : undefined} />
             <SignState label="Debitur" who={n.debtor?.name ?? short(n.counterpartyWallet)} done={n.debtorSigned} />
           </div>
@@ -218,7 +208,7 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
                 {role === "creditor" && n.disbursement === "onchain" && <> Sebagai kreditur kamu juga menandatangani <strong className="text-white">izin setor {fmtRp(n.principal)} ke escrow</strong>; dana baru cair ke debitur setelah dia ikut tanda tangan, dan bisa kamu tarik kapan saja sebelum itu.</>}
               </p>
               {!me.phoneVerified && <Notice tone="warn">Verifikasi nomor HP dulu di <Link href="/app/profil" className="underline">Profil</Link>.</Notice>}
-              <div className="flex flex-wrap gap-2.5">
+              <div className="flex flex-col gap-2.5 sm:flex-row sm:flex-wrap">
                 <Button disabled={!!busy || !me.phoneVerified} onClick={() => run("sign", signNote, "Tanda tangan tersimpan.")}>
                   {busy === "sign" && <Spinner />} Setuju &amp; tanda tangan
                 </Button>
@@ -272,18 +262,18 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
 
       <div className="flex flex-wrap items-start gap-5">
         <div className="flex min-w-0 flex-[999_1_560px] flex-col gap-5">
-          <section aria-label="Ringkasan" className="flex flex-col gap-5 rounded-[22px] bg-brand p-6">
+          <section aria-label="Ringkasan" className="flex flex-col gap-5 rounded-[22px] bg-brand p-5 sm:p-6">
             <div className="flex flex-wrap items-end justify-between gap-4">
               <div className="flex flex-col gap-1.5">
                 <span className="text-[13px] text-brand-tint">{chain ? "Sisa utang (termasuk denda berjalan)" : "Total yang harus dibayar"}</span>
-                <span className="text-[44px] font-semibold tracking-tight tabular-nums">{fmtRp(n.status === "PAID" ? "0" : chain ? remaining : n.totalOwed)}</span>
+                <span className="text-[32px] font-semibold leading-tight tracking-tight tabular-nums [overflow-wrap:anywhere] sm:text-[44px]">{fmtRp(n.status === "PAID" ? "0" : chain ? remaining : n.totalOwed)}</span>
               </div>
               {chain && <span className="text-[13px] text-brand-tint tabular-nums">Terbayar {fmtRp(paidTotal)} dari {fmtRp(n.totalOwed)}</span>}
             </div>
             <div role="progressbar" aria-label="Progres pelunasan" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct} className="h-2.5 overflow-hidden rounded-full bg-white/20">
               <div className="h-full rounded-full bg-tusc" style={{ width: `${pct}%` }} />
             </div>
-            <dl className="grid grid-cols-[repeat(auto-fit,minmax(150px,1fr))] gap-4 text-[13px]">
+            <dl className="grid grid-cols-2 gap-4 text-[13px] sm:grid-cols-[repeat(auto-fit,minmax(150px,1fr))]">
               <Stat k="Pokok" v={fmtRp(n.principal)} />
               <Stat k="Bunga" v={n.interestType === "none" ? "Tanpa bunga" : n.interestType === "percent" ? `${n.interestValue}%` : `Rp${Number(n.interestValue).toLocaleString("id-ID")}`} />
               <Stat k="Denda terlambat" v={n.lateFeeBps ? "2% per bulan" : "Tanpa denda"} />
@@ -296,8 +286,23 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
 
           <Card className="flex flex-col gap-3.5">
             <h2 className="text-lg font-semibold">Jadwal cicilan</h2>
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[520px] border-collapse text-sm">
+            {/* Layar kecil: kartu per cicilan */}
+            <ol className="flex flex-col sm:hidden">
+              {rows.map((r) => (
+                <li key={r.seq} className="flex items-center justify-between gap-3 border-t border-line py-3 first:border-t-0 first:pt-0">
+                  <span className="flex min-w-0 flex-col gap-0.5">
+                    <span className="text-sm font-medium">Cicilan {r.seq} dari {rows.length}</span>
+                    <span className="text-xs text-faint tabular-nums">{fmtDate(r.dueDate)}</span>
+                  </span>
+                  <span className="flex flex-none flex-col items-end gap-1">
+                    <span className="text-sm font-semibold tabular-nums">{fmtRp(r.amount)}</span>
+                    <InstallmentPill status={r.status} />
+                  </span>
+                </li>
+              ))}
+            </ol>
+            <div className="hidden overflow-x-auto sm:block">
+              <table className="w-full border-collapse text-sm">
                 <thead>
                   <tr className="text-left text-xs text-faint">
                     <th className="px-3 py-2 font-medium">Cicilan</th><th className="px-3 py-2 font-medium">Jatuh tempo</th>
@@ -310,9 +315,7 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
                       <td className="p-3">{r.seq} dari {rows.length}</td>
                       <td className="p-3 text-soft tabular-nums">{fmtDate(r.dueDate)}</td>
                       <td className="p-3 text-right tabular-nums">{fmtRp(r.amount)}</td>
-                      <td className="p-3">
-                        <span className={`rounded-md px-2.5 py-1 text-[11px] font-semibold ${r.status === "Lunas" ? "bg-lav text-lav-ink" : r.status === "Terlambat" ? "bg-rasp text-white" : r.status === "Sebagian" ? "bg-butter text-butter-ink" : "bg-line text-soft"}`}>{r.status}</span>
-                      </td>
+                      <td className="p-3"><InstallmentPill status={r.status} /></td>
                     </tr>
                   ))}
                 </tbody>
@@ -335,7 +338,7 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
                 />
               )}
               {pending.map((p) => (
-                <div key={p.id} className="flex flex-wrap items-center gap-4 rounded-2xl border border-dashed border-butter p-4">
+                <div key={p.id} className="flex flex-wrap items-center gap-4 rounded-2xl border border-dashed border-butter p-3.5 sm:p-4">
                   <a href={`/api/files/proof/${p.id}`} target="_blank" rel="noreferrer" className="flex h-[96px] w-[80px] items-center justify-center rounded-[10px] bg-line p-2 text-center text-[11px] text-faint underline">{p.proofName ?? "bukti"}</a>
                   <div className="flex min-w-0 flex-[1_1_240px] flex-col gap-1.5">
                     <span className="self-start rounded-md bg-butter px-2 py-1 text-[11px] font-semibold text-butter-ink">{role === "creditor" ? "MENUNGGU KONFIRMASIMU" : "MENUNGGU KREDITUR"}</span>
@@ -343,7 +346,7 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
                     <span className="text-[13px] text-muted">Dikirim {fmtDate(p.createdAt, true)}. {role === "creditor" ? "Cek mutasi rekeningmu dulu sebelum konfirmasi." : ""}</span>
                   </div>
                   {role === "creditor" && (
-                    <div className="flex flex-wrap gap-2.5">
+                    <div className="flex w-full flex-wrap gap-2.5 max-sm:[&>*]:flex-1 sm:w-auto">
                       <Button variant="secondary" disabled={!!busy} onClick={() => { const r = ask("Alasan menolak bukti ini:"); if (r) run("rejectpay", () => api(`/api/payments/${p.id}`, { method: "POST", json: { action: "reject", reason: r } }), "Bukti transfer ditolak."); }}>Tolak</Button>
                       <Button disabled={!!busy || n.status !== "ACTIVE" && n.status !== "OVERDUE"} onClick={() => run("confirm", async () => {
                         const t = await api<{ domain: Record<string, unknown>; types: never; message: Record<string, unknown> }>(`/api/payments/${p.id}`);
@@ -467,11 +470,16 @@ const EVENT: Record<string, string> = {
   INTEGRITY_CHECK: "Cek integritas",
 };
 
+function InstallmentPill({ status }: { status: string }) {
+  const cls = status === "Lunas" ? "bg-lav text-lav-ink" : status === "Terlambat" ? "bg-rasp text-white" : status === "Sebagian" ? "bg-butter text-butter-ink" : "bg-line text-soft";
+  return <span className={`whitespace-nowrap rounded-md px-2.5 py-1 text-[11px] font-semibold ${cls}`}>{status}</span>;
+}
+
 function Stat({ k, v }: { k: string; v: string }) {
   return (
     <div>
       <dt className="text-brand-tint">{k}</dt>
-      <dd className="mt-1 text-[15px] font-semibold">{v}</dd>
+      <dd className="mt-1 text-[15px] font-semibold [overflow-wrap:anywhere]">{v}</dd>
     </div>
   );
 }
@@ -502,10 +510,10 @@ function PayBox(props: {
   const [file, setFile] = useState<File | null>(null);
   const units = (() => { try { return BigInt(rupiahToUnits(amount)); } catch { return BigInt(0); } })();
   return (
-    <div className="flex flex-col gap-3.5 rounded-2xl bg-midnight p-4">
-      <div role="group" aria-label="Cara bayar" className="flex flex-wrap gap-2">
+    <div className="flex flex-col gap-3.5 rounded-2xl bg-midnight p-3.5 sm:p-4">
+      <div role="group" aria-label="Cara bayar" className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
         {(["onchain", "offchain"] as const).filter((m) => m === "onchain" || props.allowOffchain).map((m) => (
-          <button key={m} type="button" aria-pressed={method === m} onClick={() => setMethod(m)} className={`min-h-10 rounded-full border px-4 text-[13px] ${method === m ? "border-brand bg-brand font-medium" : "border-line2 text-soft"}`}>
+          <button key={m} type="button" aria-pressed={method === m} onClick={() => setMethod(m)} className={`min-h-11 rounded-2xl border px-4 py-2 text-left text-[13px] sm:min-h-10 sm:rounded-full sm:py-0 sm:text-center ${method === m ? "border-brand bg-brand font-medium" : "border-line2 text-soft"}`}>
             {m === "onchain" ? "Bayar dengan IDRX (langsung tercatat)" : "Sudah transfer bank (upload bukti)"}
           </button>
         ))}

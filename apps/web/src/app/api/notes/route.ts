@@ -13,7 +13,7 @@ export const GET = handler(async (_req, user) => {
       creditor: true,
       debtor: true,
       installments: { orderBy: { seq: "asc" } },
-      payments: { where: { status: "CONFIRMED" } },
+      payments: { where: { status: "CONFIRMED" }, select: { amount: true } },
       signatures: true,
       messages: { orderBy: { createdAt: "desc" }, take: 1 },
     },

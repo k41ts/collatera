@@ -4,7 +4,7 @@ pragma solidity 0.8.28;
 import {IDebtManager} from "./interfaces/IDebtManager.sol";
 import {IDebtNote} from "./interfaces/IDebtNote.sol";
 import {IERC20Minimal, IERC20Permit} from "./interfaces/IERC20Minimal.sol";
-import {Note, DisbursementReceipt, PaymentConfirmation, Amendment, Permit} from "./DebtTypes.sol";
+import {Note, DisbursementReceipt, PaymentConfirmation, Amendment, Permit, Schedule} from "./DebtTypes.sol";
 import {EIP712} from "./utils/EIP712.sol";
 import {AccessControl} from "./utils/AccessControl.sol";
 import {ReentrancyGuard} from "./utils/ReentrancyGuard.sol";
@@ -18,7 +18,8 @@ import {TransferHelper} from "./libraries/TransferHelper.sol";
 ///         kreditur, pencairan pokok (escrow on-chain atau konfirmasi off-chain), pencatatan pembayaran
 ///         (on-chain / off-chain), OVERDUE, PAID + burn, dispute, freeze, dan revisi bertanda tangan ulang.
 ///
-/// Status on-chain: NONE → ACTIVE → (OVERDUE dihitung) → PAID; ACTIVE ↔ DISPUTED; ACTIVE|DISPUTED ↔ FROZEN.
+/// Status on-chain: NONE → ACTIVE → (OVERDUE dihitung per cicilan) → PAID; ACTIVE ↔ DISPUTED; ACTIVE|DISPUTED ↔ FROZEN.
+/// Denda: 2% per 30 hari (pro-rata per detik, tidak majemuk) dari cicilan yang terlambat, jika disepakati.
 /// DRAFT / PENDING_SIGNATURE / REJECTED / CANCELLED tidak ada on-chain: piutang baru lahir saat aktivasi.
 contract DebtManager is IDebtManager, EIP712, AccessControl, ReentrancyGuard, Pausable, ERC2771Context {
     using TransferHelper for address;
@@ -29,10 +30,17 @@ contract DebtManager is IDebtManager, EIP712, AccessControl, ReentrancyGuard, Pa
     /// @dev Key integrity checker: HANYA boleh freeze. Tidak bisa unfreeze/tutup dispute.
     bytes32 public constant FREEZER_ROLE = keccak256("FREEZER_ROLE");
 
+    // -------------------------------------------------------------- denda
+    /// @dev Satu-satunya tarif denda yang boleh disepakati selain 0: 2% per periode.
+    uint16 public constant LATE_FEE_BPS = 200;
+    uint256 public constant LATE_FEE_PERIOD = 30 days;
+    uint256 public constant MAX_INSTALLMENTS = 24;
+    uint256 private constant BPS = 10_000;
+
     // ------------------------------------------------------------- typehashes
     bytes32 public constant NOTE_TYPEHASH =
         keccak256(
-            "Note(bytes32 noteId,uint32 version,address creditor,address debtor,bytes32 docHash,bytes32 scheduleHash,uint256 principal,uint256 totalOwed,uint256 lateFee,uint64 dueDate,uint8 disbursement,uint64 deadline,uint256 creditorNonce,uint256 debtorNonce)"
+            "Note(bytes32 noteId,uint32 version,address creditor,address debtor,bytes32 docHash,bytes32 scheduleHash,uint256 principal,uint256 totalOwed,uint16 lateFeeBps,uint64 dueDate,uint8 disbursement,uint64 deadline,uint256 creditorNonce,uint256 debtorNonce)"
         );
     bytes32 public constant RECEIPT_TYPEHASH =
         keccak256("DisbursementReceipt(bytes32 noteHash,bytes32 proofHash,uint256 amount,uint256 nonce,uint64 deadline)");
@@ -42,7 +50,7 @@ contract DebtManager is IDebtManager, EIP712, AccessControl, ReentrancyGuard, Pa
         );
     bytes32 public constant AMENDMENT_TYPEHASH =
         keccak256(
-            "Amendment(bytes32 noteId,uint32 newVersion,bytes32 newDocHash,bytes32 newScheduleHash,uint256 newTotalOwed,uint256 newLateFee,uint64 newDueDate,uint64 deadline,uint256 creditorNonce,uint256 debtorNonce)"
+            "Amendment(bytes32 noteId,uint32 newVersion,bytes32 newDocHash,bytes32 newScheduleHash,uint256 newTotalOwed,uint16 newLateFeeBps,uint64 newDueDate,uint64 deadline,uint256 creditorNonce,uint256 debtorNonce)"
         );
 
     // ----------------------------------------------------------------- errors
@@ -69,6 +77,9 @@ contract DebtManager is IDebtManager, EIP712, AccessControl, ReentrancyGuard, Pa
     error ReceiptMismatch();
     error InvalidVersion(uint32 expected);
     error UnexpectedTransferAmount();
+    error InvalidLateFee();
+    error InvalidSchedule();
+    error ScheduleMismatch();
 
     // ----------------------------------------------------------------- events
     /// @dev Satu event untuk SEMUA perubahan status (audit log / indexer). Detail ada di event spesifik.
@@ -93,8 +104,10 @@ contract DebtManager is IDebtManager, EIP712, AccessControl, ReentrancyGuard, Pa
         uint256 remaining,
         bool onchain,
         uint32 installmentIndex,
-        bytes32 proofHash
+        bytes32 proofHash,
+        uint256 toLateFee
     );
+    event LateFeeAccrued(bytes32 indexed noteId, uint256 amount, uint256 totalAccrued);
     event NoteSettled(bytes32 indexed noteId, uint256 paidTotal);
     event NoteMarkedPaid(bytes32 indexed noteId, address indexed creditor, uint256 waived);
     event NoteAmended(
@@ -104,7 +117,7 @@ contract DebtManager is IDebtManager, EIP712, AccessControl, ReentrancyGuard, Pa
         bytes32 newDocHash,
         bytes32 newScheduleHash,
         uint256 newTotalOwed,
-        uint256 newLateFee,
+        uint16 newLateFeeBps,
         uint64 newDueDate
     );
     event DisputeOpened(bytes32 indexed noteId, address indexed by, bytes32 reasonHash);
@@ -123,12 +136,17 @@ contract DebtManager is IDebtManager, EIP712, AccessControl, ReentrancyGuard, Pa
         Status status; //             tidak pernah OVERDUE (dihitung di statusOf)
         Status statusBeforeFreeze;
         bool fullyPaid; //            sudah dibayar lunas (burn bisa tertahan saat DISPUTED)
+        uint16 lateFeeBps;
+        uint64 lastAccrualAt; //      checkpoint perhitungan denda
         bytes32 docHash;
         bytes32 scheduleHash;
         uint256 principal;
-        uint256 totalOwed;
-        uint256 lateFee;
-        uint256 paid;
+        uint256 totalOwed; //         = jumlah semua cicilan
+        uint256 scheduledPaid; //     pembayaran yang dialokasikan ke cicilan (≤ totalOwed)
+        uint256 lateFeeAccrued; //    denda yang sudah dihitung dan belum dibayar
+        uint256 paid; //              total semua pembayaran (cicilan + denda)
+        uint64[] dueDates;
+        uint256[] amounts;
     }
 
     IDebtNote public immutable debtNote;
@@ -198,6 +216,7 @@ contract DebtManager is IDebtManager, EIP712, AccessControl, ReentrancyGuard, Pa
     /// @notice (On-chain) Verifikasi 2 signature, mint token ke kreditur, lepas dana escrow ke debitur, status ACTIVE.
     function activateOnchain(
         Note calldata n,
+        Schedule calldata schedule,
         bytes calldata sigCreditor,
         bytes calldata sigDebtor
     ) external nonReentrant whenNotPaused {
@@ -205,9 +224,10 @@ contract DebtManager is IDebtManager, EIP712, AccessControl, ReentrancyGuard, Pa
         bytes32 nHash = _validateNewNote(n);
         if (escrowOf[nHash] != n.principal) revert EscrowMissing();
         _verifyAgreement(n, nHash, sigCreditor, sigDebtor);
+        _validateSchedule(schedule, n.scheduleHash, n.totalOwed, n.dueDate, true);
 
         delete escrowOf[nHash];
-        _open(n, nHash);
+        _open(n, nHash, schedule);
         stablecoin.safeTransfer(n.debtor, n.principal);
     }
 
@@ -215,6 +235,7 @@ contract DebtManager is IDebtManager, EIP712, AccessControl, ReentrancyGuard, Pa
     ///         Token tidak pernah ter-mint untuk utang yang uangnya belum dikonfirmasi cair.
     function activateOffchain(
         Note calldata n,
+        Schedule calldata schedule,
         bytes calldata sigCreditor,
         bytes calldata sigDebtor,
         DisbursementReceipt calldata receipt,
@@ -232,8 +253,9 @@ contract DebtManager is IDebtManager, EIP712, AccessControl, ReentrancyGuard, Pa
             sigReceipt
         );
         _useNonce(n.debtor, receipt.nonce);
+        _validateSchedule(schedule, n.scheduleHash, n.totalOwed, n.dueDate, true);
 
-        _open(n, nHash);
+        _open(n, nHash, schedule);
     }
 
     // =====================================================================
@@ -241,6 +263,8 @@ contract DebtManager is IDebtManager, EIP712, AccessControl, ReentrancyGuard, Pa
     // =====================================================================
 
     /// @notice (On-chain) Debitur membayar stablecoin; kontrak meneruskan ke kreditur dan mengurangi sisa utang.
+    ///         `amount` adalah batas maksimal: jika melebihi sisa utang, yang ditarik hanya sisa utang (denda
+    ///         bertambah per detik, jadi "bayar lunas" tidak bisa ditebak tepat). Permit cukup sebesar `amount`.
     ///         Tetap diterima saat DISPUTED; ditolak saat FROZEN/PAID.
     function payOnchain(
         bytes32 noteId,
@@ -253,9 +277,9 @@ contract DebtManager is IDebtManager, EIP712, AccessControl, ReentrancyGuard, Pa
         if (payer != r.debtor) revert NotDebtor();
         if (r.status != Status.ACTIVE && r.status != Status.DISPUTED) revert InvalidStatus(r.status);
 
-        _recordPayment(noteId, r, amount, installmentIndex, true, bytes32(0), payer);
+        uint256 paid = _recordPayment(noteId, r, amount, installmentIndex, true, bytes32(0), payer);
         _permit(payer, amount, permit);
-        _pull(payer, r.creditor, amount);
+        _pull(payer, r.creditor, paid);
     }
 
     /// @notice (Off-chain) Pembayaran tercatat setelah kreditur menandatangani konfirmasi.
@@ -287,7 +311,8 @@ contract DebtManager is IDebtManager, EIP712, AccessControl, ReentrancyGuard, Pa
         if (caller != r.creditor) revert NotCreditor();
         if (r.status != Status.ACTIVE) revert InvalidStatus(r.status);
 
-        uint256 waived = _required(r) - r.paid;
+        _accrue(noteId, r);
+        uint256 waived = _outstanding(r);
         r.fullyPaid = true;
         emit NoteMarkedPaid(noteId, caller, waived);
         _settle(noteId, r, caller);
@@ -301,6 +326,7 @@ contract DebtManager is IDebtManager, EIP712, AccessControl, ReentrancyGuard, Pa
     ///         ditandatangani ulang kedua pihak. Pokok tidak bisa diubah. Bisa saat ACTIVE atau DISPUTED.
     function amend(
         Amendment calldata a,
+        Schedule calldata schedule,
         bytes calldata sigCreditor,
         bytes calldata sigDebtor
     ) external nonReentrant whenNotPaused {
@@ -309,6 +335,7 @@ contract DebtManager is IDebtManager, EIP712, AccessControl, ReentrancyGuard, Pa
         if (a.newVersion != r.version + 1) revert InvalidVersion(r.version + 1);
         if (a.deadline < block.timestamp) revert SignatureExpired();
         if (a.newDocHash == bytes32(0) || a.newTotalOwed == 0 || a.newDueDate == 0) revert InvalidAmount();
+        if (a.newLateFeeBps != 0 && a.newLateFeeBps != LATE_FEE_BPS) revert InvalidLateFee();
         if (noteIdOfDocHash[a.newDocHash] != bytes32(0)) revert DocHashAlreadyUsed();
 
         bytes32 digest = _hashTypedDataV4(_amendmentHash(a));
@@ -316,15 +343,31 @@ contract DebtManager is IDebtManager, EIP712, AccessControl, ReentrancyGuard, Pa
         _verify(r.debtor, digest, sigDebtor);
         _useNonce(r.creditor, a.creditorNonce);
         _useNonce(r.debtor, a.debtorNonce);
+        // Jadwal baru boleh memuat tanggal lampau (cicilan yang sudah berjalan).
+        _validateSchedule(schedule, a.newScheduleHash, a.newTotalOwed, a.newDueDate, false);
 
+        // Denda yang sudah berjalan dihitung dengan syarat lama dan tetap terutang.
+        _accrue(a.noteId, r);
+        _applyAmendment(r, a, schedule);
+
+        bool due = r.scheduledPaid == r.totalOwed && r.lateFeeAccrued == 0;
+        r.fullyPaid = due;
+        if (due && r.status == Status.ACTIVE) _settle(a.noteId, r, _msgSender());
+    }
+
+    function _applyAmendment(Record storage r, Amendment calldata a, Schedule calldata schedule) private {
         bytes32 oldDocHash = r.docHash;
         noteIdOfDocHash[a.newDocHash] = a.noteId;
         r.version = a.newVersion;
         r.docHash = a.newDocHash;
         r.scheduleHash = a.newScheduleHash;
         r.totalOwed = a.newTotalOwed;
-        r.lateFee = a.newLateFee;
+        r.lateFeeBps = a.newLateFeeBps;
         r.dueDate = a.newDueDate;
+        r.dueDates = schedule.dueDates;
+        r.amounts = schedule.amounts;
+        // Total baru di bawah yang sudah dibayar: kelebihannya dianggap melunasi cicilan.
+        if (r.scheduledPaid > r.totalOwed) r.scheduledPaid = r.totalOwed;
 
         emit NoteAmended(
             a.noteId,
@@ -333,13 +376,9 @@ contract DebtManager is IDebtManager, EIP712, AccessControl, ReentrancyGuard, Pa
             a.newDocHash,
             a.newScheduleHash,
             a.newTotalOwed,
-            a.newLateFee,
+            a.newLateFeeBps,
             a.newDueDate
         );
-
-        bool due = r.paid >= _required(r);
-        r.fullyPaid = due;
-        if (due && r.status == Status.ACTIVE) _settle(a.noteId, r, _msgSender());
     }
 
     // =====================================================================
@@ -353,6 +392,7 @@ contract DebtManager is IDebtManager, EIP712, AccessControl, ReentrancyGuard, Pa
         address caller = _msgSender();
         if (caller != r.creditor && caller != r.debtor) revert NotParty();
         if (r.status != Status.ACTIVE) revert InvalidStatus(r.status);
+        _accrue(noteId, r); // denda berhenti selama DISPUTED
         _setStatus(noteId, r, Status.DISPUTED, caller);
         emit DisputeOpened(noteId, caller, reasonHash);
     }
@@ -363,6 +403,7 @@ contract DebtManager is IDebtManager, EIP712, AccessControl, ReentrancyGuard, Pa
         Record storage r = _get(noteId);
         if (r.status != Status.DISPUTED) revert InvalidStatus(r.status);
         address caller = _msgSender();
+        _accrue(noteId, r); // geser checkpoint: periode sengketa tidak kena denda
         _setStatus(noteId, r, Status.ACTIVE, caller);
         emit DisputeClosed(noteId, caller, resolutionHash);
         if (r.fullyPaid) _settle(noteId, r, caller);
@@ -377,6 +418,7 @@ contract DebtManager is IDebtManager, EIP712, AccessControl, ReentrancyGuard, Pa
         }
         Record storage r = _get(noteId);
         if (r.status != Status.ACTIVE && r.status != Status.DISPUTED) revert InvalidStatus(r.status);
+        _accrue(noteId, r); // denda berhenti selama FROZEN
         r.statusBeforeFreeze = r.status;
         _setStatus(noteId, r, Status.FROZEN, caller);
         emit NoteFrozen(noteId, caller, reasonHash);
@@ -388,6 +430,7 @@ contract DebtManager is IDebtManager, EIP712, AccessControl, ReentrancyGuard, Pa
         if (r.status != Status.FROZEN) revert InvalidStatus(r.status);
         address caller = _msgSender();
         Status restored = r.statusBeforeFreeze;
+        _accrue(noteId, r); // geser checkpoint: periode beku tidak kena denda
         _setStatus(noteId, r, restored, caller);
         emit NoteUnfrozen(noteId, caller, resolutionHash, restored);
         if (restored == Status.ACTIVE && r.fullyPaid) _settle(noteId, r, caller);
@@ -423,7 +466,9 @@ contract DebtManager is IDebtManager, EIP712, AccessControl, ReentrancyGuard, Pa
             scheduleHash: r.scheduleHash,
             principal: r.principal,
             totalOwed: r.totalOwed,
-            lateFee: r.lateFee,
+            lateFeeBps: r.lateFeeBps,
+            lateFeeAccrued: r.lateFeeAccrued + _pendingFee(r),
+            scheduledPaid: r.scheduledPaid,
             paid: r.paid,
             dueDate: r.dueDate,
             disbursement: r.disbursement,
@@ -432,22 +477,42 @@ contract DebtManager is IDebtManager, EIP712, AccessControl, ReentrancyGuard, Pa
         });
     }
 
-    /// @notice Status saat ini; OVERDUE dihitung otomatis dari jatuh tempo (tidak butuh keeper).
+    /// @notice Jadwal cicilan yang tersimpan (tervalidasi terhadap scheduleHash).
+    function getSchedule(bytes32 noteId) external view returns (uint64[] memory dueDates, uint256[] memory amounts) {
+        Record storage r = _get(noteId);
+        return (r.dueDates, r.amounts);
+    }
+
+    /// @notice Status saat ini; OVERDUE dihitung otomatis per cicilan (tidak butuh keeper).
     function statusOf(bytes32 noteId) external view returns (Status) {
         return _statusOf(_records[noteId]);
     }
 
-    /// @notice Total yang wajib dibayar saat ini (termasuk denda jika sudah lewat jatuh tempo).
+    /// @notice Total yang wajib dibayar sampai lunas (sudah dibayar + sisa, termasuk denda berjalan).
     function requiredAmount(bytes32 noteId) external view returns (uint256) {
-        return _required(_get(noteId));
+        Record storage r = _get(noteId);
+        return r.paid + _outstanding(r);
     }
 
-    /// @notice Sisa utang saat ini (0 jika sudah lunas).
+    /// @notice Sisa utang saat ini: sisa cicilan + denda berjalan (0 jika sudah lunas).
     function remaining(bytes32 noteId) external view returns (uint256) {
+        return _outstanding(_get(noteId));
+    }
+
+    /// @notice Tunggakan: cicilan yang sudah lewat jatuh tempo dan belum dibayar.
+    function overdueAmount(bytes32 noteId) external view returns (uint256) {
+        return _arrears(_get(noteId));
+    }
+
+    /// @notice Denda yang belum dibayar, termasuk yang berjalan sampai saat ini.
+    function lateFeeOf(bytes32 noteId) external view returns (uint256) {
         Record storage r = _get(noteId);
-        if (r.fullyPaid) return 0;
-        uint256 required = _required(r);
-        return required > r.paid ? required - r.paid : 0;
+        return r.lateFeeAccrued + _pendingFee(r);
+    }
+
+    /// @notice Simpan denda berjalan ke storage (checkpoint). Opsional: semua fungsi tulis sudah memanggilnya.
+    function accrue(bytes32 noteId) external {
+        _accrue(noteId, _get(noteId));
     }
 
     /// @notice Integrity checker: bandingkan hash hasil hitung ulang dari database dengan hash on-chain.
@@ -471,7 +536,7 @@ contract DebtManager is IDebtManager, EIP712, AccessControl, ReentrancyGuard, Pa
             keccak256(
                 bytes.concat(
                     abi.encode(NOTE_TYPEHASH, n.noteId, n.version, n.creditor, n.debtor, n.docHash, n.scheduleHash),
-                    abi.encode(n.principal, n.totalOwed, n.lateFee, n.dueDate, n.disbursement, n.deadline),
+                    abi.encode(n.principal, n.totalOwed, n.lateFeeBps, n.dueDate, n.disbursement, n.deadline),
                     abi.encode(n.creditorNonce, n.debtorNonce)
                 )
             );
@@ -482,7 +547,7 @@ contract DebtManager is IDebtManager, EIP712, AccessControl, ReentrancyGuard, Pa
             keccak256(
                 bytes.concat(
                     abi.encode(AMENDMENT_TYPEHASH, a.noteId, a.newVersion, a.newDocHash, a.newScheduleHash),
-                    abi.encode(a.newTotalOwed, a.newLateFee, a.newDueDate, a.deadline, a.creditorNonce, a.debtorNonce)
+                    abi.encode(a.newTotalOwed, a.newLateFeeBps, a.newDueDate, a.deadline, a.creditorNonce, a.debtorNonce)
                 )
             );
     }
@@ -492,14 +557,85 @@ contract DebtManager is IDebtManager, EIP712, AccessControl, ReentrancyGuard, Pa
         if (r.status == Status.NONE) revert NoteNotFound();
     }
 
+    /// @dev OVERDUE = ada cicilan lewat jatuh tempo yang belum dibayar, atau denda belum dibayar.
     function _statusOf(Record storage r) private view returns (Status s) {
         s = r.status;
-        if (s == Status.ACTIVE && block.timestamp > r.dueDate) return Status.OVERDUE;
+        if (s == Status.ACTIVE && !r.fullyPaid && (_arrears(r) != 0 || r.lateFeeAccrued + _pendingFee(r) != 0)) {
+            return Status.OVERDUE;
+        }
     }
 
-    /// @dev Total wajib bayar sekarang: totalOwed (+ denda flat sekali jika lewat jatuh tempo).
-    function _required(Record storage r) private view returns (uint256) {
-        return r.totalOwed + (block.timestamp > r.dueDate ? r.lateFee : 0);
+    /// @dev Jumlah cicilan yang jatuh temponya sudah lewat (dueDate < t).
+    function _dueBefore(Record storage r, uint256 t) private view returns (uint256 cum) {
+        uint256 len = r.dueDates.length;
+        for (uint256 i; i < len; ++i) {
+            if (r.dueDates[i] >= t) break;
+            cum += r.amounts[i];
+        }
+    }
+
+    function _arrears(Record storage r) private view returns (uint256) {
+        uint256 due = _dueBefore(r, block.timestamp);
+        return due > r.scheduledPaid ? due - r.scheduledPaid : 0;
+    }
+
+    /// @dev Denda sejak checkpoint terakhir: Σ tunggakan_segmen × durasi_segmen × bps / (10.000 × 30 hari).
+    ///      Segmen dipotong di setiap jatuh tempo, jadi hasilnya tepat walau tidak ada yang memanggil accrue.
+    ///      Hanya berjalan saat ACTIVE (berhenti saat DISPUTED/FROZEN/PAID).
+    function _pendingFee(Record storage r) private view returns (uint256) {
+        if (r.lateFeeBps == 0 || r.status != Status.ACTIVE) return 0;
+        uint256 segStart = r.lastAccrualAt;
+        if (block.timestamp <= segStart) return 0;
+        uint256 paidSched = r.scheduledPaid;
+        uint256 cum;
+        uint256 weighted;
+        uint256 len = r.dueDates.length;
+        for (uint256 i; i < len; ++i) {
+            uint256 d = r.dueDates[i];
+            if (d >= block.timestamp) break;
+            if (d > segStart) {
+                if (cum > paidSched) weighted += (cum - paidSched) * (d - segStart);
+                segStart = d;
+            }
+            cum += r.amounts[i];
+        }
+        if (cum > paidSched) weighted += (cum - paidSched) * (block.timestamp - segStart);
+        return (weighted * r.lateFeeBps) / (BPS * LATE_FEE_PERIOD);
+    }
+
+    function _accrue(bytes32 noteId, Record storage r) private {
+        uint256 fee = _pendingFee(r);
+        r.lastAccrualAt = uint64(block.timestamp);
+        if (fee != 0) {
+            r.lateFeeAccrued += fee;
+            emit LateFeeAccrued(noteId, fee, r.lateFeeAccrued);
+        }
+    }
+
+    /// @dev Sisa utang: sisa cicilan + denda tersimpan + denda berjalan.
+    function _outstanding(Record storage r) private view returns (uint256) {
+        if (r.fullyPaid) return 0;
+        return r.totalOwed - r.scheduledPaid + r.lateFeeAccrued + _pendingFee(r);
+    }
+
+    /// @dev Jadwal harus cocok dengan hash yang ditandatangani, urut naik, jumlahnya = total, berakhir di dueDate.
+    function _validateSchedule(
+        Schedule calldata s,
+        bytes32 scheduleHash,
+        uint256 totalOwed,
+        uint64 dueDate,
+        bool mustBeFuture
+    ) private view {
+        uint256 len = s.dueDates.length;
+        if (len == 0 || len > MAX_INSTALLMENTS || len != s.amounts.length) revert InvalidSchedule();
+        if (keccak256(abi.encode(s.dueDates, s.amounts)) != scheduleHash) revert ScheduleMismatch();
+        if (mustBeFuture && s.dueDates[0] <= block.timestamp) revert InvalidSchedule();
+        uint256 sum;
+        for (uint256 i; i < len; ++i) {
+            if (s.amounts[i] == 0 || (i > 0 && s.dueDates[i] <= s.dueDates[i - 1])) revert InvalidSchedule();
+            sum += s.amounts[i];
+        }
+        if (sum != totalOwed || s.dueDates[len - 1] != dueDate) revert InvalidSchedule();
     }
 
     function _setStatus(bytes32 noteId, Record storage r, Status to, address actor) private {
@@ -514,6 +650,7 @@ contract DebtManager is IDebtManager, EIP712, AccessControl, ReentrancyGuard, Pa
         if (n.noteId == bytes32(0) || n.docHash == bytes32(0) || n.version == 0) revert InvalidAmount();
         if (n.creditor == address(0) || n.debtor == address(0) || n.creditor == n.debtor) revert InvalidParties();
         if (n.principal == 0 || n.totalOwed < n.principal) revert InvalidAmount();
+        if (n.lateFeeBps != 0 && n.lateFeeBps != LATE_FEE_BPS) revert InvalidLateFee();
         if (n.dueDate <= block.timestamp) revert InvalidDueDate();
         if (_records[n.noteId].status != Status.NONE) revert NoteAlreadyExists();
         if (noteIdOfDocHash[n.docHash] != bytes32(0)) revert DocHashAlreadyUsed();
@@ -543,7 +680,7 @@ contract DebtManager is IDebtManager, EIP712, AccessControl, ReentrancyGuard, Pa
     }
 
     /// @dev Simpan piutang, kunci hash dokumen, mint token ke kreditur, status ACTIVE.
-    function _open(Note calldata n, bytes32 noteHash_) private {
+    function _open(Note calldata n, bytes32 noteHash_, Schedule calldata schedule) private {
         Record storage r = _records[n.noteId];
         r.creditor = n.creditor;
         r.debtor = n.debtor;
@@ -554,7 +691,10 @@ contract DebtManager is IDebtManager, EIP712, AccessControl, ReentrancyGuard, Pa
         r.scheduleHash = n.scheduleHash;
         r.principal = n.principal;
         r.totalOwed = n.totalOwed;
-        r.lateFee = n.lateFee;
+        r.lateFeeBps = n.lateFeeBps;
+        r.lastAccrualAt = uint64(block.timestamp);
+        r.dueDates = schedule.dueDates;
+        r.amounts = schedule.amounts;
         noteIdOfDocHash[n.docHash] = n.noteId;
 
         _setStatus(n.noteId, r, Status.ACTIVE, _msgSender());
@@ -573,7 +713,8 @@ contract DebtManager is IDebtManager, EIP712, AccessControl, ReentrancyGuard, Pa
         );
     }
 
-    /// @dev SATU pintu pembukuan untuk pembayaran on-chain dan off-chain.
+    /// @dev SATU pintu pembukuan untuk pembayaran on-chain dan off-chain. On-chain: kelebihan dipotong ke sisa
+    ///      utang. Off-chain: kelebihan ditolak (kreditur menandatangani nominal yang benar-benar diterima).
     function _recordPayment(
         bytes32 noteId,
         Record storage r,
@@ -582,21 +723,34 @@ contract DebtManager is IDebtManager, EIP712, AccessControl, ReentrancyGuard, Pa
         bool onchain,
         bytes32 proofHash,
         address actor
-    ) private {
+    ) private returns (uint256) {
         if (r.fullyPaid) revert AlreadyFullyPaid();
         if (amount == 0) revert InvalidAmount();
-        uint256 required = _required(r);
-        uint256 left = required > r.paid ? required - r.paid : 0;
-        if (amount > left) revert Overpayment(left);
+        _accrue(noteId, r);
+        uint256 left = _outstanding(r);
+        if (amount > left) {
+            if (!onchain) revert Overpayment(left);
+            amount = left;
+        }
 
+        // Alokasi (BR-19): 1) tunggakan cicilan, 2) denda, 3) cicilan berikutnya.
+        uint256 arrears = _arrears(r);
+        uint256 toSched = amount < arrears ? amount : arrears;
+        uint256 rest = amount - toSched;
+        uint256 toFee = rest < r.lateFeeAccrued ? rest : r.lateFeeAccrued;
+        toSched += rest - toFee;
+
+        r.scheduledPaid += toSched;
+        r.lateFeeAccrued -= toFee;
         r.paid += amount;
-        emit PaymentRecorded(noteId, amount, r.paid, left - amount, onchain, installmentIndex, proofHash);
+        emit PaymentRecorded(noteId, amount, r.paid, left - amount, onchain, installmentIndex, proofHash, toFee);
 
-        if (r.paid >= required) {
-            // Dikunci saat pembayaran terjadi: denda yang baru berlaku setelah ini tidak berlaku surut.
+        if (amount == left) {
+            // Dikunci saat lunas: tidak ada denda lagi setelah ini (juga jika burn tertahan karena DISPUTED).
             r.fullyPaid = true;
             if (r.status == Status.ACTIVE) _settle(noteId, r, actor);
         }
+        return amount;
     }
 
     /// @dev PAID + burn token. Dipanggil hanya saat status ACTIVE dan fullyPaid.

@@ -11,11 +11,11 @@ struct Note {
     address creditor;
     address debtor;
     bytes32 docHash; //       keccak256 dari canonical payload + hash dokumen pendukung
-    bytes32 scheduleHash; //  hash jadwal cicilan (detail jadwal ada di off-chain)
+    bytes32 scheduleHash; //  keccak256(abi.encode(uint64[] dueDates, uint256[] amounts)), lihat Schedule
     uint256 principal; //     nominal pokok (satuan terkecil stablecoin)
-    uint256 totalOwed; //     pokok + bunga/fee yang disepakati (dihitung off-chain, ditandatangani)
-    uint256 lateFee; //       denda flat sekali, berlaku jika lewat jatuh tempo (0 = tidak ada)
-    uint64 dueDate; //        jatuh tempo akhir (unix detik)
+    uint256 totalOwed; //     pokok + bunga yang disepakati (= jumlah semua cicilan)
+    uint16 lateFeeBps; //     0 (tanpa denda) atau 200 (2% per 30 hari dari cicilan yang terlambat)
+    uint64 dueDate; //        jatuh tempo akhir (unix detik) = jatuh tempo cicilan terakhir
     uint8 disbursement; //    0 = ONCHAIN, 1 = OFFCHAIN
     uint64 deadline; //       batas waktu signature untuk aktivasi
     uint256 creditorNonce;
@@ -48,7 +48,7 @@ struct Amendment {
     bytes32 newDocHash;
     bytes32 newScheduleHash;
     uint256 newTotalOwed;
-    uint256 newLateFee;
+    uint16 newLateFeeBps;
     uint64 newDueDate;
     uint64 deadline;
     uint256 creditorNonce;
@@ -61,4 +61,11 @@ struct Permit {
     uint8 v;
     bytes32 r;
     bytes32 s;
+}
+
+/// @dev Jadwal cicilan. TIDAK ditandatangani langsung: kontrak mencocokkan
+///      keccak256(abi.encode(dueDates, amounts)) dengan scheduleHash yang sudah ditandatangani kedua pihak.
+struct Schedule {
+    uint64[] dueDates; //  urut naik, maks 24 cicilan; terakhir == dueDate
+    uint256[] amounts; //  > 0; jumlahnya == totalOwed
 }

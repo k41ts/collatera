@@ -33,7 +33,7 @@ describe("Stablecoin tidak standar", () => {
     const sigC = await f.signNote(ctx.creditor, ctx, note);
     const sigD = await f.signNote(ctx.debtor, ctx, note);
     await ctx.manager.depositEscrow(note, sigC, NO_PERMIT);
-    await ctx.manager.activateOnchain(note, sigC, sigD);
+    await ctx.manager.activateOnchain(note, f.scheduleOf(note), sigC, sigD);
     await ctx.manager.connect(ctx.debtor).payOnchain(note.noteId, note.totalOwed, 1, NO_PERMIT);
     expect(await ctx.manager.statusOf(note.noteId)).to.equal(Status.PAID);
   });
@@ -56,7 +56,7 @@ describe("Stablecoin tidak standar", () => {
 
     await ctx.token.setMode(Mode.NORMAL);
     await ctx.manager.depositEscrow(note, sigC, NO_PERMIT);
-    await ctx.manager.activateOnchain(note, sigC, sigD);
+    await ctx.manager.activateOnchain(note, f.scheduleOf(note), sigC, sigD);
     await ctx.token.setMode(Mode.FEE);
     await expect(ctx.manager.connect(ctx.debtor).payOnchain(note.noteId, IDR(1000), 1, NO_PERMIT)).to.be.revertedWithCustomError(
       ctx.manager,
@@ -71,7 +71,7 @@ describe("Stablecoin tidak standar", () => {
     const sigC = await f.signNote(ctx.creditor, ctx, note);
     const sigD = await f.signNote(ctx.debtor, ctx, note);
     await ctx.manager.depositEscrow(note, sigC, NO_PERMIT);
-    await ctx.manager.activateOnchain(note, sigC, sigD);
+    await ctx.manager.activateOnchain(note, f.scheduleOf(note), sigC, sigD);
 
     // saat transferFrom, token mencoba memanggil balik fungsi nonReentrant milik manager
     const reenter = ctx.manager.interface.encodeFunctionData("markPaid", [note.noteId]);

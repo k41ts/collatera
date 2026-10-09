@@ -24,7 +24,7 @@ describe("Alur utama: pencairan ON-CHAIN (escrow) + cicilan on-chain sampai luna
     expect(await manager.statusOf(note.noteId)).to.equal(Status.NONE); // belum aktif sebelum debitur tanda tangan
 
     // 2) debitur tanda tangan → aktivasi atomik
-    await expect(manager.connect(relayer).activateOnchain(note, sigC, sigD))
+    await expect(manager.connect(relayer).activateOnchain(note, f.scheduleOf(note), sigC, sigD))
       .to.emit(manager, "NoteActivated")
       .withArgs(
         note.noteId,
@@ -59,7 +59,7 @@ describe("Alur utama: pencairan ON-CHAIN (escrow) + cicilan on-chain sampai luna
     const credAfterDisb = await idrx.balanceOf(creditor.address);
     await expect(f.payOnchain(ctx, note.noteId, part, 1))
       .to.emit(manager, "PaymentRecorded")
-      .withArgs(note.noteId, part, part, note.totalOwed - part, true, 1, ethers.ZeroHash);
+      .withArgs(note.noteId, part, part, note.totalOwed - part, true, 1, ethers.ZeroHash, 0n);
     expect(await idrx.balanceOf(creditor.address)).to.equal(credAfterDisb + part);
     await f.payOnchain(ctx, note.noteId, part, 2);
     expect(await manager.remaining(note.noteId)).to.equal(note.totalOwed - 2n * part);
@@ -146,7 +146,7 @@ describe("Alur: pencairan OFF-CHAIN + pembayaran off-chain (konfirmasi kreditur)
     const { c, sig } = await f.signPayment(ctx, note.noteId, half, { installmentIndex: 1 });
     await expect(manager.connect(relayer).recordOffchainPayment(c, sig))
       .to.emit(manager, "PaymentRecorded")
-      .withArgs(note.noteId, half, half, note.totalOwed - half, false, 1, c.proofHash);
+      .withArgs(note.noteId, half, half, note.totalOwed - half, false, 1, c.proofHash, 0n);
     expect(await manager.statusOf(note.noteId)).to.equal(Status.ACTIVE);
 
     await expect(f.payOffchain(ctx, note.noteId, note.totalOwed - half, { installmentIndex: 2 })).to.emit(manager, "NoteSettled");
@@ -177,7 +177,7 @@ describe("Alur: pencairan OFF-CHAIN + pembayaran off-chain (konfirmasi kreditur)
 });
 
 describe("Jatuh tempo, OVERDUE, dan denda", () => {
-  it("OVERDUE otomatis setelah jatuh tempo; denda flat sekali ikut wajib dibayar", async () => {
+  it("OVERDUE otomatis setelah jatuh tempo; denda 2%/30 hari berjalan dan ikut wajib dibayar", async () => {
     const ctx = await loadFixture(f.deployAll);
     const { manager } = ctx;
     const note = await f.buildNote(ctx);
@@ -186,26 +186,30 @@ describe("Jatuh tempo, OVERDUE, dan denda", () => {
 
     await time.increaseTo(note.dueDate); // tepat jatuh tempo: belum OVERDUE
     expect(await manager.statusOf(note.noteId)).to.equal(Status.ACTIVE);
-    await time.increaseTo(note.dueDate + 1);
+    await time.increaseTo(note.dueDate + 30 * DAY);
     expect(await manager.statusOf(note.noteId)).to.equal(Status.OVERDUE);
-    expect(await manager.requiredAmount(note.noteId)).to.equal(note.totalOwed + note.lateFee);
+    const fee30 = (note.totalOwed * 2n) / 100n; // terlambat tepat 30 hari = 2%
+    expect(await manager.lateFeeOf(note.noteId)).to.equal(fee30);
+    expect(await manager.requiredAmount(note.noteId)).to.equal(note.totalOwed + fee30);
     expect((await manager.getNote(note.noteId)).status).to.equal(Status.OVERDUE);
 
-    // bayar totalOwed saja → belum lunas karena denda
+    // bayar totalOwed saja → cicilan lunas, tapi denda tersisa (masih OVERDUE dan denda berhenti bertambah)
     await f.payOnchain(ctx, note.noteId, note.totalOwed);
+    expect(await manager.overdueAmount(note.noteId)).to.equal(0n);
     expect(await manager.statusOf(note.noteId)).to.equal(Status.OVERDUE);
-    expect(await manager.remaining(note.noteId)).to.equal(note.lateFee);
-    // denda tidak bertambah lagi seiring waktu
+    const feeLeft = await manager.remaining(note.noteId);
+    expect(feeLeft).to.be.gte(fee30); // + beberapa detik sampai tx terkonfirmasi
+    expect(feeLeft - fee30).to.be.lessThan(IDR(1));
     await time.increase(100 * DAY);
-    expect(await manager.remaining(note.noteId)).to.equal(note.lateFee);
+    expect(await manager.remaining(note.noteId)).to.equal(feeLeft);
 
-    await f.payOnchain(ctx, note.noteId, note.lateFee);
+    await f.payOnchain(ctx, note.noteId, feeLeft);
     expect(await manager.statusOf(note.noteId)).to.equal(Status.PAID);
   });
 
-  it("piutang tanpa denda (lateFee = 0) tidak menambah kewajiban saat OVERDUE", async () => {
+  it("piutang tanpa denda (lateFeeBps = 0) tidak menambah kewajiban saat OVERDUE", async () => {
     const ctx = await loadFixture(f.deployAll);
-    const note = await f.buildNote(ctx, { lateFee: 0n });
+    const note = await f.buildNote(ctx, { lateFeeBps: 0 });
     await f.activateOnchain(ctx, note);
     await time.increaseTo(note.dueDate + 5 * DAY);
     expect(await ctx.manager.requiredAmount(note.noteId)).to.equal(note.totalOwed);
@@ -215,7 +219,7 @@ describe("Jatuh tempo, OVERDUE, dan denda", () => {
 
   it("lunas saat OVERDUE → PAID", async () => {
     const ctx = await loadFixture(f.deployAll);
-    const note = await f.buildNote(ctx, { lateFee: 0n });
+    const note = await f.buildNote(ctx, { lateFeeBps: 0 });
     await f.activateOnchain(ctx, note);
     await time.increaseTo(note.dueDate + 1);
     expect(await ctx.manager.statusOf(note.noteId)).to.equal(Status.OVERDUE);

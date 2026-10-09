@@ -35,7 +35,7 @@ describe("Validasi aktivasi & replay protection", () => {
     const permit = await f.signPermit(ctx.idrx, ctx.creditor, ctx.manager.target, b.principal, b.deadline);
     await expect(ctx.manager.depositEscrow(b, sC, permit)).to.be.revertedWithCustomError(ctx.manager, "NonceAlreadyUsed");
     // signature milik note a tidak berlaku untuk note b
-    await expect(ctx.manager.activateOnchain(b, sigC, sigD)).to.be.reverted;
+    await expect(ctx.manager.activateOnchain(b, f.scheduleOf(b), sigC, sigD)).to.be.reverted;
     void sD;
   });
 
@@ -46,16 +46,16 @@ describe("Validasi aktivasi & replay protection", () => {
     const fake = await f.signNote(ctx.stranger, ctx, note);
     const permit = await f.signPermit(ctx.idrx, ctx.creditor, ctx.manager.target, note.principal, note.deadline);
     await ctx.manager.depositEscrow(note, sigC, permit);
-    await expect(ctx.manager.activateOnchain(note, sigC, fake))
+    await expect(ctx.manager.activateOnchain(note, f.scheduleOf(note), sigC, fake))
       .to.be.revertedWithCustomError(ctx.manager, "InvalidSignature")
       .withArgs(ctx.debtor.address);
 
     // nominal diubah setelah ditandatangani → hash beda → escrow tidak ditemukan
     const sigD = await f.signNote(ctx.debtor, ctx, note);
     const tampered = { ...note, totalOwed: note.totalOwed - 1n };
-    await expect(ctx.manager.activateOnchain(tampered, sigC, sigD)).to.be.revertedWithCustomError(ctx.manager, "EscrowMissing");
+    await expect(ctx.manager.activateOnchain(tampered, f.scheduleOf(tampered), sigC, sigD)).to.be.revertedWithCustomError(ctx.manager, "EscrowMissing");
     // signature sampah (panjang salah)
-    await expect(ctx.manager.activateOnchain(note, "0x1234", sigD))
+    await expect(ctx.manager.activateOnchain(note, f.scheduleOf(note), "0x1234", sigD))
       .to.be.revertedWithCustomError(ctx.manager, "InvalidSignature")
       .withArgs(ctx.creditor.address);
   });
@@ -101,10 +101,10 @@ describe("Validasi aktivasi & replay protection", () => {
     const sigC = await f.signNote(ctx.creditor, ctx, off);
     const sigD = await f.signNote(ctx.debtor, ctx, off);
     await expect(m.depositEscrow(off, sigC, NO_PERMIT)).to.be.revertedWithCustomError(m, "WrongDisbursement");
-    await expect(m.activateOnchain(off, sigC, sigD)).to.be.revertedWithCustomError(m, "WrongDisbursement");
+    await expect(m.activateOnchain(off, f.scheduleOf(off), sigC, sigD)).to.be.revertedWithCustomError(m, "WrongDisbursement");
     const on = await f.buildNote(ctx);
     const { receipt, sig } = await f.signReceipt(ctx, on);
-    await expect(m.activateOffchain(on, sigC, sigD, receipt, sig)).to.be.revertedWithCustomError(m, "WrongDisbursement");
+    await expect(m.activateOffchain(on, f.scheduleOf(on), sigC, sigD, receipt, sig)).to.be.revertedWithCustomError(m, "WrongDisbursement");
   });
 
   it("aktivasi on-chain tanpa escrow ditolak (token tidak pernah ter-mint tanpa dana)", async () => {
@@ -112,7 +112,7 @@ describe("Validasi aktivasi & replay protection", () => {
     const note = await f.buildNote(ctx);
     const sigC = await f.signNote(ctx.creditor, ctx, note);
     const sigD = await f.signNote(ctx.debtor, ctx, note);
-    await expect(ctx.manager.activateOnchain(note, sigC, sigD)).to.be.revertedWithCustomError(ctx.manager, "EscrowMissing");
+    await expect(ctx.manager.activateOnchain(note, f.scheduleOf(note), sigC, sigD)).to.be.revertedWithCustomError(ctx.manager, "EscrowMissing");
   });
 
   it("aktivasi off-chain: receipt harus cocok, belum kedaluwarsa, ditandatangani debitur, nonce sekali pakai", async () => {
@@ -123,21 +123,21 @@ describe("Validasi aktivasi & replay protection", () => {
     const sigD = await f.signNote(ctx.debtor, ctx, note);
 
     const wrongHash = await f.signReceipt(ctx, note, { noteHash: ethers.id("lain") });
-    await expect(m.activateOffchain(note, sigC, sigD, wrongHash.receipt, wrongHash.sig)).to.be.revertedWithCustomError(m, "ReceiptMismatch");
+    await expect(m.activateOffchain(note, f.scheduleOf(note), sigC, sigD, wrongHash.receipt, wrongHash.sig)).to.be.revertedWithCustomError(m, "ReceiptMismatch");
     const wrongAmt = await f.signReceipt(ctx, note, { amount: note.principal - 1n });
-    await expect(m.activateOffchain(note, sigC, sigD, wrongAmt.receipt, wrongAmt.sig)).to.be.revertedWithCustomError(m, "ReceiptMismatch");
+    await expect(m.activateOffchain(note, f.scheduleOf(note), sigC, sigD, wrongAmt.receipt, wrongAmt.sig)).to.be.revertedWithCustomError(m, "ReceiptMismatch");
 
     const expired = await f.signReceipt(ctx, note, { deadline: (await time.latest()) - 1 });
-    await expect(m.activateOffchain(note, sigC, sigD, expired.receipt, expired.sig)).to.be.revertedWithCustomError(m, "SignatureExpired");
+    await expect(m.activateOffchain(note, f.scheduleOf(note), sigC, sigD, expired.receipt, expired.sig)).to.be.revertedWithCustomError(m, "SignatureExpired");
 
     // receipt ditandatangani kreditur (bukan debitur) → ditolak
     const ok = await f.signReceipt(ctx, note);
     const forged = await ctx.creditor.signTypedData(ctx.domain, E.RECEIPT_TYPES, ok.receipt);
-    await expect(m.activateOffchain(note, sigC, sigD, ok.receipt, forged))
+    await expect(m.activateOffchain(note, f.scheduleOf(note), sigC, sigD, ok.receipt, forged))
       .to.be.revertedWithCustomError(m, "InvalidSignature")
       .withArgs(ctx.debtor.address);
 
-    await m.activateOffchain(note, sigC, sigD, ok.receipt, ok.sig);
+    await m.activateOffchain(note, f.scheduleOf(note), sigC, sigD, ok.receipt, ok.sig);
     expect(await m.statusOf(note.noteId)).to.equal(Status.ACTIVE);
   });
 
@@ -153,7 +153,7 @@ describe("Validasi aktivasi & replay protection", () => {
     await expect(manager.connect(ctx.creditor).cancelNonce(note.creditorNonce))
       .to.emit(manager, "NonceCancelled")
       .withArgs(ctx.creditor.address, note.creditorNonce);
-    await expect(manager.activateOnchain(note, sigC, sigD)).to.be.revertedWithCustomError(manager, "NonceAlreadyUsed");
+    await expect(manager.activateOnchain(note, f.scheduleOf(note), sigC, sigD)).to.be.revertedWithCustomError(manager, "NonceAlreadyUsed");
     await expect(manager.connect(ctx.creditor).cancelNonce(note.creditorNonce)).to.be.revertedWithCustomError(manager, "NonceAlreadyUsed");
     // dana tetap bisa ditarik
     await expect(manager.connect(ctx.creditor).refundEscrow(note)).to.emit(manager, "EscrowRefunded");
@@ -205,15 +205,17 @@ describe("Pembayaran: batas dan otorisasi", () => {
     await f.activateOnchain(ctx, note);
 
     await ctx.idrx.connect(debtor).approve(manager.target, ethers.MaxUint256);
-    await expect(manager.connect(debtor).payOnchain(note.noteId, note.totalOwed + 1n, 1, NO_PERMIT))
-      .to.be.revertedWithCustomError(manager, "Overpayment")
-      .withArgs(note.totalOwed);
     await expect(manager.connect(debtor).payOnchain(note.noteId, 0, 1, NO_PERMIT)).to.be.revertedWithCustomError(manager, "InvalidAmount");
     await expect(manager.connect(creditor).payOnchain(note.noteId, 1, 1, NO_PERMIT)).to.be.revertedWithCustomError(manager, "NotDebtor");
     await expect(manager.connect(stranger).payOnchain(note.noteId, 1, 1, NO_PERMIT)).to.be.revertedWithCustomError(manager, "NotDebtor");
     await expect(manager.connect(debtor).payOnchain(ethers.id("tidak-ada"), 1, 1, NO_PERMIT)).to.be.revertedWithCustomError(manager, "NoteNotFound");
 
-    await manager.connect(debtor).payOnchain(note.noteId, note.totalOwed, 1, NO_PERMIT);
+    // kelebihan on-chain tidak ditarik: yang dibayar hanya sisa utang
+    const before = await ctx.idrx.balanceOf(debtor.address);
+    await expect(manager.connect(debtor).payOnchain(note.noteId, note.totalOwed + IDR(5_000), 1, NO_PERMIT))
+      .to.emit(manager, "PaymentRecorded")
+      .withArgs(note.noteId, note.totalOwed, note.totalOwed, 0n, true, 1, ethers.ZeroHash, 0n);
+    expect(await ctx.idrx.balanceOf(debtor.address)).to.equal(before - note.totalOwed);
     await expect(manager.connect(debtor).payOnchain(note.noteId, 1, 1, NO_PERMIT))
       .to.be.revertedWithCustomError(manager, "InvalidStatus")
       .withArgs(Status.PAID);
@@ -299,11 +301,11 @@ describe("Smart account (ERC-1271)", () => {
     const sigR = await debtor.signTypedData(ctx.domain, E.RECEIPT_TYPES, receipt);
 
     const strangerSig = await stranger.signTypedData(ctx.domain, E.NOTE_TYPES, note);
-    await expect(manager.connect(relayer).activateOffchain(note, strangerSig, sigD, receipt, sigR))
+    await expect(manager.connect(relayer).activateOffchain(note, f.scheduleOf(note), strangerSig, sigD, receipt, sigR))
       .to.be.revertedWithCustomError(manager, "InvalidSignature")
       .withArgs(credWallet.target);
 
-    await manager.connect(relayer).activateOffchain(note, sigC, sigD, receipt, sigR);
+    await manager.connect(relayer).activateOffchain(note, f.scheduleOf(note), sigC, sigD, receipt, sigR);
     expect(await ctx.debtNote.ownerOf(BigInt(note.noteId))).to.equal(credWallet.target);
     expect(await manager.statusOf(note.noteId)).to.equal(Status.ACTIVE);
   });

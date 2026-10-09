@@ -27,8 +27,10 @@ interface IDebtManager {
         bytes32 scheduleHash;
         uint256 principal;
         uint256 totalOwed;
-        uint256 lateFee;
-        uint256 paid;
+        uint16 lateFeeBps;
+        uint256 lateFeeAccrued; // denda yang belum dibayar, termasuk yang berjalan sampai saat ini
+        uint256 scheduledPaid; //  bagian pembayaran yang sudah dialokasikan ke cicilan
+        uint256 paid; //           total semua pembayaran (cicilan + denda)
         uint64 dueDate;
         Disbursement disbursement;
         Status status;

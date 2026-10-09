@@ -174,7 +174,7 @@ describe("STRESS 4 · serangan signature, replay, dan meta-transaction", functio
       const e = await openNote(ctx, { creditor, debtor, schedule: { dueDates: [now + 30 * DAY], amounts: [IDR(500_000)] } });
       const noteSig = await creditor.signTypedData(ctx.domain, E.NOTE_TYPES, e.note);
 
-      const c = { noteId: e.note.noteId, amount: IDR(1), proofHash: nextId("p"), installmentIndex: 0, nonce: nextNonce(), deadline: now + DAY };
+      const c = { noteId: e.note.noteId, amount: IDR(1), proofHash: nextId("p"), installmentIndex: 0, nonce: nextNonce(), deadline: now + DAY, settleFull: false };
       await expect(manager.connect(relayer).recordOffchainPayment.staticCall(c, noteSig)).to.be.revertedWithCustomError(manager, "InvalidSignature");
 
       // struct lain dengan isi "mirip" tapi typehash berbeda
@@ -228,7 +228,7 @@ describe("STRESS 4 · serangan signature, replay, dan meta-transaction", functio
       const now = await time.latest();
       const live = await openNote(ctx, { creditor, debtor, schedule: { dueDates: [now + 30 * DAY], amounts: [IDR(500_000)] } });
       const shared = nextNonce();
-      const c = { noteId: live.note.noteId, amount: IDR(1), proofHash: nextId("p"), installmentIndex: 0, nonce: shared, deadline: now + DAY };
+      const c = { noteId: live.note.noteId, amount: IDR(1), proofHash: nextId("p"), installmentIndex: 0, nonce: shared, deadline: now + DAY, settleFull: false };
       await manager.connect(relayer).recordOffchainPayment(c, await creditor.signTypedData(ctx.domain, E.PAYMENT_TYPES, c));
 
       const { note } = await draft(ctx, { creditorNonce: shared });
@@ -363,6 +363,7 @@ describe("STRESS 4 · serangan signature, replay, dan meta-transaction", functio
       const now = await time.latest();
       const e = await openNote(ctx, { creditor, debtor, schedule: { dueDates: [now + 30 * DAY], amounts: [IDR(500_000)] } });
       const fake = await ethers.deployContract("PiutangForwarder");
+      await fake.setManager(manager.target); // T5: forwarder hanya ke manager; tiruan ini menunjuk manager yang sama
       const data = manager.interface.encodeFunctionData("openDispute", [e.note.noteId, REASON]);
 
       const viaFake = await request(ctx, debtor, data, {}, fake);
@@ -392,7 +393,7 @@ describe("STRESS 4 · serangan signature, replay, dan meta-transaction", functio
       const expired = await request(ctx, debtor, data, { deadline: now - 1 });
       await expect(forwarder.connect(relayer).execute(expired.r, expired.sig)).to.be.revertedWithCustomError(forwarder, "RequestExpired");
       const eoaTarget = await request(ctx, debtor, data, { to: stranger.address });
-      await expect(forwarder.connect(relayer).execute(eoaTarget.r, eoaTarget.sig)).to.be.revertedWithCustomError(forwarder, "TargetNotContract");
+      await expect(forwarder.connect(relayer).execute(eoaTarget.r, eoaTarget.sig)).to.be.revertedWithCustomError(forwarder, "TargetNotAllowed"); // T5: EOA bukan manager
 
       await forwarder.connect(relayer).execute(r, sig);
       await expect(forwarder.connect(relayer).execute(r, sig)).to.be.revertedWithCustomError(forwarder, "InvalidNonce");

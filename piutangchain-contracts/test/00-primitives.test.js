@@ -221,7 +221,7 @@ describe("PiutangForwarder (gasless)", () => {
     const eoa = await req(ctx, { to: ctx.stranger.address });
     await expect(ctx.forwarder.execute(eoa, await sign(ctx, ctx.debtor, eoa))).to.be.revertedWithCustomError(
       ctx.forwarder,
-      "TargetNotContract"
+      "TargetNotAllowed" // sejak T5 target selain DebtManager ditolak lebih dulu
     );
   });
 

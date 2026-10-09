@@ -143,13 +143,14 @@ async function randomAction(ctx, rng, entry, book, label) {
     case "close": {
       const err = m.closeDisputeError();
       if (err) {
-        await expectRevert(manager.connect(admin).closeDispute.staticCall(m.noteId, REASON), ctx, err, tag);
+        await expectRevert(manager.connect(admin).closeDispute.staticCall(m.noteId, REASON, false), ctx, err, tag);
         return action + "✗";
       }
       const ts = await nextTs(rng);
+      const waive = rng.int(0, 1) === 1;
       await time.setNextBlockTimestamp(ts);
-      await manager.connect(admin).closeDispute(m.noteId, REASON);
-      m.closeDispute(ts);
+      await manager.connect(admin).closeDispute(m.noteId, REASON, waive);
+      m.closeDispute(ts, waive);
       return action;
     }
 
@@ -283,7 +284,7 @@ async function settle(ctx, entry, book, label) {
     return ts;
   };
   if (m.status === S.FROZEN) m.unfreeze(await go(() => manager.connect(admin).unfreeze(m.noteId, REASON)));
-  if (m.status === S.DISPUTED) m.closeDispute(await go(() => manager.connect(admin).closeDispute(m.noteId, REASON)));
+  if (m.status === S.DISPUTED) m.closeDispute(await go(() => manager.connect(admin).closeDispute(m.noteId, REASON, false)));
   if (m.status !== S.PAID) {
     const ts = (await time.latest()) + 1;
     const amount = m.outstanding(ts) + IDR(1);

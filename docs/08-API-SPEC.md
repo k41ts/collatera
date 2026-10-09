@@ -48,7 +48,7 @@ Aksi on-chain yang dilakukan pengguna sendiri (bayar, dispute, markPaid, refund,
 | GET | `/notes/:id/repay/typed-data?amount=` | Typed data permit MockIDRX + domain & `nonce` PiutangForwarder + `deadline` (lihat [11-BLOCKCHAIN-SPEC](11-BLOCKCHAIN-SPEC.md#gasless)) |
 | POST | `/notes/:id/payments/onchain` | `{ amount, installmentIndex, permit: { deadline, v, r, s }, forwardRequest }` → backend cek `data` = `payOnchain(noteId, amount, installmentIndex, permit)` → enqueue `PiutangForwarder.execute`. `amount` = batas maksimal; contract hanya menarik sisa utang |
 | POST | `/notes/:id/payments/offchain` | Multipart `{ amount, proof }` → PENDING |
-| GET | `/payments/:id/typed-data` | Payload EIP-712 `PaymentConfirmation` (noteId, amount, proofHash, installmentIndex, nonce, deadline) untuk konfirmasi kreditur |
+| GET | `/payments/:id/typed-data` | Payload EIP-712 `PaymentConfirmation` (noteId, amount, proofHash, installmentIndex, nonce, deadline, settleFull) untuk konfirmasi kreditur. `settleFull=true` dipakai untuk pelunasan penuh: sisa denda kecil (≤ denda 1 hari) dihapus kontrak, supaya konfirmasi senilai sisa utang saat tanda tangan tetap melunasi walau dieksekusi beberapa detik kemudian |
 | POST | `/payments/:id/confirm` | Kreditur `{ signature }` → enqueue `recordOffchainPayment` → CONFIRMED setelah event `PaymentRecorded` |
 | POST | `/payments/:id/reject` | Kreditur `{ reason }` → REJECTED |
 

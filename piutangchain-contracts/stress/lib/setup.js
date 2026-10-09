@@ -61,6 +61,7 @@ async function deployStress(nParties = 8) {
   const forwarder = await ethers.deployContract("PiutangForwarder");
   const debtNote = await ethers.deployContract("DebtNote");
   const manager = await ethers.deployContract("DebtManager", [debtNote.target, idrx.target, forwarder.target, admin.address]);
+  await forwarder.setManager(manager.target);
   await debtNote.setManager(manager.target);
   await manager.grantRole(FREEZER_ROLE, freezer.address);
   for (const p of parties) {
@@ -153,6 +154,7 @@ async function signPayment(ctx, creditor, noteId, amount, deadline) {
     installmentIndex: 0,
     nonce: nextNonce(),
     deadline,
+    settleFull: false,
   };
   const sig = await creditor.signTypedData(ctx.domain, E.PAYMENT_TYPES, c);
   return { c, sig };

@@ -21,7 +21,7 @@ stateDiagram-v2
     OVERDUE --> PAID: dilunasi
     ACTIVE --> DISPUTED
     OVERDUE --> DISPUTED
-    DISPUTED --> ACTIVE: admin tutup (dihitung ulang)
+    DISPUTED --> ACTIVE: admin tutup, atau siapa pun setelah 14 hari (dihitung ulang)
     DISPUTED --> OVERDUE: admin tutup (dihitung ulang)
     DISPUTED --> PAID: admin tutup, sisa nol (burn di tx closeDispute)
     note right of PAID: token di-burn
@@ -67,17 +67,17 @@ OVERDUE **tidak disimpan** di contract: `statusOf()` menghitungnya saat dibaca d
 ## Pembayaran
 
 - **BR-17** Pembayaran on-chain langsung mengurangi sisa utang tanpa input manual.
-- **BR-18** Pembayaran off-chain tercatat hanya setelah kreditur konfirmasi dengan signature EIP-712 (`PaymentConfirmation`, ber-`nonce`, `deadline`, dan `proofHash` unik); kreditur boleh menolak dengan alasan.
+- **BR-18** Pembayaran off-chain tercatat hanya setelah kreditur konfirmasi dengan signature EIP-712 (`PaymentConfirmation`, ber-`nonce`, `deadline`, dan `proofHash` unik); kreditur boleh menolak dengan alasan. Konfirmasi memuat flag `settleFull`: bila `true` dan nominal menutup seluruh sisa cicilan, sisa denda kecil (≤ denda 1 hari dari tunggakan) dihapus dan piutang langsung lunas, supaya konfirmasi pelunasan tidak menyisakan denda akibat jeda eksekusi.
 - **BR-19** Pembayaran sebagian diperbolehkan; dialokasikan berurutan: (1) tunggakan cicilan yang sudah jatuh tempo, tertua dulu, (2) late fee, (3) cicilan berikutnya yang belum jatuh tempo.
 - **BR-20** Sisa utang = sisa cicilan (pokok + bunga) + late fee berjalan. Pembayaran tidak boleh melebihi sisa utang.
 - **BR-21** Ada cicilan lewat jatuh tempo yang belum lunas → OVERDUE (dicek per cicilan, on-chain); kembali ACTIVE setelah tunggakan **dan** late fee dibayar.
-- **BR-21a** Late fee **2% per bulan (30 hari)** dari cicilan yang terlambat, pro-rata harian, tidak majemuk, hanya jika disepakati di perjanjian (`lateFeeBps` 0 atau 200). Tidak bertambah selama DISPUTED atau FROZEN.
+- **BR-21a** Late fee **2% per bulan (30 hari)** dari cicilan yang terlambat, pro-rata harian, tidak majemuk, hanya jika disepakati di perjanjian (`lateFeeBps` 0 atau 200). **Tetap bertambah selama DISPUTED** (dispute tidak boleh jadi cara menghentikan denda); hanya **FROZEN** yang menghentikannya. Saat menutup dispute admin boleh menghapus denda yang menumpuk selama periode dispute (`waiveFee`). *(Diubah dari aturan lama "tidak bertambah selama DISPUTED".)*
 - **BR-22** Sisa utang nol → PAID, token di-burn, bukti lunas berisi txHash dikirim ke kedua pihak.
 
 ## Dispute & Integrity
 
 - **BR-23** Dispute hanya dari ACTIVE atau OVERDUE, wajib alasan dan bukti.
-- **BR-24** Saat DISPUTED: pembayaran on-chain tetap diterima; burn dan konfirmasi off-chain ditahan. Dispute dibuka on-chain oleh kreditur/debitur (`openDispute`) dan ditutup admin (`closeDispute`); jika sisa utang nol, PAID + burn terjadi di tx penutupan itu.
+- **BR-24** Saat DISPUTED: pembayaran on-chain tetap diterima; burn dan konfirmasi off-chain ditahan. Dispute dibuka on-chain oleh kreditur/debitur (`openDispute`) dan ditutup admin (`closeDispute(noteId, resolutionHash, waiveFee)`); jika admin tidak bertindak dalam `DISPUTE_WINDOW` (14 hari), siapa pun boleh menutupnya (`closeExpiredDispute`, tanpa waive). Dispute kedua pada piutang yang sama boleh dan tidak mereset denda yang sudah ada. Jika sisa utang nol, PAID + burn terjadi di tx penutupan itu.
 - **BR-25** Admin tidak bisa mengubah nominal atau isi perjanjian; perubahan hanya lewat revisi yang ditandatangani ulang kedua pihak.
 - **BR-26** Hash DB ≠ hash on-chain → TAMPERED → FROZEN otomatis.
 - **BR-27** Piutang FROZEN menolak pembayaran baru, perubahan, dan burn sampai admin membukanya.

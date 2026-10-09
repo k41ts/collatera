@@ -25,6 +25,7 @@ async function deployAll() {
     admin.address,
   ]);
   await debtNote.setManager(manager.target);
+  await forwarder.setManager(manager.target);
   await manager.grantRole(FREEZER_ROLE, freezer.address);
 
   await idrx.mint(creditor.address, IDR(100_000_000));
@@ -137,6 +138,7 @@ async function signPayment(ctx, noteId, amount, overrides = {}) {
     installmentIndex: 1,
     nonce: 5000n + BigInt(proofCounter),
     deadline: now + DAY,
+    settleFull: false,
     ...overrides,
   };
   const sig = await ctx.creditor.signTypedData(ctx.domain, E.PAYMENT_TYPES, c);

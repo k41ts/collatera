@@ -52,40 +52,40 @@ export default function NotesPage() {
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div className="flex flex-col gap-1.5">
           <span className="text-[13px] text-faint">Semua surat piutang kamu, sebagai kreditur maupun debitur</span>
-          <h1 className="text-[32px] font-semibold tracking-tight">Piutang saya</h1>
+          <h1 className="text-[26px] font-semibold tracking-tight sm:text-[32px]">Piutang saya</h1>
         </div>
-        <LinkButton href="/app/piutang/baru">+ Buat surat piutang</LinkButton>
+        <LinkButton href="/app/piutang/baru" className="max-sm:hidden">+ Buat surat piutang</LinkButton>
       </div>
 
-      <section aria-label="Cari dan filter" className="flex flex-col gap-3.5 rounded-[20px] border border-line bg-card p-4">
+      <section aria-label="Cari dan filter" className="flex min-w-0 flex-col gap-3.5 rounded-[20px] border border-line bg-card p-3 sm:p-4">
         <div className="flex flex-wrap items-center gap-3">
           <div className="relative min-w-0 flex-[1_1_320px]">
             <label htmlFor="cari" className="sr-only">Cari piutang</label>
             <svg className="absolute left-3.5 top-1/2 -translate-y-1/2" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#8A8C9A" strokeWidth="2" strokeLinecap="round" aria-hidden><circle cx="11" cy="11" r="7" /><path d="M20 20l-3.5-3.5" /></svg>
             <input id="cari" type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Cari judul, nama pihak, atau nomor (PC-…)" className={`${input} pl-10 text-sm`} />
           </div>
-          <div role="group" aria-label="Peranmu" className="flex gap-1 rounded-xl bg-midnight p-1">
+          <div role="group" aria-label="Peranmu" className="flex flex-[1_1_auto] gap-1 rounded-xl bg-midnight p-1 sm:flex-none">
             {(["all", "creditor", "debtor"] as const).map((r) => (
-              <button key={r} type="button" aria-pressed={role === r} onClick={() => setRole(r)} className={`min-h-[38px] rounded-[9px] px-3.5 text-[13px] ${role === r ? "bg-brand-soft font-medium text-white" : "text-muted"}`}>
+              <button key={r} type="button" aria-pressed={role === r} onClick={() => setRole(r)} className={`min-h-[38px] flex-1 rounded-[9px] px-3.5 text-[13px] sm:flex-none ${role === r ? "bg-brand-soft font-medium text-white" : "text-muted"}`}>
                 {{ all: "Semua", creditor: "Kreditur", debtor: "Debitur" }[r]}
               </button>
             ))}
           </div>
-          <label htmlFor="urut" className="flex items-center gap-2 text-[13px] text-muted">
+          <label htmlFor="urut" className="flex flex-[1_1_auto] items-center gap-2 text-[13px] text-muted sm:flex-none">
             Urutkan
-            <select id="urut" value={sort} onChange={(e) => setSort(e.target.value as typeof sort)} className="min-h-11 rounded-xl border border-line2 bg-midnight px-3 text-sm text-white">
+            <select id="urut" value={sort} onChange={(e) => setSort(e.target.value as typeof sort)} className="min-h-11 min-w-0 flex-1 rounded-xl border border-line2 bg-midnight px-3 text-sm text-white sm:flex-none">
               <option value="due">Jatuh tempo terdekat</option>
               <option value="left">Sisa terbesar</option>
               <option value="new">Terbaru diubah</option>
             </select>
           </label>
         </div>
-        <div role="group" aria-label="Status" className="flex flex-wrap gap-2">
+        <div role="group" aria-label="Status" className="-mx-3 flex gap-2 overflow-x-auto px-3 pb-1 no-scrollbar [scrollbar-width:none] sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0 sm:pb-0">
           {FILTERS.map(([key, label]) => {
             const on = status === key;
             const count = base.filter((n) => inFilter(n, key)).length;
             return (
-              <button key={key} type="button" aria-pressed={on} onClick={() => setStatus(key)} className={`inline-flex min-h-10 items-center gap-2 rounded-full border px-3.5 text-[13px] ${on ? "border-brand bg-brand font-medium text-white" : "border-line2 bg-midnight text-soft"}`}>
+              <button key={key} type="button" aria-pressed={on} onClick={() => setStatus(key)} className={`inline-flex min-h-10 flex-none items-center gap-2 whitespace-nowrap rounded-full border px-3.5 text-[13px] ${on ? "border-brand bg-brand font-medium text-white" : "border-line2 bg-midnight text-soft"}`}>
                 {label}
                 <span className={`rounded-full px-1.5 text-[11px] font-semibold ${on ? "bg-white/20" : "bg-line text-soft"}`}>{count}</span>
               </button>
@@ -99,7 +99,7 @@ export default function NotesPage() {
       </p>
 
       {!loading && shown.length === 0 ? (
-        <div className="flex flex-col items-center gap-3 rounded-[20px] border border-dashed border-line2 px-6 py-12 text-center">
+        <div className="flex flex-col items-center gap-3 rounded-[20px] border border-dashed border-line2 px-5 py-10 text-center sm:px-6 sm:py-12">
           <span className="text-lg font-semibold">{notes.length === 0 ? "Belum ada surat piutang" : "Tidak ada piutang yang cocok"}</span>
           <span className="max-w-[420px] text-sm text-muted">{notes.length === 0 ? "Buat surat piutang pertama kamu." : "Coba kata kunci lain atau hapus filter."}</span>
           {notes.length === 0 ? (
@@ -109,18 +109,18 @@ export default function NotesPage() {
           )}
         </div>
       ) : (
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-4">
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,300px),1fr))] gap-4">
           {shown.map((n) => {
             const pct = Number((BigInt(n.paid) * BigInt(100)) / BigInt(n.totalOwed || "1"));
             const urgent = ["OVERDUE", "PENDING_SIGNATURE", "AWAITING_DISBURSEMENT"].includes(n.status);
             const lft = left(n);
             return (
-              <Link key={n.id} href={`/app/piutang/${n.id}`} className="flex flex-col gap-3.5 rounded-[20px] border border-line bg-card p-5 text-white no-underline transition-colors hover:border-line2">
+              <Link key={n.id} href={`/app/piutang/${n.id}`} className="flex min-w-0 flex-col gap-3.5 rounded-[20px] border border-line bg-card p-4 text-white sm:p-5 no-underline transition-colors hover:border-line2">
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-xs text-faint">{n.code} · {TYPES[n.debtType]}</span>
                   <StatusPill status={n.status} />
                 </div>
-                <span className="text-lg font-semibold leading-snug">{n.title}</span>
+                <span className="text-lg font-semibold leading-snug [overflow-wrap:anywhere]">{n.title}</span>
                 <div className="flex items-center gap-2.5">
                   <Avatar name={n.party} size="sm" />
                   <span className="flex min-w-0 flex-col">
@@ -138,7 +138,7 @@ export default function NotesPage() {
                     <div className={`h-full rounded-full ${n.status === "PAID" ? "bg-lav" : "bg-tusc"}`} style={{ width: `${n.status === "PAID" ? 100 : pct}%` }} />
                   </div>
                 </div>
-                <div className="flex justify-between gap-2 border-t border-line pt-3 text-xs">
+                <div className="flex flex-wrap justify-between gap-x-2 gap-y-1 border-t border-line pt-3 text-xs">
                   <span className={urgent ? (n.status === "OVERDUE" ? "font-medium text-[#ff7aae]" : "font-medium text-peach") : "text-soft"}>{dueText(n)}</span>
                   <span className="text-faint">{n.paidInstallments} dari {n.installmentCount} cicilan</span>
                 </div>

@@ -51,21 +51,21 @@ export default function ProfilePage() {
 
   return (
     <div className="flex flex-col gap-5">
-      <h1 className="text-[32px] font-semibold tracking-tight">Profil</h1>
+      <h1 className="text-[26px] font-semibold tracking-tight sm:text-[32px]">Profil</h1>
 
-      <section aria-label="Ringkasan akun" className="flex flex-wrap items-center gap-5 rounded-[22px] bg-brand p-6">
+      <section aria-label="Ringkasan akun" className="flex flex-wrap items-center gap-4 rounded-[22px] bg-brand p-5 sm:gap-5 sm:p-6">
         <Avatar name={u.name || u.wallet.slice(2, 4)} seed={u.wallet} size="lg" />
         <div className="flex min-w-0 flex-[1_1_260px] flex-col gap-2">
-          <span className="text-[26px] font-semibold tracking-tight">{u.name || "Belum ada nama"}</span>
+          <span className="text-[22px] font-semibold leading-tight tracking-tight [overflow-wrap:anywhere] sm:text-[26px]">{u.name || "Belum ada nama"}</span>
           <span className="text-sm text-brand-tint">Bergabung {fmtDate(u.createdAt)} · login dengan wallet</span>
           <div className="flex flex-wrap gap-2">
             <span className={`rounded-lg px-2.5 py-1 text-xs font-medium ${u.phoneVerifiedAt ? "bg-mint text-mint-ink" : "bg-white/20"}`}>{u.phoneVerifiedAt ? "HP terverifikasi" : "HP belum diverifikasi"}</span>
             <span className="rounded-lg bg-white/20 px-2.5 py-1 text-xs font-medium">Sepolia</span>
           </div>
         </div>
-        <dl className="grid flex-[1_1_280px] grid-cols-3 gap-3 text-center">
+        <dl className="grid w-full flex-[1_1_280px] grid-cols-3 gap-2 text-center sm:w-auto sm:gap-3">
           {[["Sebagai kreditur", data.stats.asCreditor], ["Sebagai debitur", data.stats.asDebtor], ["Lunas", data.stats.paid]].map(([k, v]) => (
-            <div key={k as string} className="rounded-[14px] bg-black/20 p-3"><dt className="text-xs text-brand-tint">{k}</dt><dd className="mt-1 text-[22px] font-semibold">{v}</dd></div>
+            <div key={k as string} className="rounded-[14px] bg-black/20 p-2.5 sm:p-3"><dt className="text-[11px] leading-snug text-brand-tint sm:text-xs">{k}</dt><dd className="mt-1 text-xl font-semibold sm:text-[22px]">{v}</dd></div>
           ))}
         </dl>
       </section>
@@ -76,14 +76,14 @@ export default function ProfilePage() {
         <div className="flex min-w-0 flex-[999_1_480px] flex-col gap-5">
           <Card className="flex flex-col gap-4">
             <h2 className="text-lg font-semibold">Data diri</h2>
-            <form className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-4" onSubmit={(e) => { e.preventDefault(); run("save", () => api("/api/me", { method: "PATCH", json: { name, email } }), "Profil disimpan."); }}>
+            <form className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,220px),1fr))] gap-4" onSubmit={(e) => { e.preventDefault(); run("save", () => api("/api/me", { method: "PATCH", json: { name, email } }), "Profil disimpan."); }}>
               <Field label="Nama lengkap" htmlFor="nama" hint="Ditampilkan ke pihak lawan di surat piutang">
                 <input id="nama" value={name} onChange={(e) => setName(e.target.value)} className={input} />
               </Field>
               <Field label="Email" htmlFor="email" hint="Untuk pengingat jatuh tempo">
                 <input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} className={input} />
               </Field>
-              <div><Button type="submit" disabled={!!busy}>{busy === "save" && <Spinner />} Simpan</Button></div>
+              <div><Button type="submit" disabled={!!busy} className="w-full sm:w-auto">{busy === "save" && <Spinner />} Simpan</Button></div>
             </form>
           </Card>
 
@@ -96,7 +96,7 @@ export default function ProfilePage() {
                   <input id="hp" inputMode="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+62812…" className={input} />
                 </Field>
               </div>
-              <Button variant="secondary" disabled={!!busy || phone.length < 9} onClick={() => run("otp", async () => {
+              <Button variant="secondary" className="w-full sm:w-auto" disabled={!!busy || phone.length < 9} onClick={() => run("otp", async () => {
                 const r = await api<{ devCode?: string }>("/api/me/otp", { method: "POST", json: { action: "send", phone } });
                 setOtpSent(r.devCode ?? "");
               }, "Kode OTP dikirim.")}>{u.phoneVerifiedAt ? "Ganti nomor" : "Kirim kode OTP"}</Button>
@@ -104,31 +104,31 @@ export default function ProfilePage() {
             {otpSent !== null && (
               <div className="flex flex-wrap items-end gap-3">
                 <div className="min-w-0 flex-[1_1_160px]">
-                  <Field label="Kode OTP (6 digit)" htmlFor="otp" hint={otpSent ? `Mode demo (SMS belum aktif): kodenya ${otpSent}` : "Cek SMS kamu"}>
+                  <Field label="Kode OTP (6 digit)" htmlFor="otp" hint={otpSent ? `Mode development: kodenya ${otpSent}` : "Cek SMS kamu"}>
                     <input id="otp" inputMode="numeric" maxLength={6} value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))} className={`${input} tracking-[0.3em]`} />
                   </Field>
                 </div>
-                <Button disabled={!!busy || code.length !== 6} onClick={() => run("verify", async () => { await api("/api/me/otp", { method: "POST", json: { action: "verify", code } }); setOtpSent(null); setCode(""); }, "Nomor HP terverifikasi.")}>Verifikasi</Button>
+                <Button className="w-full sm:w-auto" disabled={!!busy || code.length !== 6} onClick={() => run("verify", async () => { await api("/api/me/otp", { method: "POST", json: { action: "verify", code } }); setOtpSent(null); setCode(""); }, "Nomor HP terverifikasi.")}>Verifikasi</Button>
               </div>
             )}
           </Card>
 
           <Card className="flex flex-col gap-3.5">
             <h2 className="text-lg font-semibold">Wallet</h2>
-            <div className="flex flex-wrap items-center gap-3 rounded-[14px] bg-midnight p-4">
+            <div className="flex flex-wrap items-center gap-3 rounded-[14px] bg-midnight p-3.5 sm:p-4">
               <div className="flex min-w-0 flex-[1_1_260px] flex-col gap-1">
                 <span className="text-xs text-faint">Alamat wallet login</span>
                 <span className="font-mono text-sm [overflow-wrap:anywhere]">{u.wallet}</span>
               </div>
-              <Button variant="secondary" onClick={async () => { try { await navigator.clipboard.writeText(u.wallet); } catch { /* abaikan */ } setCopied(true); }}>{copied ? "Tersalin" : "Salin alamat"}</Button>
+              <Button variant="secondary" className="w-full sm:w-auto" onClick={async () => { try { await navigator.clipboard.writeText(u.wallet); } catch { /* abaikan */ } setCopied(true); }}>{copied ? "Tersalin" : "Salin alamat"}</Button>
             </div>
-            <dl className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-3 text-[13px]">
+            <dl className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,180px),1fr))] gap-3 text-[13px]">
               <div><dt className="text-xs text-faint">Saldo IDRX uji</dt><dd className="mt-0.5 font-medium tabular-nums">{fmtRp(data.balance)}</dd></div>
               <div><dt className="text-xs text-faint">Token</dt><dd className="mt-0.5 font-mono text-xs [overflow-wrap:anywhere]">{ADDR.MockIDRX}</dd></div>
               <div><dt className="text-xs text-faint">Biaya jaringan</dt><dd className="mt-0.5 font-medium">Dibayar relayer PiutangChain</dd></div>
             </dl>
             <div className="flex flex-wrap gap-2.5">
-              <Button disabled={!!busy || faucetWait > 0} onClick={() => run("faucet", () => api<{ txHash: string }>("/api/faucet", { method: "POST" }), "Rp10.000.000 IDRX uji masuk ke wallet kamu.", (r) => (r as { txHash: string }).txHash)}>
+              <Button className="w-full sm:w-auto" disabled={!!busy || faucetWait > 0} onClick={() => run("faucet", () => api<{ txHash: string }>("/api/faucet", { method: "POST" }), "Rp10.000.000 IDRX uji masuk ke wallet kamu.", (r) => (r as { txHash: string }).txHash)}>
                 {busy === "faucet" && <Spinner />} {faucetWait > 0 ? `Faucet lagi dalam ${Math.ceil(faucetWait / 3600_000)} jam` : "Ambil Rp10.000.000 IDRX uji"}
               </Button>
             </div>

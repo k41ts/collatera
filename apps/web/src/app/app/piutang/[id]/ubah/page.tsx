@@ -45,7 +45,7 @@ export default function EditNotePage({ params }: { params: Promise<{ id: string 
         <span aria-hidden>/</span>
         <span>Ubah draft</span>
       </nav>
-      <h1 className="text-[34px] font-semibold tracking-tight">Ubah draft</h1>
+      <h1 className="text-[26px] font-semibold leading-tight tracking-tight [overflow-wrap:anywhere] sm:text-[34px]">Ubah draft</h1>
       <p className="-mt-3 text-sm text-muted">Dokumen yang sudah diupload dikelola di halaman detail. File baru di bawah akan ditambahkan.</p>
       <NoteForm initial={initial} noteId={id} />
     </div>

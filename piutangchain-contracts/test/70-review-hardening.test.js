@@ -286,3 +286,41 @@ describe("T3: dispute tidak boleh menjadi alat menghindari denda (BR-21a)", () =
     expect(await manager.lateFeeOf(note.noteId)).to.be.gt(frozenFee);
   });
 });
+
+describe("T4: pause tidak boleh menghukum debitur (opsi fallback: payOnchain tetap boleh saat pause)", () => {
+  it("pause 30 hari saat OVERDUE: debitur tetap bisa membayar on-chain dan melunasi; fungsi lain tetap tertahan", async () => {
+    const ctx = await loadFixture(f.deployAll);
+    const { manager, admin, creditor, debtor, idrx, debtNote } = ctx;
+    const note = await f.buildNote(ctx);
+    await f.activateOnchain(ctx, note);
+    await time.increaseTo(Number(note.dueDate) + 5 * DAY);
+    await manager.connect(admin).pause();
+    await time.increase(30 * DAY);
+
+    // fungsi lain tetap whenNotPaused
+    await expect(manager.connect(creditor).markPaid(note.noteId)).to.be.revertedWithCustomError(manager, "EnforcedPause");
+    const { c, sig } = await f.signPayment(ctx, note.noteId, IDR(1_000));
+    await expect(manager.recordOffchainPayment(c, sig)).to.be.revertedWithCustomError(manager, "EnforcedPause");
+
+    // debitur membayar sebagian lalu lunas, tanpa harus menunggu unpause
+    const credBefore = await idrx.balanceOf(creditor.address);
+    await f.payOnchain(ctx, note.noteId, IDR(100_000));
+    expect(await idrx.balanceOf(creditor.address)).to.equal(credBefore + IDR(100_000));
+    await f.payOnchain(ctx, note.noteId, note.totalOwed * 3n); // dipotong ke sisa utang
+    expect(await manager.statusOf(note.noteId)).to.equal(Status.PAID);
+    expect(await manager.remaining(note.noteId)).to.equal(0n);
+    await expect(debtNote.ownerOf(BigInt(note.noteId))).to.be.reverted;
+  });
+
+  it("unpause melanjutkan normal; hanya debitur yang boleh membayar saat pause", async () => {
+    const ctx = await loadFixture(f.deployAll);
+    const { manager, admin, creditor, debtor, stranger } = ctx;
+    const note = await f.buildNote(ctx);
+    await f.activateOnchain(ctx, note);
+    await manager.connect(admin).pause();
+    await expect(manager.connect(stranger).payOnchain(note.noteId, 1, 1, f.NO_PERMIT)).to.be.revertedWithCustomError(manager, "NotDebtor");
+    await manager.connect(admin).unpause();
+    await f.payOnchain(ctx, note.noteId, IDR(100_000));
+    await expect(manager.connect(creditor).markPaid(note.noteId)).to.emit(manager, "NoteMarkedPaid");
+  });
+});

@@ -3,6 +3,7 @@ import Link from "next/link";
 import { use } from "react";
 import NoteForm, { type NoteFormValues } from "@/components/NoteForm";
 import { Notice } from "@/components/ui";
+import { NoteFormSkeleton } from "@/components/Skeleton";
 import { useApi } from "@/lib/hooks";
 import { unitsToRupiah } from "@/lib/money";
 
@@ -19,7 +20,7 @@ export default function EditNotePage({ params }: { params: Promise<{ id: string 
   const { id } = use(params);
   const { data, error } = useApi<Detail>(`/api/notes/${id}`);
   if (error) return <Notice tone="error">{error}</Notice>;
-  if (!data) return <p className="text-muted">Memuat…</p>;
+  if (!data) return <NoteFormSkeleton />;
   const n = data.note;
   if (!data.me.isCreator || n.status !== "DRAFT") return <Notice tone="warn">Draft ini tidak bisa diubah (hanya pembuat, dan hanya sebelum dikirim).</Notice>;
 

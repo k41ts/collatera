@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Avatar, StatusPill, input } from "@/components/ui";
 import { api } from "@/lib/client";
 import { useApi, type NoteSummary } from "@/lib/hooks";
+import { ChatHeaderSkeleton, ChatListSkeleton, ChatThreadSkeleton } from "@/components/Skeleton";
 
 type Msg = { id: string; body: string; link: string | null; createdAt: string; kind: "me" | "them" | "event"; sender: string | null };
 
@@ -73,7 +74,7 @@ function ChatInner() {
         <section aria-label="Daftar percakapan" className={`min-w-0 flex-[1_1_300px] flex-col gap-2.5 rounded-[20px] border border-line bg-card p-2.5 sm:p-3.5 lg:flex lg:max-w-[360px] ${chosen ? "hidden" : "flex"}`}>
           <label htmlFor="cari-chat" className="sr-only">Cari percakapan</label>
           <input id="cari-chat" type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Cari nama atau piutang" className={`${input} text-[13px]`} />
-          {convos.length === 0 && <p className="p-3 text-sm text-muted">Belum ada percakapan. Chat muncul untuk setiap surat piutang kamu.</p>}
+          {!list ? <ChatListSkeleton /> : convos.length === 0 && <p className="p-3 text-sm text-muted">Belum ada percakapan. Chat muncul untuk setiap surat piutang kamu.</p>}
           {convos.map((c) => {
             const on = c.id === activeId;
             return (
@@ -91,7 +92,12 @@ function ChatInner() {
         </section>
 
         <section aria-label="Percakapan" className={`min-w-0 flex-[999_1_480px] flex-col overflow-hidden rounded-[20px] border border-line bg-card max-lg:h-[calc(100dvh-8.5rem)] max-lg:min-h-[420px] lg:flex lg:min-h-[560px] ${chosen ? "flex" : "hidden"}`}>
-          {!active ? (
+          {!list ? (
+            <>
+              <ChatHeaderSkeleton />
+              <ChatThreadSkeleton />
+            </>
+          ) : !active ? (
             <p className="m-auto p-6 text-sm text-muted">Pilih percakapan di kiri.</p>
           ) : (
             <>
@@ -114,6 +120,7 @@ function ChatInner() {
                 Chat tersimpan di server PiutangChain, bukan di blockchain, dan <strong className="font-semibold text-white">tidak mengubah isi perjanjian</strong>. Perubahan nominal atau jadwal tetap lewat revisi yang ditandatangani berdua.
               </div>
               <ol aria-label="Pesan" aria-live="polite" className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto overscroll-contain px-3 py-4 sm:px-4 lg:max-h-[60vh] lg:min-h-[320px]">
+                {!thread && <li className="flex flex-1 flex-col"><ChatThreadSkeleton inset={false} /></li>}
                 {(thread?.messages ?? []).map((m) =>
                   m.kind === "event" && revisionKind(m.body) ? (
                     <li key={m.id} className="flex justify-center">

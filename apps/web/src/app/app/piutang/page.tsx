@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { Avatar, LinkButton, StatusPill, fmtDate, input } from "@/components/ui";
 import { fmtRp } from "@/lib/money";
 import { useApi, type NoteSummary } from "@/lib/hooks";
+import { NoteGridSkeleton, Sk } from "@/components/Skeleton";
 
 const TYPES: Record<string, string> = { personal: "Pribadi", business: "Bisnis", invoice: "Invoice", other: "Lainnya" };
 const FILTERS: [string, string, string[]][] = [
@@ -101,11 +102,17 @@ export default function NotesPage() {
         </div>
       </section>
 
-      <p role="status" className="text-[13px] text-muted">
-        {loading ? "Memuat…" : error ? error : `${shown.length} dari ${notes.length} piutang${q.trim() ? ` untuk "${q.trim()}"` : ""}`}
-      </p>
+      {loading ? (
+        <Sk className="h-3.5 w-28" />
+      ) : (
+        <p role="status" className="text-[13px] text-muted">
+          {error ? error : `${shown.length} dari ${notes.length} piutang${q.trim() ? ` untuk "${q.trim()}"` : ""}`}
+        </p>
+      )}
 
-      {!loading && shown.length === 0 ? (
+      {loading ? (
+        <NoteGridSkeleton />
+      ) : shown.length === 0 ? (
         <div className="flex flex-col items-center gap-3 rounded-[20px] border border-dashed border-line2 px-5 py-10 text-center sm:px-6 sm:py-12">
           <span className="text-lg font-semibold">{notes.length === 0 ? "Belum ada surat piutang" : "Tidak ada piutang yang cocok"}</span>
           <span className="max-w-[420px] text-sm text-muted">{notes.length === 0 ? "Buat surat piutang pertama kamu." : "Coba kata kunci lain atau hapus filter."}</span>

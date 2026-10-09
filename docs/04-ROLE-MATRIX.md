@@ -59,3 +59,6 @@ Peran ditentukan **per surat piutang**. Satu akun bisa jadi kreditur di satu piu
 | `DEFAULT_ADMIN_ROLE` | Multisig tim | Atur role |
 | `RELAYER_ROLE` | Wallet relayer | `mintNote`, `confirmOffchainPayment` |
 | `GUARDIAN_ROLE` | Admin + integrity service | `freeze`, `unfreeze`, `setDisputed` |
+| `MINTER_ROLE` (MockIDR) | Wallet relayer | `faucet` (testnet) |
+
+`repay` tidak butuh role: dipanggil debitur lewat `Forwarder` (ERC-2771). `markOverdue` boleh dipanggil siapa saja, dalam praktik oleh cron worker.

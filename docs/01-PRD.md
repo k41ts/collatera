@@ -50,5 +50,6 @@ Surat piutang yang sudah ditandatangani kedua pihak di-mint sebagai **token ERC-
 - Bunga/fee diizinkan di MVP atau hanya pinjaman tanpa bunga?
 - Token perlu bisa dialihkan (cessie) di versi berikutnya?
 - Siapa menanggung biaya gas relayer jangka panjang?
+- Late fee dan keterlambatan per cicilan: dihitung on-chain atau cukup off-chain? Saat ini contract hanya menyimpan `dueDate` akhir dan `outstanding` (pokok + bunga), sehingga late fee belum bisa dibayar on-chain.
 
 Detail lanjutan: alur di [02-USER-FLOW](02-USER-FLOW.md), aturan di [03-BUSINESS-RULES](03-BUSINESS-RULES.md).

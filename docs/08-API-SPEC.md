@@ -1,7 +1,8 @@
 # 08 — API Specification
 
 Base URL: `/api/v1` · Format: JSON · Auth: cookie `session` (JWT httpOnly) hasil SIWE.
-Semua endpoint `/notes/:id/*` hanya untuk kreditur/debitur piutang itu (atau admin).
+Semua endpoint `/notes/:id/*` hanya untuk kreditur/debitur piutang itu (atau admin saat piutang DISPUTED/FROZEN, lihat [04-ROLE-MATRIX](04-ROLE-MATRIX.md)).
+Nominal dikirim sebagai string rupiah utuh (mis. `"5000000"`); backend mengonversi ke 18 desimal (`× 10^18`) sebelum disimpan dan dikirim ke contract.
 
 ## Auth
 
@@ -13,6 +14,7 @@ Semua endpoint `/notes/:id/*` hanya untuk kreditur/debitur piutang itu (atau adm
 | POST | `/auth/otp/send` | `{ phone }` | Kirim OTP |
 | POST | `/auth/otp/verify` | `{ phone, code }` | Tandai HP terverifikasi |
 | GET | `/me` | — | Profil + status verifikasi |
+| POST | `/faucet` | — | Testnet saja: relayer mengirim MockIDR ke wallet user (gasless), dibatasi rate limit |
 
 ## Surat Piutang
 
@@ -39,6 +41,7 @@ Semua endpoint `/notes/:id/*` hanya untuk kreditur/debitur piutang itu (atau adm
 | GET | `/notes/:id/repay/typed-data` | Payload permit untuk bayar on-chain |
 | POST | `/notes/:id/payments/onchain` | `{ amount, permitSig }` → enqueue repay |
 | POST | `/notes/:id/payments/offchain` | Multipart `{ amount, proof }` → PENDING |
+| GET | `/payments/:id/typed-data` | Payload EIP-712 `OffchainPayment` untuk konfirmasi kreditur |
 | POST | `/payments/:id/confirm` | Kreditur `{ signature }` → CONFIRMED |
 | POST | `/payments/:id/reject` | Kreditur `{ reason }` → REJECTED |
 
@@ -53,7 +56,8 @@ Semua endpoint `/notes/:id/*` hanya untuk kreditur/debitur piutang itu (atau adm
 | POST | `/admin/notes/:id/freeze` | `{ reason }` |
 | POST | `/admin/notes/:id/unfreeze` | Hanya jika integrity VERIFIED |
 | GET | `/admin/audit-logs?noteId=` | Audit log |
-| GET | `/notifications` · POST `/notifications/:id/read` | In-app |
+| GET | `/notifications` | Daftar notifikasi in-app |
+| POST | `/notifications/:id/read` | Tandai sudah dibaca |
 
 ## Contoh
 
@@ -78,6 +82,6 @@ POST /api/v1/notes
 ## Error
 
 `{ "error": { "code": "NOTE_FROZEN", "message": "…" } }`
-Kode umum: `UNAUTHORIZED` 401, `FORBIDDEN` 403, `NOT_FOUND` 404, `INVALID_STATUS` 409, `DOC_HASH_EXISTS` 409, `SIGNATURE_INVALID` 422, `SIGNATURE_EXPIRED` 422, `NOTE_FROZEN` 423, `RATE_LIMITED` 429.
+Kode umum: `UNAUTHORIZED` 401, `FORBIDDEN` 403, `PHONE_NOT_VERIFIED` 403, `NOT_FOUND` 404, `INVALID_STATUS` 409, `DOC_HASH_EXISTS` 409, `SIGNATURE_INVALID` 422, `SIGNATURE_EXPIRED` 422, `FILE_INVALID` 422, `NOTE_FROZEN` 423, `RATE_LIMITED` 429.
 
-Header `Idempotency-Key` wajib untuk `/sign`, `/payments/*`, dan `/confirm`.
+Header `Idempotency-Key` wajib untuk `/notes/:id/sign`, `/notes/:id/payments/*`, `/payments/:id/confirm`, dan `/notes/:id/confirm-disbursement`.

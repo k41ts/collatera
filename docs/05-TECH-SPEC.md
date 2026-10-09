@@ -35,13 +35,24 @@ struct DebtNote {
     uint256 interestAmount;  // 0 jika tanpa bunga
     uint256 lateFeeBps;      // 0 jika tidak disepakati
     uint64  dueDate;         // unix timestamp
-    bytes32 scheduleHash;    // keccak256(abi.encode(installments[]))
-    bytes32 docHash;         // keccak256(concat(sorted fileHashes))
+    bytes32 scheduleHash;    // keccak256(abi.encode(dueDates[], amounts[]))
+    bytes32 docHash;         // keccak256(abi.encodePacked(sorted fileHashes))
     uint8   disbursement;    // 0 = on-chain, 1 = off-chain
-    uint256 nonce;
+    uint256 creditorNonce;   // nonces[creditor] di contract
+    uint256 debtorNonce;     // nonces[debtor] di contract
+    uint64  deadline;        // sama untuk kedua pihak, ditetapkan backend di typed-data
+}
+
+struct OffchainPayment {     // ditandatangani kreditur saat konfirmasi bayar off-chain
+    uint256 tokenId;
+    bytes32 paymentId;       // uuid payment → bytes32
+    uint256 amount;
+    uint256 nonce;           // nonces[creditor]
     uint64  deadline;
 }
 ```
+
+Kedua pihak menandatangani struct yang **identik** (termasuk kedua nonce dan `deadline`), sehingga `termsHash` yang diverifikasi contract sama untuk dua signature.
 
 Domain: `{ name: "PiutangChain", version: "1", chainId: 11155111, verifyingContract: <PiutangNote> }`.
 

@@ -18,10 +18,11 @@ stateDiagram-v2
     OVERDUE --> DISPUTED
     DISPUTED --> ACTIVE: admin tutup (status semula)
     DISPUTED --> OVERDUE: admin tutup (status semula)
+    DISPUTED --> PAID: admin tutup, sisa nol (burn yang ditunda dijalankan)
     note right of PAID: token di-burn
 ```
 
-**FROZEN** bisa terjadi dari status apa pun saat integrity check menghasilkan TAMPERED. Hanya admin yang bisa membukanya setelah data diperbaiki.
+**FROZEN** bisa terjadi dari status apa pun saat integrity check menghasilkan TAMPERED. Hanya admin yang bisa membukanya setelah data diperbaiki; piutang kembali ke status sebelum di-freeze.
 
 ## Akun & Identitas
 
@@ -49,12 +50,12 @@ stateDiagram-v2
 
 - **BR-14** On-chain: kreditur menyetor stablecoin ke escrow saat tanda tangan; dana dilepas ke debitur saat mint.
 - **BR-15** Off-chain: piutang ACTIVE setelah debitur mengonfirmasi terima dana.
-- **BR-16** Jika piutang batal sebelum mint, dana escrow dikembalikan penuh ke kreditur.
+- **BR-16** Penarikan escrow (permit) dan pelepasan ke debitur terjadi atomik dalam satu tx `mintNote`. Jika piutang batal sebelum mint, permit tidak pernah dieksekusi sehingga dana kreditur tidak berpindah.
 
 ## Pembayaran
 
 - **BR-17** Pembayaran on-chain langsung mengurangi sisa utang tanpa input manual.
-- **BR-18** Pembayaran off-chain tercatat hanya setelah kreditur konfirmasi dengan signature; kreditur boleh menolak dengan alasan.
+- **BR-18** Pembayaran off-chain tercatat hanya setelah kreditur konfirmasi dengan signature EIP-712 (`OffchainPayment`, ber-`nonce` dan `deadline`); kreditur boleh menolak dengan alasan.
 - **BR-19** Pembayaran sebagian diperbolehkan dan dialokasikan ke cicilan tertua dulu.
 - **BR-20** Pembayaran tidak boleh melebihi sisa utang (termasuk late fee).
 - **BR-21** Lewat jatuh tempo dan belum lunas → OVERDUE; late fee dihitung hanya jika disepakati di perjanjian.

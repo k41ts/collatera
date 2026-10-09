@@ -4,6 +4,9 @@
 erDiagram
     USERS ||--o{ DEBT_NOTES : "kreditur"
     USERS ||--o{ DEBT_NOTES : "debitur"
+    USERS ||--o{ DEBT_NOTES : "pembuat"
+    USERS ||--o{ SIGNATURES : "penanda tangan"
+    USERS ||--o{ DISPUTES : "pengaju"
     USERS ||--o{ AUTH_NONCES : has
     DEBT_NOTES ||--o{ NOTE_VERSIONS : has
     NOTE_VERSIONS ||--o{ SIGNATURES : has
@@ -32,11 +35,13 @@ erDiagram
         uuid id PK
         bytes32 chain_note_id UK
         uuid creator_id FK
-        uuid creditor_id FK
-        uuid debtor_id FK
+        uuid creditor_id FK "null sampai pihak lawan bergabung"
+        uuid debtor_id FK "null sampai pihak lawan bergabung"
         int current_version
         string status
         string status_before_dispute
+        string status_before_freeze
+        bytes32 minted_doc_hash UK "diisi saat mint"
         string integrity_status "VERIFIED|TAMPERED|UNCHECKED"
         numeric outstanding_amount
         bigint token_id
@@ -57,7 +62,7 @@ erDiagram
         int late_fee_bps
         text collateral_note
         string disbursement "onchain|offchain"
-        bytes32 doc_hash UK
+        bytes32 doc_hash
         bytes32 schedule_hash
         bytes32 terms_hash
         bool is_current
@@ -126,7 +131,7 @@ erDiagram
     CHAIN_TXS {
         uuid id PK
         uuid note_id FK
-        string kind "mint|repay|confirm|freeze|burn"
+        string kind "mint|repay|confirm|overdue|dispute|freeze|unfreeze|faucet"
         string status "QUEUED|SENT|MINED|FAILED"
         string tx_hash
         int attempts
@@ -158,6 +163,8 @@ erDiagram
 
 ## Catatan
 
-- `NOTE_VERSIONS` immutable: revisi = baris baru, `is_current` dipindah.
+- `NOTE_VERSIONS` immutable: revisi = baris baru, `is_current` dipindah. `doc_hash` **tidak** unik di tabel ini karena revisi yang hanya mengubah jadwal memakai dokumen yang sama.
+- Anti double-mint di DB: `DEBT_NOTES.minted_doc_hash` unik, diisi dari versi yang di-mint (cermin `usedDocHash` di contract).
+- Burn terjadi di dalam tx `repay`/`confirm` (atau saat dispute ditutup), jadi tidak ada `kind` burn terpisah di `CHAIN_TXS`.
 - `PAYMENTS (tx_hash, log_index)` unik untuk idempotency event on-chain.
 - `AUDIT_LOGS` append-only (tanpa UPDATE/DELETE lewat RLS atau trigger).

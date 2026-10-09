@@ -28,8 +28,10 @@
 | SC-12 | `repay` saat FROZEN | Revert `NoteFrozen` |
 | SC-13 | Freeze oleh non-guardian | Revert AccessControl |
 | SC-14 | DISPUTED: repay sampai nol | Outstanding 0, burn ditunda |
-| SC-15 | Loop 100x jumlah repay acak | Total bayar tidak pernah > pokok + fee |
+| SC-15 | Loop 100x jumlah repay acak | Total bayar tidak pernah > pokok + bunga |
 | SC-16 | `mintNote` sebelum deadline, lalu `time.increaseTo` lewat jatuh tempo (hardhat-network-helpers) | `markOverdue` berhasil |
+| SC-17 | `confirmOffchainPayment` dengan signature yang sama dua kali | Revert (nonce terpakai) |
+| SC-18 | Freeze saat DISPUTED lalu unfreeze | Status kembali DISPUTED |
 
 ## Backend
 

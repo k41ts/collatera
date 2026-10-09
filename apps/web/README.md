@@ -19,7 +19,7 @@ npm install
 cp .env.example .env
 ```
 
-Isi `.env`: `DATABASE_URL` (Supabase "Transaction pooler", port 6543, `?pgbouncer=true&connection_limit=1`), `DIRECT_URL` (Supabase "Direct connection" atau "Session pooler", port 5432), `SESSION_SECRET` (string acak ≥32 karakter) dan `RELAYER_PRIVATE_KEY` (wallet ber-Sepolia ETH; harus owner MockIDRX + `ADMIN_ROLE` supaya faucet dan auto-freeze jalan). Di development, kalau `RELAYER_PRIVATE_KEY` kosong, server memakai `DEPLOYER_PRIVATE_KEY` dari `piutangchain-contracts/.env`.
+Isi `.env`: `DATABASE_URL` (Supabase "Transaction pooler", port 6543, `?pgbouncer=true&connection_limit=5`), `DIRECT_URL` (Supabase "Direct connection" atau "Session pooler", port 5432), `SESSION_SECRET` (string acak ≥32 karakter) dan `RELAYER_PRIVATE_KEY` (wallet ber-Sepolia ETH; harus owner MockIDRX + `ADMIN_ROLE` supaya faucet dan auto-freeze jalan). Di development, kalau `RELAYER_PRIVATE_KEY` kosong, server memakai `DEPLOYER_PRIVATE_KEY` dari `piutangchain-contracts/.env`.
 
 ```bash
 npx prisma db push

@@ -19,7 +19,8 @@ export const noteInclude = {
   // tanpa kolom data (isi file) supaya setiap request tidak menarik sampai 20 MB
   documents: { orderBy: { createdAt: "asc" as const }, select: { id: true, noteId: true, name: true, mime: true, size: true, fileHash: true, createdAt: true } },
   signatures: true,
-  payments: { orderBy: { createdAt: "desc" as const } },
+  // tanpa isi file bukti transfer; diambil terpisah lewat /api/files/proof/[id]
+  payments: { orderBy: { createdAt: "desc" as const }, omit: { proofData: true } },
   events: { orderBy: { createdAt: "desc" as const }, take: 30 },
 };
 

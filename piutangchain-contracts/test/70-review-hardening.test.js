@@ -1,7 +1,7 @@
 const { expect } = require("chai");
 const { loadFixture } = require("@nomicfoundation/hardhat-network-helpers");
 const f = require("./fixture");
-const { ethers, time, E, IDR, DAY, Status } = f;
+const { ethers, time, E, IDR, DAY, NO_PERMIT, Status } = f;
 
 // Regresi hasil review (branch fix/review-hardening). Satu blok describe per tugas.
 
@@ -452,5 +452,96 @@ describe("T6: deploy.js — FREEZER_ROLE jelas dan peringatan admin tunggal", ()
     } finally {
       delete process.env.FREEZER_ADDRESS;
     }
+  });
+});
+
+describe("T7: ERC-1271 wallet jahat", () => {
+  const Mode = { VALID: 0, GARBAGE: 1, WRONG_MAGIC: 2, REVERT: 3, BURN_GAS: 4, REENTER: 5, BOMB: 6 };
+
+  /** Note dengan kreditur = wallet jahat (sudah approve token ke manager). */
+  async function creditorWalletNote(ctx) {
+    const wallet = await ethers.deployContract("MockHostileWallet", [ctx.creditor.address]);
+    await ctx.idrx.mint(wallet.target, IDR(10_000_000));
+    await wallet.connect(ctx.creditor).execute(ctx.idrx.target, ctx.idrx.interface.encodeFunctionData("approve", [ctx.manager.target, ethers.MaxUint256]));
+    const note = await f.buildNote(ctx, { creditor: wallet.target });
+    const sigC = await ctx.creditor.signTypedData(ctx.domain, E.NOTE_TYPES, note); // tanda tangan owner wallet
+    const sigD = await f.signNote(ctx.debtor, ctx, note);
+    return { wallet, note, sigC, sigD };
+  }
+
+  for (const [name, mode] of [["return sampah (4 byte)", Mode.GARBAGE], ["magic salah", Mode.WRONG_MAGIC], ["revert", Mode.REVERT]]) {
+    it("wallet " + name + ": depositEscrow ditolak InvalidSignature, tidak ada dana/nonce yang berubah", async () => {
+      const ctx = await loadFixture(f.deployAll);
+      const { wallet, note, sigC } = await creditorWalletNote(ctx);
+      await wallet.setMode(mode);
+      const bal = await ctx.idrx.balanceOf(wallet.target);
+      await expect(ctx.manager.depositEscrow(note, sigC, NO_PERMIT)).to.be.revertedWithCustomError(ctx.manager, "InvalidSignature");
+      expect(await ctx.idrx.balanceOf(wallet.target)).to.equal(bal);
+      expect(await ctx.manager.nonceUsed(wallet.target, note.creditorNonce)).to.equal(false);
+    });
+  }
+
+  it("wallet yang membakar gas: transaksi gagal, tidak ada efek; biaya dibatasi gas limit pengirim", async () => {
+    const ctx = await loadFixture(f.deployAll);
+    const { wallet, note, sigC } = await creditorWalletNote(ctx);
+    await wallet.setMode(Mode.BURN_GAS);
+    await expect(ctx.manager.connect(ctx.relayer).depositEscrow(note, sigC, NO_PERMIT, { gasLimit: 1_000_000 })).to.be.reverted;
+    expect(await ctx.manager.escrowOf(await ctx.manager.noteHash(note))).to.equal(0n);
+    expect(await ctx.manager.nonceUsed(wallet.target, note.creditorNonce)).to.equal(false);
+  });
+
+  it("wallet return-bomb (500 KB): tidak ada efek samping", async () => {
+    const ctx = await loadFixture(f.deployAll);
+    const { wallet, note, sigC } = await creditorWalletNote(ctx);
+    await wallet.setMode(Mode.BOMB);
+    await expect(ctx.manager.connect(ctx.relayer).depositEscrow(note, sigC, NO_PERMIT, { gasLimit: 3_000_000 })).to.be.reverted;
+    expect(await ctx.manager.nonceUsed(wallet.target, note.creditorNonce)).to.equal(false);
+  });
+
+  it("wallet reentrancy: panggilan balik dari dalam isValidSignature (staticcall) tidak bisa mengubah state", async () => {
+    const ctx = await loadFixture(f.deployAll);
+    const { wallet, note, sigC, sigD } = await creditorWalletNote(ctx);
+    await wallet.setReenter(ctx.manager.target, ctx.manager.interface.encodeFunctionData("cancelNonce", [999n]));
+    await wallet.setMode(Mode.REENTER);
+    await ctx.manager.depositEscrow(note, sigC, NO_PERMIT); // valid hanya jika panggilan balik gagal
+    expect(await ctx.manager.nonceUsed(wallet.target, 999n)).to.equal(false);
+    await ctx.manager.activateOnchain(note, f.scheduleOf(note), sigC, sigD);
+    expect(await ctx.manager.statusOf(note.noteId)).to.equal(Status.ACTIVE);
+    expect(await ctx.manager.nonceUsed(wallet.target, 999n)).to.equal(false);
+  });
+
+  it("wallet mencabut validitas antara depositEscrow dan activateOnchain: aktivasi gagal, dana aman dan bisa di-refund", async () => {
+    const ctx = await loadFixture(f.deployAll);
+    const { manager, idrx } = ctx;
+    const { wallet, note, sigC, sigD } = await creditorWalletNote(ctx);
+    const before = await idrx.balanceOf(wallet.target);
+
+    await manager.depositEscrow(note, sigC, NO_PERMIT); // saat itu valid
+    expect(await idrx.balanceOf(wallet.target)).to.equal(before - note.principal);
+
+    await wallet.setMode(Mode.WRONG_MAGIC); // dicabut
+    await expect(manager.activateOnchain(note, f.scheduleOf(note), sigC, sigD)).to.be.revertedWithCustomError(manager, "InvalidSignature");
+    expect(await manager.statusOf(note.noteId)).to.equal(Status.NONE);
+    expect(await manager.escrowOf(await manager.noteHash(note))).to.equal(note.principal);
+
+    // refundEscrow tidak butuh signature valid: wallet menarik dananya sendiri
+    await wallet.connect(ctx.creditor).execute(manager.target, manager.interface.encodeFunctionData("refundEscrow", [note]));
+    expect(await idrx.balanceOf(wallet.target)).to.equal(before);
+    expect(await idrx.balanceOf(manager.target)).to.equal(0n);
+  });
+
+  it("debitur wallet mencabut tanda tangan setelah kreditur setor escrow: kreditur tetap bisa refund", async () => {
+    const ctx = await loadFixture(f.deployAll);
+    const { manager, idrx, creditor } = ctx;
+    const dWallet = await ethers.deployContract("MockHostileWallet", [ctx.debtor.address]);
+    const note = await f.buildNote(ctx, { debtor: dWallet.target });
+    const sigC = await f.signNote(creditor, ctx, note);
+    const sigD = await ctx.debtor.signTypedData(ctx.domain, E.NOTE_TYPES, note);
+    await manager.depositEscrow(note, sigC, await f.signPermit(idrx, creditor, manager.target, note.principal, note.deadline));
+    await dWallet.setMode(Mode.GARBAGE);
+    await expect(manager.activateOnchain(note, f.scheduleOf(note), sigC, sigD)).to.be.revertedWithCustomError(manager, "InvalidSignature");
+    const bal = await idrx.balanceOf(creditor.address);
+    await manager.connect(creditor).refundEscrow(note);
+    expect(await idrx.balanceOf(creditor.address)).to.equal(bal + note.principal);
   });
 });

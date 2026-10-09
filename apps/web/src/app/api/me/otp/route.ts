@@ -1,5 +1,5 @@
-// Verifikasi nomor HP. Provider SMS belum disambung: di mode development kode OTP dikembalikan di respons
-// dan dicetak di log server. Di production kirim lewat provider (Twilio Verify / lokal) di sini.
+// Verifikasi nomor HP. Provider SMS belum disambung: di development (atau production dengan OTP_DEMO=1 untuk
+// demo hackathon) kode OTP dikembalikan di respons. Untuk rilis sungguhan kirim lewat provider SMS di sini.
 import { randomInt } from "node:crypto";
 import { z } from "zod";
 import { db } from "@/lib/db";
@@ -17,8 +17,8 @@ export const POST = handler(async (req, user) => {
       where: { id: user.id },
       data: { phone: phone.replace(/[\s-]/g, ""), phoneVerifiedAt: null, otpCode: code, otpExpiresAt: new Date(Date.now() + 5 * 60_000) },
     });
-    console.log(`[OTP dev] ${phone}: ${code}`);
-    return ok({ sent: true, devCode: process.env.NODE_ENV !== "production" ? code : undefined });
+    const demo = process.env.NODE_ENV !== "production" || process.env.OTP_DEMO === "1";
+    return ok({ sent: true, devCode: demo ? code : undefined });
   }
   const { code } = Verify.parse(body);
   if (!user.otpCode || !user.otpExpiresAt || user.otpExpiresAt < new Date()) throw new ApiError(422, "OTP_EXPIRED", "Kode OTP kedaluwarsa. Kirim ulang.");

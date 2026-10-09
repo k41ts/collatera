@@ -1,15 +1,16 @@
-// Skema PiutangChain (lihat docs/07-ERD.md).
-// Dev memakai SQLite supaya tidak butuh Docker/Postgres. Untuk Supabase/Postgres: ganti `provider` jadi
-// "postgresql", isi DATABASE_URL, lalu `npx prisma migrate dev`. Nominal disimpan sebagai string angka
-// dalam satuan terkecil token (MockIDRX 2 desimal: Rp1 = "100") supaya portabel di SQLite & Postgres.
+// Skema PiutangChain (lihat docs/07-ERD.md). PostgreSQL (Supabase).
+// DATABASE_URL = pooler transaksi Supabase (port 6543, ?pgbouncer=true) untuk serverless Vercel;
+// DIRECT_URL = koneksi langsung (port 5432) untuk migrasi. Nominal disimpan sebagai string angka dalam
+// satuan terkecil token (MockIDRX 2 desimal: Rp1 = "100"). File upload disimpan sebagai bytea (maks 4 MB).
 
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 model User {
@@ -112,7 +113,7 @@ model Document {
   mime      String
   size      Int
   fileHash  String   // keccak256(isi file)
-  path      String   // relatif ke folder uploads
+  data      Bytes    // isi file
   createdAt DateTime @default(now())
   note      Note     @relation(fields: [noteId], references: [id], onDelete: Cascade)
 }
@@ -138,7 +139,8 @@ model Payment {
   amount      String
   installment Int      @default(0)
   status      String   @default("PENDING") // PENDING | CONFIRMED | REJECTED
-  proofPath   String?
+  proofData   Bytes?
+  proofMime   String?
   proofHash   String?
   proofName   String?
   rejectReason String?

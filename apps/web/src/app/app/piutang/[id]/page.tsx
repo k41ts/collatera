@@ -34,8 +34,10 @@ const LIVE = ["ACTIVE", "OVERDUE", "DISPUTED", "FROZEN"];
 
 export default function NoteDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const { data, error, refresh } = useApi<Detail>(`/api/notes/${id}`);
+  // Polling supaya aksi pihak lain (bukti transfer, konfirmasi, tanda tangan) muncul tanpa refresh halaman.
+  const { data, error, refresh } = useApi<Detail>(`/api/notes/${id}`, 10000);
   const [busy, setBusy] = useState<string | null>(null);
+  const [rejecting, setRejecting] = useState<string | null>(null);
   const [msg, setMsg] = useState<{ tone: "ok" | "error" | "info"; text: string; tx?: string } | null>(null);
 
   if (error) return <Notice tone="error">{error}</Notice>;
@@ -347,13 +349,25 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
                   </div>
                   {role === "creditor" && (
                     <div className="flex w-full flex-wrap gap-2.5 max-sm:[&>*]:flex-1 sm:w-auto">
-                      <Button variant="secondary" disabled={!!busy} onClick={() => { const r = ask("Alasan menolak bukti ini:"); if (r) run("rejectpay", () => api(`/api/payments/${p.id}`, { method: "POST", json: { action: "reject", reason: r } }), "Bukti transfer ditolak."); }}>Tolak</Button>
+                      <Button variant="secondary" disabled={!!busy} onClick={() => setRejecting(rejecting === p.id ? null : p.id)}>Tolak</Button>
                       <Button disabled={!!busy || n.status !== "ACTIVE" && n.status !== "OVERDUE"} onClick={() => run("confirm", async () => {
                         const t = await api<{ domain: Record<string, unknown>; types: never; message: Record<string, unknown> }>(`/api/payments/${p.id}`);
                         const signature = await signTyped(t, me.wallet);
                         return api(`/api/payments/${p.id}`, { method: "POST", json: { action: "confirm", signature, message: t.message } });
                       }, "Pembayaran dikonfirmasi.")}>{busy === "confirm" && <Spinner />} Konfirmasi &amp; tanda tangan</Button>
                     </div>
+                  )}
+                  {role === "creditor" && rejecting === p.id && (
+                    <RejectProof
+                      busy={busy === "rejectpay"}
+                      disabled={!!busy}
+                      onCancel={() => setRejecting(null)}
+                      onSubmit={(reason) => run("rejectpay", async () => {
+                        const r = await api(`/api/payments/${p.id}`, { method: "POST", json: { action: "reject", reason } });
+                        setRejecting(null);
+                        return r;
+                      }, "Bukti transfer ditolak. Debitur bisa mengirim bukti baru.")}
+                    />
                   )}
                 </div>
               ))}
@@ -496,6 +510,29 @@ function SignState({ label, who, done, extra }: { label: string; who: string; do
   );
 }
 
+/** Form alasan tolak bukti transfer (inline, bukan window.prompt yang sering diblokir browser). */
+function RejectProof({ busy, disabled, onCancel, onSubmit }: { busy: boolean; disabled: boolean; onCancel: () => void; onSubmit: (reason: string) => void }) {
+  const [reason, setReason] = useState("");
+  const tooShort = reason.trim().length < 5;
+  return (
+    <form
+      className="flex w-full flex-col gap-2.5"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (!tooShort) onSubmit(reason.trim());
+      }}
+    >
+      <Field label="Alasan menolak bukti ini" htmlFor="alasan-tolak" hint="Minimal 5 huruf. Alasan ini dikirim ke debitur di chat.">
+        <textarea id="alasan-tolak" autoFocus maxLength={300} rows={2} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Contoh: nominal di mutasi tidak sesuai" className={`${input} py-2.5`} />
+      </Field>
+      <div className="flex flex-wrap gap-2.5">
+        <Button type="submit" variant="danger" disabled={disabled || tooShort}>{busy && <Spinner />} Tolak bukti</Button>
+        <Button variant="secondary" disabled={busy} onClick={onCancel}>Batal</Button>
+      </div>
+    </form>
+  );
+}
+
 function PayBox(props: {
   disabled: boolean;
   allowOffchain: boolean;
@@ -526,8 +563,16 @@ function PayBox(props: {
         </div>
         {method === "offchain" && (
           <div className="min-w-0 flex-[1_1_200px]">
-            <Field label="Bukti transfer" htmlFor="bukti" hint="PDF/JPG/PNG maks 10 MB">
-              <input id="bukti" type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={(e) => setFile(e.target.files?.[0] ?? null)} className="text-sm text-soft file:mr-3 file:rounded-full file:border-0 file:bg-brand-soft file:px-4 file:py-2 file:text-lav" />
+            <Field label="Bukti transfer" htmlFor="bukti" hint="PDF/JPG/PNG maks 4 MB">
+              <input id="bukti" type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={(e) => {
+                const f = e.target.files?.[0] ?? null;
+                if (f && f.size > 4 * 1024 * 1024) {
+                  window.alert("Ukuran file maksimal 4 MB.");
+                  e.target.value = "";
+                  return setFile(null);
+                }
+                setFile(f);
+              }} className="text-sm text-soft file:mr-3 file:rounded-full file:border-0 file:bg-brand-soft file:px-4 file:py-2 file:text-lav" />
             </Field>
           </div>
         )}

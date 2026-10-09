@@ -11,7 +11,7 @@ import { fmtRp } from "@/lib/money";
 type Ctx = { params: Promise<{ pid: string }> };
 
 async function load(pid: string, user: Parameters<typeof loadNote>[1]) {
-  const p = await db.payment.findUnique({ where: { id: pid } });
+  const p = await db.payment.findUnique({ where: { id: pid }, omit: { proofData: true } });
   if (!p) throw new ApiError(404, "NOT_FOUND", "Pembayaran tidak ditemukan.");
   const n = await loadNote(p.noteId, user);
   if (roleOf(n, user) !== "creditor") throw new ApiError(403, "FORBIDDEN", "Hanya kreditur yang mengonfirmasi pembayaran.");

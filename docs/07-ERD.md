@@ -4,6 +4,9 @@
 erDiagram
     USERS ||--o{ DEBT_NOTES : "kreditur"
     USERS ||--o{ DEBT_NOTES : "debitur"
+    USERS ||--o{ DEBT_NOTES : "pembuat"
+    USERS ||--o{ SIGNATURES : "penanda tangan"
+    USERS ||--o{ DISPUTES : "pengaju"
     USERS ||--o{ AUTH_NONCES : has
     DEBT_NOTES ||--o{ NOTE_VERSIONS : has
     NOTE_VERSIONS ||--o{ SIGNATURES : has
@@ -32,13 +35,16 @@ erDiagram
         uuid id PK
         bytes32 chain_note_id UK
         uuid creator_id FK
-        uuid creditor_id FK
-        uuid debtor_id FK
+        uuid creditor_id FK "null sampai pihak lawan bergabung"
+        uuid debtor_id FK "null sampai pihak lawan bergabung"
         int current_version
-        string status
-        string status_before_dispute
+        string status "DRAFT|PENDING_SIGNATURE|AWAITING_DISBURSEMENT|ACTIVE|OVERDUE|DISPUTED|FROZEN|PAID|REJECTED|CANCELLED"
+        string status_before_freeze
+        bytes32 minted_doc_hash UK "diisi saat mint"
         string integrity_status "VERIFIED|TAMPERED|UNCHECKED"
-        numeric outstanding_amount
+        numeric outstanding_amount "cache dari contract"
+        numeric late_fee_accrued "cache dari contract"
+        timestamp disbursement_confirmed_at
         bigint token_id
         string mint_tx_hash
         string invite_token
@@ -54,10 +60,11 @@ erDiagram
         numeric interest_value
         string repayment_scheme "single|installment"
         date due_date
-        int late_fee_bps
+        int late_fee_bps "0 atau 200"
+        numeric interest_amount
         text collateral_note
         string disbursement "onchain|offchain"
-        bytes32 doc_hash UK
+        bytes32 doc_hash
         bytes32 schedule_hash
         bytes32 terms_hash
         bool is_current
@@ -94,6 +101,8 @@ erDiagram
         uuid note_id FK
         string method "onchain|offchain"
         numeric amount
+        numeric to_installments
+        numeric to_late_fee
         string status "PENDING|CONFIRMED|REJECTED"
         string proof_storage_key
         text creditor_signature
@@ -126,7 +135,7 @@ erDiagram
     CHAIN_TXS {
         uuid id PK
         uuid note_id FK
-        string kind "mint|repay|confirm|freeze|burn"
+        string kind "mint|repay|confirm|overdue|dispute|freeze|unfreeze|faucet"
         string status "QUEUED|SENT|MINED|FAILED"
         string tx_hash
         int attempts
@@ -158,6 +167,9 @@ erDiagram
 
 ## Catatan
 
-- `NOTE_VERSIONS` immutable: revisi = baris baru, `is_current` dipindah.
+- `NOTE_VERSIONS` immutable: revisi = baris baru, `is_current` dipindah. `doc_hash` **tidak** unik di tabel ini karena revisi yang hanya mengubah jadwal memakai dokumen yang sama.
+- Anti double-mint di DB: `DEBT_NOTES.minted_doc_hash` unik, diisi dari versi yang di-mint (cermin `usedDocHash` di contract).
+- Burn terjadi di dalam tx `repay`/`confirm` (atau saat dispute ditutup), jadi tidak ada `kind` burn terpisah di `CHAIN_TXS`.
 - `PAYMENTS (tx_hash, log_index)` unik untuk idempotency event on-chain.
+- `DEBT_NOTES.status` ACTIVE/OVERDUE/PAID dan `INSTALLMENTS.paid_amount` diperbarui indexer dari event (`StatusChanged`, `Repaid`), bukan dari cron.
 - `AUDIT_LOGS` append-only (tanpa UPDATE/DELETE lewat RLS atau trigger).

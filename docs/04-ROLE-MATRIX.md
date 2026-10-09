@@ -31,10 +31,11 @@ Peran ditentukan **per surat piutang**. Satu akun bisa jadi kreditur di satu piu
 | Bayar cicilan | ❌ | ✅ | ❌ | ❌ | ❌ |
 | Upload bukti transfer | ❌ | ✅ | ❌ | ❌ | ❌ |
 | Konfirmasi / tolak bayar off-chain | ✅ | ❌ | ❌ | ❌ | ❌ |
-| Set OVERDUE | ❌ | ❌ | ❌ | ⚙️ | ❌ |
+| Set OVERDUE / kembali ACTIVE | ❌ | ❌ | ❌ | ⚙️ (`markOverdue` / otomatis saat bayar) | ❌ |
+| Hitung late fee | ❌ | ❌ | ❌ | ⚙️ (contract) | ❌ |
 | Burn token (PAID) | ❌ | ❌ | ❌ | ⚙️ | ❌ |
 | Mengajukan dispute | ✅ | ✅ | ❌ | ❌ | ❌ |
-| Menutup dispute | ❌ | ❌ | ✅ | ❌ | ❌ |
+| Menutup dispute | ❌ | ❌ | ✅ | ⚙️ kirim tx `setDisputed(false)`, burn jika sisa nol | ❌ |
 | Integrity check | ✅ (trigger) | ✅ (trigger) | ✅ | ⚙️ terjadwal | ❌ |
 | Freeze piutang | ❌ | ❌ | ✅ | ⚙️ saat TAMPERED | ❌ |
 | Unfreeze piutang | ❌ | ❌ | ✅ | ❌ | ❌ |
@@ -47,6 +48,7 @@ Peran ditentukan **per surat piutang**. Satu akun bisa jadi kreditur di satu piu
 |--------|-------------------------|
 | DRAFT | edit, undang, cancel |
 | PENDING_SIGNATURE | tanda tangan, revisi, tolak, cancel, setor escrow |
+| AWAITING_DISBURSEMENT | debitur konfirmasi terima dana, kreditur cancel |
 | ACTIVE / OVERDUE | bayar, konfirmasi bayar, dispute, integrity check |
 | DISPUTED | bayar on-chain saja; burn & konfirmasi off-chain ditahan |
 | FROZEN | baca saja; admin bisa unfreeze |
@@ -59,3 +61,6 @@ Peran ditentukan **per surat piutang**. Satu akun bisa jadi kreditur di satu piu
 | `DEFAULT_ADMIN_ROLE` | Multisig tim | Atur role |
 | `RELAYER_ROLE` | Wallet relayer | `mintNote`, `confirmOffchainPayment` |
 | `GUARDIAN_ROLE` | Admin + integrity service | `freeze`, `unfreeze`, `setDisputed` |
+| `MINTER_ROLE` (MockIDR) | Wallet relayer | `faucet` (testnet) |
+
+`repay` tidak butuh role: dipanggil debitur lewat `Forwarder` (ERC-2771). `markOverdue` dan `accrue` boleh dipanggil siapa saja, dalam praktik oleh cron worker.

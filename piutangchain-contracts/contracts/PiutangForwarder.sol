@@ -53,6 +53,13 @@ contract PiutangForwarder is EIP712 {
         nonces[req.from] = req.nonce + 1;
 
         (bool ok, bytes memory ret) = req.to.call{gas: req.gas}(abi.encodePacked(req.data, req.from));
+        // EIP-150: jika relayer mengirim gas terlalu sedikit, target hanya menerima 63/64 sisa gas dan bisa
+        // berjalan dengan gas < req.gas (mis. permit di dalam try/catch sengaja dibuat gagal). Batalkan semuanya.
+        if (gasleft() <= req.gas / 63) {
+            assembly {
+                invalid()
+            }
+        }
         if (!ok) {
             if (ret.length == 0) revert CallFailed(ret);
             assembly {

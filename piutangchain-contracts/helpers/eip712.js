@@ -1,6 +1,6 @@
 // Helper EIP-712 untuk PiutangChain. Dipakai test dan bisa dipakai ulang di backend/frontend
 // (ethers v6) supaya payload yang ditandatangani PERSIS sama dengan yang diverifikasi kontrak.
-const { TypedDataEncoder } = require("ethers");
+const { TypedDataEncoder, AbiCoder, keccak256 } = require("ethers");
 
 const DEBT_MANAGER_DOMAIN_NAME = "PiutangChain";
 const DOMAIN_VERSION = "1";
@@ -15,7 +15,7 @@ const NOTE_TYPES = {
     { name: "scheduleHash", type: "bytes32" },
     { name: "principal", type: "uint256" },
     { name: "totalOwed", type: "uint256" },
-    { name: "lateFee", type: "uint256" },
+    { name: "lateFeeBps", type: "uint16" },
     { name: "dueDate", type: "uint64" },
     { name: "disbursement", type: "uint8" },
     { name: "deadline", type: "uint64" },
@@ -52,7 +52,7 @@ const AMENDMENT_TYPES = {
     { name: "newDocHash", type: "bytes32" },
     { name: "newScheduleHash", type: "bytes32" },
     { name: "newTotalOwed", type: "uint256" },
-    { name: "newLateFee", type: "uint256" },
+    { name: "newLateFeeBps", type: "uint16" },
     { name: "newDueDate", type: "uint64" },
     { name: "deadline", type: "uint64" },
     { name: "creditorNonce", type: "uint256" },
@@ -103,6 +103,10 @@ const tokenDomain = (chainId, verifyingContract) => ({
 /** Struct hash Note (kunci escrow & referensi receipt). Sama dengan DebtManager.noteHash(note). */
 const noteStructHash = (note) => TypedDataEncoder.hashStruct("Note", NOTE_TYPES, note);
 
+/** scheduleHash = keccak256(abi.encode(uint64[] dueDates, uint256[] amounts)). Sama dengan validasi DebtManager. */
+const scheduleHash = ({ dueDates, amounts }) =>
+  keccak256(AbiCoder.defaultAbiCoder().encode(["uint64[]", "uint256[]"], [dueDates, amounts]));
+
 /** Pecah signature permit hex menjadi {v, r, s} untuk struct Permit di kontrak. */
 function splitSig(sig) {
   return { v: Number("0x" + sig.slice(130, 132)), r: "0x" + sig.slice(2, 66), s: "0x" + sig.slice(66, 130) };
@@ -119,5 +123,6 @@ module.exports = {
   forwarderDomain,
   tokenDomain,
   noteStructHash,
+  scheduleHash,
   splitSig,
 };

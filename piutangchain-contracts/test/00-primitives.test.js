@@ -165,7 +165,8 @@ describe("DebtNote (ERC-721 non-transferable)", () => {
     const late = JSON.parse((await debtNote.tokenURI(BigInt(note.noteId))).slice(27));
     expect(late.attributes.find((a) => a.trait_type === "status").value).to.equal("OVERDUE");
 
-    await f.payOnchain(ctx, note.noteId, await manager.remaining(note.noteId));
+    // denda berjalan per detik: kirim sedikit lebih; kontrak hanya menarik sisa utang saat tx dieksekusi
+    await f.payOnchain(ctx, note.noteId, (await manager.remaining(note.noteId)) + IDR(1));
     await expect(debtNote.tokenURI(BigInt(note.noteId))).to.be.revertedWithCustomError(debtNote, "NonexistentToken");
   });
 });

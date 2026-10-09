@@ -159,7 +159,7 @@ describe("Freeze / integrity checker", () => {
     await frozen(manager.connect(creditor).markPaid(note.noteId));
     await frozen(manager.connect(debtor).openDispute(note.noteId, REASON));
     const am = await signAmendment(ctx, note, { newDocHash: ethers.id("doc-baru") });
-    await frozen(manager.connect(relayer).amend(am.a, am.sigC, am.sigD));
+    await frozen(amendWith(manager.connect(relayer), am.a, am.sigC, am.sigD));
     // token tetap ada
     expect(await debtNote.ownerOf(BigInt(note.noteId))).to.equal(creditor.address);
   });
@@ -209,21 +209,26 @@ describe("Freeze / integrity checker", () => {
   });
 });
 
+/** Jadwal revisi default: satu cicilan sebesar newTotalOwed di newDueDate. */
+const amendSchedule = (a) => ({ dueDates: [a.newDueDate], amounts: [a.newTotalOwed] });
+const amendWith = (m, a, sigC, sigD, schedule = amendSchedule(a)) => m.amend(a, schedule, sigC, sigD);
+
 async function signAmendment(ctx, note, over = {}) {
   const now = await time.latest();
   const a = {
     noteId: note.noteId,
     newVersion: 2,
     newDocHash: ethers.id("doc-revisi"),
-    newScheduleHash: ethers.id("jadwal-revisi"),
+    newScheduleHash: ethers.ZeroHash,
     newTotalOwed: note.totalOwed,
-    newLateFee: note.lateFee,
+    newLateFeeBps: note.lateFeeBps,
     newDueDate: note.dueDate + 30 * DAY,
     deadline: now + 7 * DAY,
     creditorNonce: 910_000n + BigInt(Math.floor(Math.random() * 1e6)),
     debtorNonce: 920_000n + BigInt(Math.floor(Math.random() * 1e6)),
     ...over,
   };
+  if (!("newScheduleHash" in over)) a.newScheduleHash = E.scheduleHash(amendSchedule(a));
   const sigC = await ctx.creditor.signTypedData(ctx.domain, E.AMENDMENT_TYPES, a);
   const sigD = await ctx.debtor.signTypedData(ctx.domain, E.AMENDMENT_TYPES, a);
   return { a, sigC, sigD };
@@ -233,14 +238,14 @@ describe("Revisi setelah ACTIVE (amend, ditandatangani ulang kedua pihak)", () =
   it("memperpanjang jatuh tempo & ganti hash dokumen; versi naik; hash lama tetap terkunci; pokok tidak berubah", async () => {
     const ctx = await loadFixture(f.deployAll);
     const { manager, relayer } = ctx;
-    const note = await activeNote(ctx);
+    const note = await activeNote(ctx, { lateFeeBps: 0 });
     await time.increaseTo(note.dueDate + 1);
     expect(await manager.statusOf(note.noteId)).to.equal(Status.OVERDUE);
 
     const { a, sigC, sigD } = await signAmendment(ctx, note, { newDueDate: (await time.latest()) + 20 * DAY });
-    await expect(manager.connect(relayer).amend(a, sigC, sigD))
+    await expect(amendWith(manager.connect(relayer), a, sigC, sigD))
       .to.emit(manager, "NoteAmended")
-      .withArgs(note.noteId, 2, note.docHash, a.newDocHash, a.newScheduleHash, a.newTotalOwed, a.newLateFee, a.newDueDate);
+      .withArgs(note.noteId, 2, note.docHash, a.newDocHash, a.newScheduleHash, a.newTotalOwed, a.newLateFeeBps, a.newDueDate);
 
     const v = await manager.getNote(note.noteId);
     expect(v.version).to.equal(2);
@@ -259,7 +264,7 @@ describe("Revisi setelah ACTIVE (amend, ditandatangani ulang kedua pihak)", () =
     const note = await activeNote(ctx);
     await f.payOnchain(ctx, note.noteId, IDR(700_000));
     const { a, sigC, sigD } = await signAmendment(ctx, note, { newTotalOwed: IDR(700_000) });
-    await expect(manager.connect(relayer).amend(a, sigC, sigD)).to.emit(manager, "NoteSettled");
+    await expect(amendWith(manager.connect(relayer), a, sigC, sigD)).to.emit(manager, "NoteSettled");
     expect(await manager.statusOf(note.noteId)).to.equal(Status.PAID);
     await expect(debtNote.ownerOf(BigInt(note.noteId))).to.be.revertedWithCustomError(debtNote, "NonexistentToken");
   });
@@ -273,7 +278,7 @@ describe("Revisi setelah ACTIVE (amend, ditandatangani ulang kedua pihak)", () =
     expect((await manager.getNote(note.noteId)).fullyPaid).to.equal(true);
 
     const { a, sigC, sigD } = await signAmendment(ctx, note, { newTotalOwed: note.totalOwed + IDR(50_000) });
-    await manager.connect(relayer).amend(a, sigC, sigD);
+    await amendWith(manager.connect(relayer), a, sigC, sigD);
     const v = await manager.getNote(note.noteId);
     expect(v.fullyPaid).to.equal(false);
     expect(v.status).to.equal(Status.DISPUTED);
@@ -287,42 +292,42 @@ describe("Revisi setelah ACTIVE (amend, ditandatangani ulang kedua pihak)", () =
     const other = await activeNote(ctx);
 
     let r = await signAmendment(ctx, note, { newVersion: 3 });
-    await expect(manager.connect(relayer).amend(r.a, r.sigC, r.sigD))
+    await expect(amendWith(manager.connect(relayer), r.a, r.sigC, r.sigD))
       .to.be.revertedWithCustomError(manager, "InvalidVersion")
       .withArgs(2);
 
     r = await signAmendment(ctx, note);
     const fake = await stranger.signTypedData(ctx.domain, E.AMENDMENT_TYPES, r.a);
-    await expect(manager.connect(relayer).amend(r.a, r.sigC, fake)).to.be.revertedWithCustomError(manager, "InvalidSignature");
-    await expect(manager.connect(relayer).amend({ ...r.a, newTotalOwed: r.a.newTotalOwed + 1n }, r.sigC, r.sigD)).to.be.revertedWithCustomError(
+    await expect(amendWith(manager.connect(relayer), r.a, r.sigC, fake)).to.be.revertedWithCustomError(manager, "InvalidSignature");
+    await expect(amendWith(manager.connect(relayer), { ...r.a, newTotalOwed: r.a.newTotalOwed + 1n }, r.sigC, r.sigD)).to.be.revertedWithCustomError(
       manager,
       "InvalidSignature"
     );
 
     r = await signAmendment(ctx, note, { newDocHash: other.docHash });
-    await expect(manager.connect(relayer).amend(r.a, r.sigC, r.sigD)).to.be.revertedWithCustomError(manager, "DocHashAlreadyUsed");
+    await expect(amendWith(manager.connect(relayer), r.a, r.sigC, r.sigD)).to.be.revertedWithCustomError(manager, "DocHashAlreadyUsed");
     r = await signAmendment(ctx, note, { newDocHash: note.docHash });
-    await expect(manager.connect(relayer).amend(r.a, r.sigC, r.sigD)).to.be.revertedWithCustomError(manager, "DocHashAlreadyUsed");
+    await expect(amendWith(manager.connect(relayer), r.a, r.sigC, r.sigD)).to.be.revertedWithCustomError(manager, "DocHashAlreadyUsed");
 
     for (const over of [{ newDocHash: ethers.ZeroHash }, { newTotalOwed: 0n }, { newDueDate: 0 }]) {
       r = await signAmendment(ctx, note, over);
-      await expect(manager.connect(relayer).amend(r.a, r.sigC, r.sigD)).to.be.revertedWithCustomError(manager, "InvalidAmount");
+      await expect(amendWith(manager.connect(relayer), r.a, r.sigC, r.sigD)).to.be.revertedWithCustomError(manager, "InvalidAmount");
     }
 
     r = await signAmendment(ctx, note, { deadline: (await time.latest()) - 1 });
-    await expect(manager.connect(relayer).amend(r.a, r.sigC, r.sigD)).to.be.revertedWithCustomError(manager, "SignatureExpired");
+    await expect(amendWith(manager.connect(relayer), r.a, r.sigC, r.sigD)).to.be.revertedWithCustomError(manager, "SignatureExpired");
 
     // sukses sekali, replay ditolak (versi sudah naik)
     r = await signAmendment(ctx, note);
-    await manager.connect(relayer).amend(r.a, r.sigC, r.sigD);
-    await expect(manager.connect(relayer).amend(r.a, r.sigC, r.sigD)).to.be.revertedWithCustomError(manager, "InvalidVersion");
+    await amendWith(manager.connect(relayer), r.a, r.sigC, r.sigD);
+    await expect(amendWith(manager.connect(relayer), r.a, r.sigC, r.sigD)).to.be.revertedWithCustomError(manager, "InvalidVersion");
     // nonce kreditur dipakai ulang untuk versi berikutnya
     const again = await signAmendment(ctx, note, {
       newVersion: 3,
       newDocHash: ethers.id("doc-v3"),
       creditorNonce: r.a.creditorNonce,
     });
-    await expect(manager.connect(relayer).amend(again.a, again.sigC, again.sigD)).to.be.revertedWithCustomError(
+    await expect(amendWith(manager.connect(relayer), again.a, again.sigC, again.sigD)).to.be.revertedWithCustomError(
       manager,
       "NonceAlreadyUsed"
     );
@@ -330,10 +335,10 @@ describe("Revisi setelah ACTIVE (amend, ditandatangani ulang kedua pihak)", () =
     // sudah PAID → tidak bisa direvisi
     await f.payOnchain(ctx, other.noteId, other.totalOwed);
     const paid = await signAmendment(ctx, other, { newDocHash: ethers.id("doc-paid") });
-    await expect(manager.connect(relayer).amend(paid.a, paid.sigC, paid.sigD))
+    await expect(amendWith(manager.connect(relayer), paid.a, paid.sigC, paid.sigD))
       .to.be.revertedWithCustomError(manager, "InvalidStatus")
       .withArgs(Status.PAID);
-    await expect(manager.connect(relayer).amend({ ...paid.a, noteId: ethers.id("x") }, paid.sigC, paid.sigD)).to.be.revertedWithCustomError(
+    await expect(amendWith(manager.connect(relayer), { ...paid.a, noteId: ethers.id("x") }, paid.sigC, paid.sigD)).to.be.revertedWithCustomError(
       manager,
       "NoteNotFound"
     );

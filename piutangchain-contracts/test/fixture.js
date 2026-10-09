@@ -36,27 +36,47 @@ async function deployAll() {
 }
 
 let counter = 0;
-/** Bangun Note default (pokok Rp1.000.000, total Rp1.100.000, denda Rp50.000, jatuh tempo 30 hari). */
+const schedules = new Map(); // noteId → Schedule yang dipakai saat aktivasi
+
+/** Jadwal satu cicilan: seluruh totalOwed jatuh tempo di dueDate. */
+const singleInstallment = (note) => ({ dueDates: [note.dueDate], amounts: [note.totalOwed] });
+
+/** Jadwal untuk note (yang didaftarkan buildNote, atau satu cicilan). */
+const scheduleOf = (note) => schedules.get(note.noteId) ?? singleInstallment(note);
+
+/**
+ * Bangun Note default (pokok Rp1.000.000, total Rp1.100.000, denda 2%/30 hari, satu cicilan jatuh tempo 30 hari).
+ * `overrides.schedule` = { dueDates, amounts } untuk cicilan; dueDate & totalOwed diambil dari jadwal itu.
+ */
 async function buildNote(ctx, overrides = {}) {
   counter++;
   const now = await time.latest();
-  return {
+  const { schedule, ...fields } = overrides;
+  const note = {
     noteId: ethers.id(`note-${counter}`),
     version: 1,
     creditor: ctx.creditor.address,
     debtor: ctx.debtor.address,
     docHash: ethers.id(`doc-${counter}`),
-    scheduleHash: ethers.id(`schedule-${counter}`),
+    scheduleHash: ethers.ZeroHash,
     principal: IDR(1_000_000),
     totalOwed: IDR(1_100_000),
-    lateFee: IDR(50_000),
+    lateFeeBps: 200,
     dueDate: now + 30 * DAY,
     disbursement: 0,
     deadline: now + 7 * DAY,
     creditorNonce: BigInt(counter) * 1000n,
     debtorNonce: BigInt(counter) * 1000n,
-    ...overrides,
+    ...fields,
   };
+  if (schedule) {
+    note.dueDate = schedule.dueDates[schedule.dueDates.length - 1];
+    note.totalOwed = schedule.amounts.reduce((a, b) => a + b, 0n);
+  }
+  const sched = schedule ?? singleInstallment(note);
+  schedules.set(note.noteId, sched);
+  if (!("scheduleHash" in fields)) note.scheduleHash = E.scheduleHash(sched);
+  return note;
 }
 
 const signNote = (signer, ctx, note) => signer.signTypedData(ctx.domain, E.NOTE_TYPES, note);
@@ -80,7 +100,7 @@ async function activateOnchain(ctx, note) {
   const sigD = await signNote(ctx.debtor, ctx, note);
   const permit = await signPermit(ctx.idrx, ctx.creditor, ctx.manager.target, note.principal, note.deadline);
   await ctx.manager.connect(ctx.relayer).depositEscrow(note, sigC, permit);
-  await ctx.manager.connect(ctx.relayer).activateOnchain(note, sigC, sigD);
+  await ctx.manager.connect(ctx.relayer).activateOnchain(note, scheduleOf(note), sigC, sigD);
   return { sigC, sigD };
 }
 
@@ -102,7 +122,7 @@ async function activateOffchain(ctx, note) {
   const sigC = await signNote(ctx.creditor, ctx, note);
   const sigD = await signNote(ctx.debtor, ctx, note);
   const { receipt, sig } = await signReceipt(ctx, note);
-  await ctx.manager.connect(ctx.relayer).activateOffchain(note, sigC, sigD, receipt, sig);
+  await ctx.manager.connect(ctx.relayer).activateOffchain(note, scheduleOf(note), sigC, sigD, receipt, sig);
   return { sigC, sigD, receipt, sigReceipt: sig };
 }
 
@@ -145,6 +165,7 @@ module.exports = {
   Status,
   deployAll,
   buildNote,
+  scheduleOf,
   signNote,
   signPermit,
   activateOnchain,

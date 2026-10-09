@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // Upload & DB SQLite ada di dalam folder app: jangan sampai file watcher dev ikut bereaksi
+  // Jaga-jaga file lokal (upload/DB lama) di dalam folder app: jangan sampai file watcher dev ikut bereaksi
   // (memicu rebuild di tengah request dan error "Unexpected end of JSON input").
   webpack: (config, { dev }) => {
     if (dev) {

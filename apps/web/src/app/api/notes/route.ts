@@ -26,7 +26,7 @@ export const GET = handler(async (_req, user) => {
         SELECT m."noteId", COUNT(*)::int AS n
         FROM "Message" m
         LEFT JOIN "ChatRead" r ON r."noteId" = m."noteId" AND r."userId" = ${user.id}
-        WHERE m."noteId" = ANY(${ids}) AND m."senderId" <> ${user.id} AND m."createdAt" > COALESCE(r."readAt", 'epoch'::timestamp)
+        WHERE m."noteId" = ANY(${ids}) AND COALESCE(m."senderId", '') <> ${user.id} AND m."createdAt" > COALESCE(r."readAt", 'epoch'::timestamp)
         GROUP BY m."noteId"`
     : [];
   const unreadOf = new Map(unreadRows.map((r) => [r.noteId, r.n]));
@@ -40,6 +40,12 @@ export const GET = handler(async (_req, user) => {
       const next = n.installments.find((i) => (cum += BigInt(i.amount)) > paid);
       const unread = unreadOf.get(n.id) ?? 0;
       const mySig = n.signatures.some((s) => s.version === n.version && s.signerId === user.id && s.role !== "receipt");
+      const isCreator = n.creatorId === user.id;
+      // Status revisi untuk notifikasi di daftar & menu: diminta (pembuat perlu memperbaiki), sedang dikerjakan, atau sudah direvisi.
+      const revision =
+        n.status === "DRAFT" && n.revisionNote ? (isCreator ? "requested" : "in_progress")
+        : n.status === "PENDING_SIGNATURE" && n.version > 1 && !isCreator ? (mySig ? null : "done")
+        : null;
       return {
         id: n.id,
         code: "PC-" + n.chainNoteId.slice(2, 6).toUpperCase(),
@@ -58,7 +64,9 @@ export const GET = handler(async (_req, user) => {
         lateFeeBps: n.lateFeeBps,
         version: n.version,
         mySignature: mySig,
-        isCreator: n.creatorId === user.id,
+        isCreator,
+        revision,
+        revisionNote: n.revisionNote,
         documents: 0,
         lastMessage: n.messages[0]?.body ?? null,
         lastMessageAt: n.messages[0]?.createdAt ?? null,
@@ -91,7 +99,7 @@ export const POST = handler(async (req, user) => {
       installments: { create: installments },
     },
   });
-  await systemMessage(note.id, `${displayName(user)} membuat draft surat piutang.`);
+  await systemMessage(note.id, `${displayName(user)} membuat draft surat piutang.`, undefined, user.id);
   await audit(note.id, user.id, "CREATE_DRAFT");
   return ok({ id: note.id }, 201);
 });

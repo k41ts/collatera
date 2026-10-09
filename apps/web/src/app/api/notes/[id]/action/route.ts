@@ -43,7 +43,15 @@ export const POST = handler<Ctx>(async (req, user, { params }) => {
         revisionNote: null,
       },
     });
-    await systemMessage(n.id, `${name} mengirim surat piutang versi ${n.version} untuk ditandatangani.`);
+    // Versi > 1 = hasil revisi: beri tahu pihak lawan bahwa permintaannya sudah dikerjakan.
+    await systemMessage(
+      n.id,
+      n.version > 1
+        ? `${name} sudah merevisi surat piutang${n.revisionNote ? ` sesuai permintaan "${n.revisionNote}"` : ""}. Versi ${n.version} siap dicek dan ditandatangani.`
+        : `${name} mengirim surat piutang versi ${n.version} untuk ditandatangani.`,
+      `/app/piutang/${n.id}`,
+      user.id,
+    );
     await audit(n.id, user.id, "SEND_FOR_SIGNATURE", `versi ${n.version}`);
     return ok();
   }
@@ -53,7 +61,7 @@ export const POST = handler<Ctx>(async (req, user, { params }) => {
       (isCreator && ["DRAFT", "PENDING_SIGNATURE"].includes(n.status)) || (role === "creditor" && n.status === "AWAITING_DISBURSEMENT");
     if (!allowed) throw new ApiError(409, "INVALID_STATUS", "Surat ini tidak bisa dibatalkan sekarang.");
     await db.note.update({ where: { id: n.id }, data: { status: "CANCELLED" } });
-    await systemMessage(n.id, `${name} membatalkan surat piutang.` + (n.escrowTermsJson ? " Kreditur bisa menarik dana escrow di halaman detail." : ""));
+    await systemMessage(n.id, `${name} membatalkan surat piutang.` + (n.escrowTermsJson ? " Kreditur bisa menarik dana escrow di halaman detail." : ""), undefined, user.id);
     await audit(n.id, user.id, "CANCEL");
     return ok();
   }
@@ -64,7 +72,7 @@ export const POST = handler<Ctx>(async (req, user, { params }) => {
     if (n.status !== "DISPUTED") throw new ApiError(409, "INVALID_STATUS", "Surat ini tidak sedang sengketa.");
     const rc = await relay("Tutup sengketa kedaluwarsa", (c) => c.manager.closeExpiredDispute.populateTransaction(n.chainNoteId));
     await db.note.update({ where: { id: n.id }, data: { status: "ACTIVE" } });
-    await systemMessage(n.id, `${name} menutup sengketa yang lewat 14 hari tanpa keputusan admin. Denda selama sengketa tetap terutang.`);
+    await systemMessage(n.id, `${name} menutup sengketa yang lewat 14 hari tanpa keputusan admin. Denda selama sengketa tetap terutang.`, undefined, user.id);
     await audit(n.id, user.id, "CLOSE_EXPIRED_DISPUTE", "", rc.hash);
     return ok({ txHash: rc.hash });
   }
@@ -75,7 +83,7 @@ export const POST = handler<Ctx>(async (req, user, { params }) => {
 
   if (body.action === "reject") {
     await db.note.update({ where: { id: n.id }, data: { status: "REJECTED", rejectReason: body.reason } });
-    await systemMessage(n.id, `${name} menolak surat piutang: "${body.reason}"`);
+    await systemMessage(n.id, `${name} menolak surat piutang: "${body.reason}"`, undefined, user.id);
     await audit(n.id, user.id, "REJECT", body.reason);
     return ok();
   }
@@ -85,7 +93,7 @@ export const POST = handler<Ctx>(async (req, user, { params }) => {
     where: { id: n.id },
     data: { status: "DRAFT", version: n.version + 1, termsJson: null, scheduleJson: null, noteHash: null, revisionNote: body.reason },
   });
-  await systemMessage(n.id, `${name} minta revisi: "${body.reason}". Tanda tangan versi ${n.version} dibatalkan.`);
+  await systemMessage(n.id, `${name} minta revisi: "${body.reason}". Surat kembali ke draft dan tanda tangan versi ${n.version} dibatalkan.`, `/app/piutang/${n.id}`, user.id);
   await audit(n.id, user.id, "REQUEST_REVISION", body.reason);
   return ok();
 });

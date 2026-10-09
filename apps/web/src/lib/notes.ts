@@ -101,6 +101,7 @@ export async function rehashDocuments(n: FullNote): Promise<string[]> {
 
 export function payloadOf(n: FullNote, version = n.version) {
   return {
+    noteId: n.chainNoteId,
     title: n.title,
     debtType: n.debtType,
     interestType: n.interestType,

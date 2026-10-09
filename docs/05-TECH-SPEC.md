@@ -48,7 +48,7 @@ Jadwal cicilan (`Schedule { dueDates[], amounts[] }`, maks 24, Σ = `totalOwed`,
 > **Disepakati** tim backend pada 9 Okt 2026. Integrity checker dan endpoint tanda tangan wajib memakai rumus ini; perubahan rumus = perubahan `docHash` untuk semua piutang baru.
 
 1. Setiap file → `keccak256(fileBytes)` saat upload, disimpan di `documents.file_hash`.
-2. `payloadHash = keccak256(canonical JSON field off-chain)`: judul, jenis utang, tipe/nilai bunga, catatan jaminan, metode pencairan, versi. Canonical JSON = key diurutkan, tanpa spasi, nominal sebagai string.
+2. `payloadHash = keccak256(canonical JSON field off-chain)`: `noteId` (on-chain), judul, jenis utang, tipe/nilai bunga, catatan jaminan, metode pencairan, versi. `noteId` wajib ada: tanpa itu dua perjanjian identik tanpa dokumen menghasilkan `docHash` yang sama dan aktivasi kedua ditolak kontrak (`DocHashAlreadyUsed`). Canonical JSON = key diurutkan, tanpa spasi, nominal sebagai string.
 3. `docHash = keccak256(abi.encodePacked(payloadHash, sorted(fileHashes)))` → field `Note.docHash`, dicek ulang dengan `verifyHash(noteId, docHash)`.
 4. `scheduleHash = keccak256(abi.encode(uint64[] dueDates, uint256[] amounts))` (helper `E.scheduleHash`); `dueDates` = 00:00 WIB tanggal jatuh tempo dalam unix timestamp.
 5. Field nominal (`principal`, `totalOwed`, `lateFeeBps`, `dueDate`, pihak) tersimpan langsung on-chain; integrity checker membandingkannya dengan DB lewat `getNote()`.

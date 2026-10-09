@@ -86,7 +86,7 @@ export const POST = handler<Ctx>(async (req, user, { params }) => {
       c.manager.activateOffchain.populateTransaction(terms, schedule, sigOf(n, "creditor"), sigOf(n, "debtor"), m, body.signature),
     );
     await db.note.update({ where: { id: n.id }, data: { status: "ACTIVE", activationTx: rc.hash, activatedAt: new Date() } });
-    await systemMessage(n.id, `${name} mengonfirmasi dana ${fmtRp(terms.principal)} sudah diterima. Piutang aktif.`);
+    await systemMessage(n.id, `${name} mengonfirmasi dana ${fmtRp(terms.principal)} sudah diterima. Piutang aktif.`, undefined, user.id);
     await audit(n.id, user.id, "ACTIVATE_OFFCHAIN", "", rc.hash);
     return ok({ status: "ACTIVE", txHash: rc.hash });
   }
@@ -105,7 +105,7 @@ export const POST = handler<Ctx>(async (req, user, { params }) => {
       throw new ApiError(422, "INSUFFICIENT_BALANCE", `Saldo IDRX kamu ${fmtRp(bal)}, kurang dari pokok ${fmtRp(terms.principal)}. Ambil dari faucet di Profil.`);
     const rc = await relay("Setor escrow", (c) => c.manager.depositEscrow.populateTransaction(terms, body.signature, body.permit));
     await db.note.update({ where: { id: n.id }, data: { escrowTx: rc.hash, escrowTermsJson: n.termsJson } });
-    await systemMessage(n.id, `${name} menyetor ${fmtRp(terms.principal)} ke escrow.`);
+    await systemMessage(n.id, `${name} menyetor ${fmtRp(terms.principal)} ke escrow.`, undefined, user.id);
     await audit(n.id, user.id, "DEPOSIT_ESCROW", "", rc.hash);
   }
 
@@ -114,7 +114,7 @@ export const POST = handler<Ctx>(async (req, user, { params }) => {
     update: { signature: body.signature, signerId: user.id },
     create: { noteId: n.id, version: n.version, role, signature: body.signature, signerId: user.id },
   });
-  await systemMessage(n.id, `${name} menandatangani surat versi ${n.version}.`);
+  await systemMessage(n.id, `${name} menandatangani surat versi ${n.version}.`, undefined, user.id);
   await audit(n.id, user.id, "SIGN", `versi ${n.version} sebagai ${role}`);
 
   n = await loadNote(n.id, user);
@@ -124,7 +124,7 @@ export const POST = handler<Ctx>(async (req, user, { params }) => {
 
   if (n.disbursement === "offchain") {
     await db.note.update({ where: { id: n.id }, data: { status: "AWAITING_DISBURSEMENT" } });
-    await systemMessage(n.id, "Kedua pihak sudah tanda tangan. Kreditur silakan transfer pokok, lalu debitur konfirmasi dana diterima.");
+    await systemMessage(n.id, "Kedua pihak sudah tanda tangan. Kreditur silakan transfer pokok, lalu debitur konfirmasi dana diterima.", undefined, user.id);
     return ok({ status: "AWAITING_DISBURSEMENT" });
   }
   if (!escrowDone(n)) return ok({ status: n.status, waiting: "Menunggu kreditur menyetor escrow." });
@@ -134,7 +134,7 @@ export const POST = handler<Ctx>(async (req, user, { params }) => {
     where: { id: n.id },
     data: { status: "ACTIVE", activationTx: rc.hash, activatedAt: new Date(), escrowTermsJson: null },
   });
-  await systemMessage(n.id, `Piutang aktif. Bukti digital terbit di wallet kreditur dan ${fmtRp(terms.principal)} cair ke debitur.`);
+  await systemMessage(n.id, `Piutang aktif. Bukti digital terbit di wallet kreditur dan ${fmtRp(terms.principal)} cair ke debitur.`, undefined, user.id);
   await audit(n.id, null, "ACTIVATE_ONCHAIN", "", rc.hash);
   return ok({ status: "ACTIVE", txHash: rc.hash });
 });

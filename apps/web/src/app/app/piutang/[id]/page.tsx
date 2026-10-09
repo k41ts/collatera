@@ -9,6 +9,7 @@ import { fmtRp, rupiahToUnits, unitsToRupiah } from "@/lib/money";
 import { txUrl } from "@/lib/chain/config";
 import { splitSig } from "@/lib/chain/eip712";
 import RevisionModal from "./RevisionModal";
+import { useConfirm } from "@/components/Dialog";
 
 type Payment = { id: string; method: string; amount: string; installment: number; status: string; proofName: string | null; rejectReason: string | null; txHash: string | null; createdAt: string };
 type Detail = {
@@ -39,6 +40,7 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
   const [busy, setBusy] = useState<string | null>(null);
   const [msg, setMsg] = useState<{ tone: "ok" | "error" | "info"; text: string; tx?: string } | null>(null);
   const [reviseOpen, setReviseOpen] = useState(false);
+  const [confirm, confirmDialog] = useConfirm();
 
   if (error) return <Notice tone="error">{error}</Notice>;
   if (!data) return <p className="text-muted">Memuat…</p>;
@@ -66,10 +68,6 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
   }
 
   const action = (body: Record<string, unknown>) => api(`/api/notes/${id}/action`, { method: "POST", json: body });
-  const ask = (q: string) => {
-    const r = window.prompt(q);
-    return r && r.trim() ? r.trim() : null;
-  };
 
   async function signNote() {
     const t = await api<{ domain: Record<string, unknown>; types: never; message: Record<string, unknown>; permit: { domain: Record<string, unknown>; types: never; message: Record<string, unknown> } | null; balance: string | null }>(`/api/notes/${id}/sign?kind=note`);
@@ -107,6 +105,8 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
   const paidTotal = BigInt(chain?.paid ?? "0");
   const pct = n.status === "PAID" ? 100 : Number((scheduledPaid * BigInt(100)) / BigInt(n.totalOwed));
   const pending = n.payments.filter((p) => p.status === "PENDING");
+  // Permintaan revisi terakhir (riwayat terbaru di depan) untuk memberi tahu bahwa versi ini hasil revisi.
+  const lastRevision = n.version > 1 ? n.events.find((e) => e.action === "REQUEST_REVISION") ?? null : null;
 
   return (
     <div className="mx-auto flex max-w-[1240px] flex-col gap-6">
@@ -140,34 +140,46 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
             </Button>
           )}
           {["ACTIVE", "OVERDUE"].includes(n.status) && role === "creditor" && (
-            <Button variant="secondary" disabled={!!busy} onClick={() => {
-              if (!window.confirm(`Ikhlaskan sisa utang ${fmtRp(remaining)}? Piutang langsung ditandai lunas dan tidak bisa dibatalkan.`)) return;
-              run("waive", () => forwardAction({ noteId: id, wallet: me.wallet, fn: "markPaid", args: [n.chainNoteId], purpose: "markPaid" }), "Piutang ditandai lunas.");
-            }}>Ikhlaskan sisa</Button>
+            <Button variant="secondary" disabled={!!busy} aria-haspopup="dialog" onClick={() => confirm({
+              title: "Ikhlaskan sisa utang?",
+              description: <>Sisa <strong className="text-white">{fmtRp(remaining)}</strong> tidak akan ditagih lagi. Piutang langsung ditandai lunas di blockchain dan <strong className="text-white">tidak bisa dibatalkan</strong>.</>,
+              confirmText: "Ya, ikhlaskan",
+              tone: "danger",
+              action: () => run("waive", () => forwardAction({ noteId: id, wallet: me.wallet, fn: "markPaid", args: [n.chainNoteId], purpose: "markPaid" }), "Piutang ditandai lunas."),
+            })}>Ikhlaskan sisa</Button>
           )}
           {["ACTIVE", "OVERDUE"].includes(n.status) && role && (
-            <Button variant="danger" disabled={!!busy} onClick={() => {
-              const reason = ask("Jelaskan alasan sengketa (min. 10 huruf):");
-              if (!reason) return;
-              run("dispute", () => forwardAction({ noteId: id, wallet: me.wallet, fn: "openDispute", args: [n.chainNoteId, keccak256(toUtf8Bytes(reason))], purpose: "dispute", reason }), "Sengketa diajukan. Admin akan meninjau.");
-            }}>Ajukan sengketa</Button>
+            <Button variant="danger" disabled={!!busy} aria-haspopup="dialog" onClick={() => confirm({
+              title: "Ajukan sengketa",
+              description: "Admin akan meninjau sengketa ini. Hash alasanmu dicatat di blockchain, jadi tulis dengan jelas dan jujur.",
+              field: { label: "Alasan sengketa", placeholder: "Contoh: pembayaran cicilan 2 sudah saya transfer tanggal 5 tapi belum dikonfirmasi.", minLength: 10, hint: "Minimal 10 huruf." },
+              confirmText: "Ajukan sengketa",
+              tone: "danger",
+              action: (reason) => run("dispute", () => forwardAction({ noteId: id, wallet: me.wallet, fn: "openDispute", args: [n.chainNoteId, keccak256(toUtf8Bytes(reason))], purpose: "dispute", reason }), "Sengketa diajukan. Admin akan meninjau."),
+            })}>Ajukan sengketa</Button>
           )}
           {me.isAdmin && n.status === "DISPUTED" && (
-            <Button variant="secondary" disabled={!!busy} onClick={() => {
-              const r = ask("Ringkasan keputusan admin:");
-              if (!r) return;
-              run("close", () => forwardAction({ noteId: id, wallet: me.wallet, fn: "closeDispute", args: [n.chainNoteId, keccak256(toUtf8Bytes(r))], purpose: "closeDispute" }), "Sengketa ditutup.");
-            }}>Tutup sengketa (admin)</Button>
+            <Button variant="secondary" disabled={!!busy} aria-haspopup="dialog" onClick={() => confirm({
+              title: "Tutup sengketa",
+              description: "Ringkasan keputusan dikirim ke kedua pihak dan hash-nya dicatat di blockchain.",
+              field: { label: "Ringkasan keputusan admin", placeholder: "Contoh: bukti transfer valid, cicilan 2 dianggap lunas." },
+              confirmText: "Tutup sengketa",
+              action: (r) => run("close", () => forwardAction({ noteId: id, wallet: me.wallet, fn: "closeDispute", args: [n.chainNoteId, keccak256(toUtf8Bytes(r))], purpose: "closeDispute" }), "Sengketa ditutup."),
+            })}>Tutup sengketa (admin)</Button>
           )}
           {me.isAdmin && n.status === "FROZEN" && (
-            <Button variant="secondary" disabled={!!busy} onClick={() => {
-              const r = ask("Catatan pemulihan data:");
-              if (!r) return;
-              run("unfreeze", () => forwardAction({ noteId: id, wallet: me.wallet, fn: "unfreeze", args: [n.chainNoteId, keccak256(toUtf8Bytes(r))], purpose: "unfreeze" }), "Pembekuan dibuka.");
-            }}>Buka pembekuan (admin)</Button>
+            <Button variant="secondary" disabled={!!busy} aria-haspopup="dialog" onClick={() => confirm({
+              title: "Buka pembekuan",
+              description: "Pastikan data sudah dipulihkan. Catatan ini dicatat di blockchain.",
+              field: { label: "Catatan pemulihan data", placeholder: "Contoh: dokumen dipulihkan dari cadangan, hash cocok lagi." },
+              confirmText: "Buka pembekuan",
+              action: (r) => run("unfreeze", () => forwardAction({ noteId: id, wallet: me.wallet, fn: "unfreeze", args: [n.chainNoteId, keccak256(toUtf8Bytes(r))], purpose: "unfreeze" }), "Pembekuan dibuka."),
+            })}>Buka pembekuan (admin)</Button>
           )}
         </div>
       </header>
+
+      {confirmDialog}
 
       {msg && (
         <Notice tone={msg.tone}>
@@ -179,7 +191,13 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
       {/* ---------------- banner aksi per status ---------------- */}
       {n.status === "DRAFT" && (
         <Card className="flex flex-col gap-3 border-line2">
-          {n.revisionNote && <Notice tone="warn">Revisi diminta: “{n.revisionNote}”</Notice>}
+          {n.revisionNote && (
+            <Notice tone="warn">
+              {me.isCreator
+                ? <><strong className="font-semibold">{data.other?.name ?? "Pihak lawan"} minta revisi:</strong> “{n.revisionNote}”. Ubah draft lalu kirim ulang sebagai versi {n.version}.</>
+                : <>Kamu minta revisi: “{n.revisionNote}”. Menunggu pembuat mengirim versi {n.version}.</>}
+            </Notice>
+          )}
           {me.isCreator ? (
             <>
               <h2 className="text-lg font-semibold">Draft versi {n.version} belum dikirim</h2>
@@ -190,7 +208,14 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
                   {busy === "send" && <Spinner />} Kirim untuk tanda tangan
                 </Button>
                 <LinkButton href={`/app/piutang/${id}/ubah`} variant="secondary">Ubah draft</LinkButton>
-                <Button variant="danger" disabled={!!busy} onClick={() => window.confirm("Batalkan draft ini?") && run("cancel", () => action({ action: "cancel" }), "Draft dibatalkan.")}>Batalkan</Button>
+                <Button variant="danger" disabled={!!busy} aria-haspopup="dialog" onClick={() => confirm({
+                  title: "Batalkan draft?",
+                  description: "Draft ini ditutup permanen dan tidak bisa dikirim lagi. Kamu perlu membuat surat baru kalau berubah pikiran.",
+                  confirmText: "Ya, batalkan draft",
+                  cancelText: "Jangan",
+                  tone: "danger",
+                  action: () => run("cancel", () => action({ action: "cancel" }), "Draft dibatalkan."),
+                })}>Batalkan</Button>
               </div>
             </>
           ) : (
@@ -202,6 +227,13 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
       {n.status === "PENDING_SIGNATURE" && (
         <Card className="flex flex-col gap-4 border-peach/50">
           <h2 className="text-lg font-semibold">Menunggu tanda tangan · versi {n.version}</h2>
+          {lastRevision && (
+            <Notice tone="ok">
+              {me.isCreator
+                ? <>Versi {n.version} hasil revisi sudah dikirim. Permintaan revisi: “{lastRevision.detail}”</>
+                : <>Versi {n.version} sudah direvisi sesuai permintaan: “{lastRevision.detail}”. Cek lagi isi, jadwal, dan dokumen sebelum tanda tangan.</>}
+            </Notice>
+          )}
           <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,220px),1fr))] gap-3 text-sm">
             <SignState label="Kreditur" who={n.creditor?.name ?? short(n.counterpartyWallet)} done={n.creditorSigned} extra={n.disbursement === "onchain" ? (n.escrowIsCurrent ? "Dana sudah di escrow" : "Setor escrow saat tanda tangan") : undefined} />
             <SignState label="Debitur" who={n.debtor?.name ?? short(n.counterpartyWallet)} done={n.debtorSigned} />
@@ -220,7 +252,14 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
                 {!me.isCreator && (
                   <>
                     <Button variant="secondary" disabled={!!busy} aria-haspopup="dialog" onClick={() => setReviseOpen(true)}>Minta revisi</Button>
-                    <Button variant="danger" disabled={!!busy} onClick={() => { const r = ask("Alasan penolakan (wajib, final):"); if (r) run("reject", () => action({ action: "reject", reason: r }), "Surat ditolak."); }}>Tolak</Button>
+                    <Button variant="danger" disabled={!!busy} aria-haspopup="dialog" onClick={() => confirm({
+                      title: "Tolak surat ini?",
+                      description: <>Penolakan bersifat <strong className="text-white">final</strong>: surat ditutup dan tidak bisa direvisi. Kalau hanya ada yang perlu diubah, pakai <strong className="text-white">Minta revisi</strong>.</>,
+                      field: { label: "Alasan penolakan", placeholder: "Contoh: saya tidak pernah meminjam uang ini.", minLength: 5, hint: "Wajib, minimal 5 huruf. Dikirim ke pembuat surat." },
+                      confirmText: "Tolak surat",
+                      tone: "danger",
+                      action: (r) => run("reject", () => action({ action: "reject", reason: r }), "Surat ditolak."),
+                    })}>Tolak</Button>
                   </>
                 )}
               </div>
@@ -235,7 +274,14 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
             />
           )}
           {me.isCreator && (
-            <div><Button variant="danger" disabled={!!busy} onClick={() => window.confirm("Batalkan surat ini?") && run("cancel", () => action({ action: "cancel" }), "Surat dibatalkan.")}>Batalkan surat</Button></div>
+            <div><Button variant="danger" disabled={!!busy} aria-haspopup="dialog" onClick={() => confirm({
+              title: "Batalkan surat ini?",
+              description: `Permintaan tanda tangan ditarik dan surat ditutup permanen.${n.disbursement === "onchain" && n.escrowTerms ? " Dana escrow bisa ditarik kreditur setelahnya." : ""}`,
+              confirmText: "Ya, batalkan surat",
+              cancelText: "Jangan",
+              tone: "danger",
+              action: () => run("cancel", () => action({ action: "cancel" }), "Surat dibatalkan."),
+            })}>Batalkan surat</Button></div>
           )}
         </Card>
       )}
@@ -251,7 +297,14 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
           ) : (
             <>
               <p className="text-sm text-muted">Transfer {fmtRp(n.principal)} ke debitur lewat bank atau tunai, lalu minta debitur mengonfirmasi di aplikasi.</p>
-              {role === "creditor" && <div><Button variant="danger" disabled={!!busy} onClick={() => window.confirm("Batalkan sebelum dana dicairkan?") && run("cancel", () => action({ action: "cancel" }), "Surat dibatalkan.")}>Batalkan</Button></div>}
+              {role === "creditor" && <div><Button variant="danger" disabled={!!busy} aria-haspopup="dialog" onClick={() => confirm({
+                title: "Batalkan sebelum dana dicairkan?",
+                description: <>Surat ditutup permanen. Lakukan ini hanya kalau kamu <strong className="text-white">belum mentransfer</strong> {fmtRp(n.principal)} ke debitur.</>,
+                confirmText: "Ya, batalkan",
+                cancelText: "Jangan",
+                tone: "danger",
+                action: () => run("cancel", () => action({ action: "cancel" }), "Surat dibatalkan."),
+              })}>Batalkan</Button></div>}
             </>
           )}
         </Card>
@@ -360,7 +413,14 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
                   </div>
                   {role === "creditor" && (
                     <div className="flex w-full flex-wrap gap-2.5 max-sm:[&>*]:flex-1 sm:w-auto">
-                      <Button variant="secondary" disabled={!!busy} onClick={() => { const r = ask("Alasan menolak bukti ini:"); if (r) run("rejectpay", () => api(`/api/payments/${p.id}`, { method: "POST", json: { action: "reject", reason: r } }), "Bukti transfer ditolak."); }}>Tolak</Button>
+                      <Button variant="secondary" disabled={!!busy} aria-haspopup="dialog" onClick={() => confirm({
+                        title: "Tolak bukti transfer?",
+                        description: `Bukti transfer ${fmtRp(p.amount)} ditandai ditolak dan debitur diberi tahu lewat chat.`,
+                        field: { label: "Alasan menolak", placeholder: "Contoh: dana belum masuk ke rekening BCA saya per hari ini." },
+                        confirmText: "Tolak bukti",
+                        tone: "danger",
+                        action: (r) => run("rejectpay", () => api(`/api/payments/${p.id}`, { method: "POST", json: { action: "reject", reason: r } }), "Bukti transfer ditolak."),
+                      })}>Tolak</Button>
                       <Button disabled={!!busy || n.status !== "ACTIVE" && n.status !== "OVERDUE"} onClick={() => run("confirm", async () => {
                         const t = await api<{ domain: Record<string, unknown>; types: never; message: Record<string, unknown> }>(`/api/payments/${p.id}`);
                         const signature = await signTyped(t, me.wallet);
@@ -431,7 +491,13 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
                 <span className="flex flex-none items-center gap-2 text-xs text-faint">
                   {Math.ceil(d.size / 1024)} KB
                   {n.status === "DRAFT" && me.isCreator && (
-                    <button type="button" aria-label={`Hapus ${d.name}`} className="text-pink" onClick={() => run("deldoc", () => api(`/api/notes/${id}/documents?doc=${d.id}`, { method: "DELETE" }), "Dokumen dihapus.")}>Hapus</button>
+                    <button type="button" aria-label={`Hapus ${d.name}`} aria-haspopup="dialog" className="text-pink" onClick={() => confirm({
+                      title: "Hapus dokumen?",
+                      description: <>“{d.name}” dihapus dari draft ini.</>,
+                      confirmText: "Hapus dokumen",
+                      tone: "danger",
+                      action: () => run("deldoc", () => api(`/api/notes/${id}/documents?doc=${d.id}`, { method: "DELETE" }), "Dokumen dihapus."),
+                    })}>Hapus</button>
                   )}
                 </span>
               </div>

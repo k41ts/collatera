@@ -59,15 +59,28 @@ export async function joinIfInvited(n: FullNote, u: SessionUser) {
   if (r === "creditor" && !n.creditorId) await db.note.update({ where: { id: n.id }, data: { creditorId: u.id } });
   else if (r === "debtor" && !n.debtorId) await db.note.update({ where: { id: n.id }, data: { debtorId: u.id } });
   else return n;
-  await systemMessage(n.id, `${displayName(u)} bergabung sebagai ${r === "creditor" ? "kreditur" : "debitur"}.`);
+  await systemMessage(n.id, `${displayName(u)} bergabung sebagai ${r === "creditor" ? "kreditur" : "debitur"}.`, undefined, u.id);
   return loadNote(n.id, u);
 }
 
 export const displayName = (u: { name: string | null; wallet: string } | null | undefined) =>
   u ? u.name?.trim() || `${u.wallet.slice(0, 6)}…${u.wallet.slice(-4)}` : "Pihak lawan";
 
-export async function systemMessage(noteId: string, body: string, link?: string) {
-  await db.message.create({ data: { noteId, body, link } });
+/**
+ * Pesan sistem di chat surat. `actorId` = user yang memicu kejadian ini: kalau dia sudah membaca semua pesan
+ * sebelumnya, pesan ini langsung dianggap terbaca olehnya (yang jadi "belum dibaca" hanya pihak lawan).
+ */
+export async function systemMessage(noteId: string, body: string, link?: string, actorId?: string) {
+  const prev = actorId ? await db.message.findFirst({ where: { noteId }, orderBy: { createdAt: "desc" }, select: { createdAt: true } }) : null;
+  const m = await db.message.create({ data: { noteId, body, link } });
+  if (!actorId) return;
+  const read = await db.chatRead.findUnique({ where: { userId_noteId: { userId: actorId, noteId } } });
+  if (prev && (!read || read.readAt < prev.createdAt)) return;
+  await db.chatRead.upsert({
+    where: { userId_noteId: { userId: actorId, noteId } },
+    update: { readAt: m.createdAt },
+    create: { userId: actorId, noteId, readAt: m.createdAt },
+  });
 }
 
 export async function audit(noteId: string | null, actorId: string | null, action: string, detail = "", txHash?: string) {

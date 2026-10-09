@@ -16,6 +16,11 @@ const FILTERS: [string, string, string[]][] = [
   ["paid", "Lunas", ["PAID"]],
   ["closed", "Ditolak & batal", ["REJECTED", "CANCELLED"]],
 ];
+const REVISION: Record<NonNullable<NoteSummary["revision"]>, { label: string; cls: string; text: (n: NoteSummary) => string }> = {
+  requested: { label: "REVISI DIMINTA", cls: "border-butter/50 bg-[#3a3017]/70 text-butter", text: (n) => `${n.party} minta revisi: “${n.revisionNote}”` },
+  in_progress: { label: "SEDANG DIREVISI", cls: "border-line2 bg-raised text-soft", text: (n) => `Kamu minta revisi: “${n.revisionNote}”. Menunggu ${n.party} mengirim versi ${n.version}.` },
+  done: { label: "SUDAH DIREVISI", cls: "border-mint/40 bg-[#1e3324]/70 text-mint", text: (n) => `${n.party} sudah mengirim versi ${n.version} hasil revisi. Cek lalu tanda tangani.` },
+};
 
 export default function NotesPage() {
   const { data, loading, error } = useApi<{ notes: NoteSummary[] }>("/api/notes");
@@ -32,7 +37,9 @@ export default function NotesPage() {
       (n) => (role === "all" || n.role === role) && (!qq || `${n.title} ${n.party} ${n.code} ${TYPES[n.debtType]}`.toLowerCase().includes(qq)),
     );
   }, [notes, q, role]);
-  const inFilter = (n: NoteSummary, key: string) => key === "all" || FILTERS.find((f) => f[0] === key)![2].includes(n.status);
+  const inFilter = (n: NoteSummary, key: string) =>
+    key === "all" || (key === "revision" ? !!n.revision : FILTERS.find((f) => f[0] === key)![2].includes(n.status));
+  const filters: [string, string, string[]][] = notes.some((n) => n.revision) ? [FILTERS[0], ["revision", "Revisi", []], ...FILTERS.slice(1)] : FILTERS;
   const shown = useMemo(
     () =>
       base
@@ -81,7 +88,7 @@ export default function NotesPage() {
           </label>
         </div>
         <div role="group" aria-label="Status" className="-mx-3 flex gap-2 overflow-x-auto px-3 pb-1 no-scrollbar [scrollbar-width:none] sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0 sm:pb-0">
-          {FILTERS.map(([key, label]) => {
+          {filters.map(([key, label]) => {
             const on = status === key;
             const count = base.filter((n) => inFilter(n, key)).length;
             return (
@@ -112,7 +119,7 @@ export default function NotesPage() {
         <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,300px),1fr))] gap-4">
           {shown.map((n) => {
             const pct = Number((BigInt(n.paid) * BigInt(100)) / BigInt(n.totalOwed || "1"));
-            const urgent = ["OVERDUE", "PENDING_SIGNATURE", "AWAITING_DISBURSEMENT"].includes(n.status);
+            const urgent = ["OVERDUE", "PENDING_SIGNATURE", "AWAITING_DISBURSEMENT"].includes(n.status) || n.revision === "requested";
             const lft = left(n);
             return (
               <Link key={n.id} href={`/app/piutang/${n.id}`} className="flex min-w-0 flex-col gap-3.5 rounded-[20px] border border-line bg-card p-4 text-white sm:p-5 no-underline transition-colors hover:border-line2">
@@ -121,6 +128,12 @@ export default function NotesPage() {
                   <StatusPill status={n.status} />
                 </div>
                 <span className="text-lg font-semibold leading-snug [overflow-wrap:anywhere]">{n.title}</span>
+                {n.revision && (
+                  <div className={`flex flex-col gap-1 rounded-xl border px-3 py-2.5 text-xs leading-relaxed ${REVISION[n.revision].cls}`}>
+                    <span className="text-[11px] font-semibold tracking-wide">{REVISION[n.revision].label}</span>
+                    <span className="line-clamp-2 text-soft [overflow-wrap:anywhere]">{REVISION[n.revision].text(n)}</span>
+                  </div>
+                )}
                 <div className="flex items-center gap-2.5">
                   <Avatar name={n.party} size="sm" />
                   <span className="flex min-w-0 flex-col">
@@ -130,9 +143,9 @@ export default function NotesPage() {
                   {n.unread > 0 && <span className="ml-auto rounded-full bg-brand-soft px-2.5 py-1 text-xs text-lav">{n.unread} pesan</span>}
                 </div>
                 <div className="flex flex-col gap-2">
-                  <div className="flex items-baseline justify-between gap-2">
-                    <span className="text-xs text-faint">Sisa dari {fmtRp(n.totalOwed)}</span>
-                    <span className="text-xl font-semibold tabular-nums">{fmtRp(lft > BigInt(0) ? lft : BigInt(0))}</span>
+                  <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
+                    <span className="min-w-0 text-xs text-faint [overflow-wrap:anywhere]">Sisa dari {fmtRp(n.totalOwed)}</span>
+                    <span className="ml-auto min-w-0 text-right text-xl font-semibold leading-tight tabular-nums [overflow-wrap:anywhere]">{fmtRp(lft > BigInt(0) ? lft : BigInt(0))}</span>
                   </div>
                   <div className="h-1.5 overflow-hidden rounded-full bg-line">
                     <div className={`h-full rounded-full ${n.status === "PAID" ? "bg-lav" : "bg-tusc"}`} style={{ width: `${n.status === "PAID" ? 100 : pct}%` }} />
@@ -153,8 +166,8 @@ export default function NotesPage() {
 
 function dueText(n: NoteSummary) {
   switch (n.status) {
-    case "DRAFT": return n.isCreator ? "Draft, belum dikirim" : "Draft pihak lawan";
-    case "PENDING_SIGNATURE": return n.mySignature ? "Menunggu tanda tangan pihak lain" : "Menunggu tanda tanganmu";
+    case "DRAFT": return n.revision === "requested" ? "Perbaiki draft lalu kirim ulang" : n.isCreator ? "Draft, belum dikirim" : n.revision ? "Pembuat sedang merevisi" : "Draft pihak lawan";
+    case "PENDING_SIGNATURE": return n.mySignature ? "Menunggu tanda tangan pihak lain" : n.revision === "done" ? `Versi ${n.version} menunggu tanda tanganmu` : "Menunggu tanda tanganmu";
     case "AWAITING_DISBURSEMENT": return n.role === "debtor" ? "Konfirmasi dana sudah diterima" : "Menunggu konfirmasi debitur";
     case "PAID": return "Lunas";
     case "REJECTED": return "Ditolak";

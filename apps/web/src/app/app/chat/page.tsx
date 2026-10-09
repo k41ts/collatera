@@ -115,7 +115,11 @@ function ChatInner() {
               </div>
               <ol aria-label="Pesan" aria-live="polite" className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto overscroll-contain px-3 py-4 sm:px-4 lg:max-h-[60vh] lg:min-h-[320px]">
                 {(thread?.messages ?? []).map((m) =>
-                  m.kind === "event" ? (
+                  m.kind === "event" && revisionKind(m.body) ? (
+                    <li key={m.id} className="flex justify-center">
+                      <RevisionEvent kind={revisionKind(m.body)!} body={m.body} at={time(m.createdAt)} link={m.link} />
+                    </li>
+                  ) : m.kind === "event" ? (
                     <li key={m.id} className="flex justify-center">
                       <div className="flex flex-wrap items-center justify-center gap-2 rounded-full border border-line bg-midnight px-3.5 py-1.5 text-center text-xs text-soft">
                         <span>{m.body}</span><span className="text-faint">· {time(m.createdAt)}</span>
@@ -159,5 +163,22 @@ export default function ChatPage() {
     <Suspense>
       <ChatInner />
     </Suspense>
+  );
+}
+
+/** Pesan sistem soal revisi ditampilkan lebih menonjol dari kejadian biasa. */
+const revisionKind = (body: string) => (/ minta revisi: /.test(body) ? "requested" : / sudah merevisi surat piutang/.test(body) ? "done" : null);
+
+function RevisionEvent({ kind, body, at, link }: { kind: "requested" | "done"; body: string; at: string; link: string | null }) {
+  const requested = kind === "requested";
+  return (
+    <div className={`flex w-full max-w-[520px] flex-col gap-2 rounded-2xl border px-4 py-3 text-sm ${requested ? "border-butter/50 bg-[#3a3017]/60" : "border-mint/40 bg-[#1e3324]/60"}`}>
+      <span className="flex items-center justify-between gap-2">
+        <span className={`rounded-md px-2 py-0.5 text-[11px] font-semibold tracking-wide ${requested ? "bg-butter text-butter-ink" : "bg-mint text-mint-ink"}`}>{requested ? "PERMINTAAN REVISI" : "SUDAH DIREVISI"}</span>
+        <span className="text-[11px] text-faint">{at}</span>
+      </span>
+      <span className="leading-relaxed text-white [overflow-wrap:anywhere]">{body}</span>
+      {link && <Link href={link} className="self-start text-[13px] font-medium text-lav">{requested ? "Lihat surat →" : "Cek versi baru →"}</Link>}
+    </div>
   );
 }

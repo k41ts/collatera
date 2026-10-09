@@ -21,6 +21,9 @@ export type NoteSummary = {
   version: number;
   mySignature: boolean;
   isCreator: boolean;
+  /** requested = pihak lawan minta revisi (kamu pembuat), in_progress = pembuat sedang merevisi, done = versi revisi menunggu tanda tanganmu. */
+  revision: "requested" | "in_progress" | "done" | null;
+  revisionNote: string | null;
   lastMessage: string | null;
   lastMessageAt: string | null;
   unread: number;
@@ -79,6 +82,9 @@ export function useApi<T>(path: string | null, pollMs?: number) {
 
   return { data, error, loading, refresh, setData };
 }
+
+/** Surat dengan kabar revisi yang perlu kamu tindak lanjuti (badge menu "Piutang saya"). */
+export const hasRevisionAlert = (n: NoteSummary) => n.revision === "requested" || n.revision === "done";
 
 /** Status piutang yang menunggu tanda tangan user ini. */
 export const needsMySignature = (n: NoteSummary) => n.status === "PENDING_SIGNATURE" && !n.mySignature && !!n.role;

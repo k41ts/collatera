@@ -17,8 +17,9 @@ export default function Dashboard() {
   const week = Date.now() + 7 * 86400_000;
   const dueSoon = notes.filter((n) => LIVE.includes(n.status) && n.nextDue && new Date(n.nextDue).getTime() <= week);
   const toSign = notes.filter(needsMySignature);
+  const toRevise = notes.filter((n) => n.revision === "requested");
   const toConfirm = notes.filter((n) => n.status === "AWAITING_DISBURSEMENT" && n.role === "debtor");
-  const actions = toSign.length + toConfirm.length;
+  const actions = toRevise.length + toSign.length + toConfirm.length;
   const name = me?.user.name?.split(" ")[0];
 
   return (
@@ -71,12 +72,12 @@ export default function Dashboard() {
                       </span>
                       <StatusPill status={n.status} />
                     </span>
-                    <span className="flex items-baseline justify-between gap-3 text-[13px]">
+                    <span className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 text-[13px]">
                       <span className="text-soft">
                         {n.role === "creditor" ? "Kreditur" : n.role === "debtor" ? "Debitur" : "-"}
                         {n.nextDue && LIVE.includes(n.status) ? ` · jatuh tempo ${fmtDate(n.nextDue)}` : ""}
                       </span>
-                      <span className="flex-none font-semibold tabular-nums">{fmtRp(left(n) > BigInt(0) ? left(n) : BigInt(0))}</span>
+                      <span className="ml-auto min-w-0 text-right font-semibold tabular-nums [overflow-wrap:anywhere]">{fmtRp(left(n) > BigInt(0) ? left(n) : BigInt(0))}</span>
                     </span>
                   </Link>
                 </li>
@@ -116,8 +117,11 @@ export default function Dashboard() {
         <section aria-labelledby="judul-tindakan" className="flex min-w-0 flex-[1_1_300px] flex-col gap-3">
           <h2 id="judul-tindakan" className="text-lg font-semibold">Perlu tindakan</h2>
           {actions === 0 && <p className="rounded-2xl border border-line bg-card p-4 text-sm text-muted">Tidak ada yang perlu kamu lakukan sekarang.</p>}
+          {toRevise.map((n) => (
+            <ActionCard key={n.id} href={`/app/piutang/${n.id}/ubah`} tag="REVISI DIMINTA" tagCls="bg-butter text-butter-ink" title={n.title} sub={`${n.party}: “${n.revisionNote}”`} cta="Perbaiki draft →" />
+          ))}
           {toSign.map((n) => (
-            <ActionCard key={n.id} href={`/app/piutang/${n.id}`} tag="TANDA TANGAN" tagCls="bg-pink text-pink-ink" title={`${n.title} · ${fmtRp(n.totalOwed)}`} sub={`${n.party} · versi ${n.version} · kamu ${n.role === "creditor" ? "kreditur" : "debitur"}`} cta="Review & tanda tangan →" />
+            <ActionCard key={n.id} href={`/app/piutang/${n.id}`} tag={n.revision === "done" ? `SUDAH DIREVISI · VERSI ${n.version}` : "TANDA TANGAN"} tagCls={n.revision === "done" ? "bg-mint text-mint-ink" : "bg-pink text-pink-ink"} title={`${n.title} · ${fmtRp(n.totalOwed)}`} sub={`${n.party} · versi ${n.version} · kamu ${n.role === "creditor" ? "kreditur" : "debitur"}`} cta="Review & tanda tangan →" />
           ))}
           {toConfirm.map((n) => (
             <ActionCard key={n.id} href={`/app/piutang/${n.id}`} tag="KONFIRMASI DANA" tagCls="bg-butter text-butter-ink" title={`Sudah terima ${fmtRp(n.principal)}?`} sub={`${n.title} · dari ${n.party}`} cta="Konfirmasi terima dana →" />
@@ -132,7 +136,7 @@ function Tile({ title, value, sub, big, alert, wide }: { title: string; value: s
   return (
     <div className={`flex min-w-0 flex-col gap-2 rounded-[18px] p-4 sm:gap-2.5 sm:p-5 ${wide ? "col-span-2 sm:col-span-1" : ""} ${big ? "bg-brand" : `border bg-card ${alert ? "border-rasp" : "border-line"}`}`}>
       <span className={`text-[13px] leading-snug ${big ? "text-brand-tint" : alert ? "text-pink" : "text-muted"}`}>{title}</span>
-      <span className="text-[24px] font-semibold leading-tight tabular-nums sm:text-[clamp(20px,2.4vw,28px)]">{value}</span>
+      <span className="text-[24px] font-semibold leading-tight tabular-nums [overflow-wrap:anywhere] sm:text-[clamp(20px,2.4vw,28px)]">{value}</span>
       <span className={`text-xs ${big ? "text-brand-tint" : "text-muted"}`}>{sub}</span>
     </div>
   );
@@ -142,8 +146,8 @@ function ActionCard({ href, tag, tagCls, title, sub, cta }: { href: string; tag:
   return (
     <Link href={href} className="flex flex-col gap-2 rounded-2xl border border-line bg-card p-4 text-white no-underline hover:border-line2">
       <span className={`self-start rounded-md px-2 py-1 text-[11px] font-semibold ${tagCls}`}>{tag}</span>
-      <span className="text-sm font-medium">{title}</span>
-      <span className="text-xs text-muted">{sub}</span>
+      <span className="text-sm font-medium [overflow-wrap:anywhere]">{title}</span>
+      <span className="text-xs text-muted [overflow-wrap:anywhere]">{sub}</span>
       <span className="text-[13px] font-medium text-lav">{cta}</span>
     </Link>
   );

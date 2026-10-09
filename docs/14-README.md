@@ -8,61 +8,46 @@ Surat piutang (promissory note) on-chain: dibuat, ditandatangani kedua pihak, di
 - Draft, undangan, revisi, dan tanda tangan EIP-712 gasless
 - Token ERC-721 non-transferable ke wallet kreditur sebagai hak tagih
 - Pencairan pokok lewat escrow stablecoin atau transfer off-chain
-- Cicilan, pembayaran on-chain (MockIDR) dan off-chain dengan konfirmasi kreditur
+- Cicilan, pembayaran on-chain (MockIDRX) dan off-chain dengan konfirmasi kreditur
 - OVERDUE otomatis per cicilan, late fee 2%/bulan (jika disepakati), pengingat H-3 & H-0
 - Integrity checker: hash DB vs on-chain → TAMPERED → FROZEN
 - Dispute ke admin dan audit log
 
-## Struktur Repo (usulan)
+## Struktur Repo
 
 ```
-apps/
-  web/          Next.js frontend
-  api/          Backend API + worker (relayer, cron, indexer)
-packages/
-  contracts/    Hardhat: PiutangNote, MockIDR, Forwarder (+ TypeChain types)
-  shared/       Tipe, skema Zod, helper EIP-712
-docs/           01-PRD … 14-README
+piutangchain-contracts/   Hardhat 2: DebtManager, DebtNote, MockIDRX, PiutangForwarder (sudah ada)
+docs/                     01-PRD … 14-README
+apps/web/                 Next.js frontend (rencana)
+apps/api/                 Backend API + worker: relayer, cron, indexer (rencana)
 ```
 
 ## Menjalankan Lokal
 
-Prasyarat: Node 22+, pnpm, Docker.
+Prasyarat: Node 20+ dan npm. Smart contract:
 
 ```bash
-pnpm install
+cd piutangchain-contracts && npm install
 ```
 
 ```bash
-docker compose up -d postgres redis
+npm run node
 ```
 
 ```bash
-pnpm --filter contracts exec hardhat node
+npm run deploy:local
 ```
 
-```bash
-pnpm --filter contracts deploy:local
-```
-
-```bash
-pnpm --filter api db:migrate && pnpm --filter api db:seed
-```
-
-```bash
-pnpm dev
-```
-
-Salin `.env.example` ke `.env` lalu isi nilainya (lihat [10-DEPLOYMENT-PLAN](10-DEPLOYMENT-PLAN.md)).
+Deploy ke Sepolia: salin `piutangchain-contracts/.env.example` ke `.env`, isi RPC dan key, lalu `npm run deploy:sepolia` (lihat [10-DEPLOYMENT-PLAN](10-DEPLOYMENT-PLAN.md)). Backend dan frontend belum dibuat.
 
 ## Test
 
 ```bash
-pnpm --filter contracts test
+cd piutangchain-contracts && npm test
 ```
 
 ```bash
-pnpm test
+npm run coverage
 ```
 
 ## Dokumentasi

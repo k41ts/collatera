@@ -31,15 +31,17 @@ Peran ditentukan **per surat piutang**. Satu akun bisa jadi kreditur di satu piu
 | Bayar cicilan | ❌ | ✅ | ❌ | ❌ | ❌ |
 | Upload bukti transfer | ❌ | ✅ | ❌ | ❌ | ❌ |
 | Konfirmasi / tolak bayar off-chain | ✅ | ❌ | ❌ | ❌ | ❌ |
-| Set OVERDUE / kembali ACTIVE | ❌ | ❌ | ❌ | ⚙️ (`markOverdue` / otomatis saat bayar) | ❌ |
+| Set OVERDUE / kembali ACTIVE | ❌ | ❌ | ❌ | ⚙️ dihitung contract saat dibaca (`statusOf`) | ❌ |
 | Hitung late fee | ❌ | ❌ | ❌ | ⚙️ (contract) | ❌ |
 | Burn token (PAID) | ❌ | ❌ | ❌ | ⚙️ | ❌ |
-| Mengajukan dispute | ✅ | ✅ | ❌ | ❌ | ❌ |
-| Menutup dispute | ❌ | ❌ | ✅ | ⚙️ kirim tx `setDisputed(false)`, burn jika sisa nol | ❌ |
+| Mengajukan dispute | ✅ (`openDispute`) | ✅ (`openDispute`) | ❌ | ❌ | ❌ |
+| Menutup dispute | ❌ | ❌ | ✅ (`closeDispute`, burn jika sisa nol) | ❌ | ❌ |
 | Integrity check | ✅ (trigger) | ✅ (trigger) | ✅ | ⚙️ terjadwal | ❌ |
 | Freeze piutang | ❌ | ❌ | ✅ | ⚙️ saat TAMPERED | ❌ |
 | Unfreeze piutang | ❌ | ❌ | ✅ | ❌ | ❌ |
-| Ubah nominal/isi perjanjian | via revisi ulang | via revisi ulang | ❌ | ❌ | ❌ |
+| Mengikhlaskan sisa utang (`markPaid`) | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Menarik escrow sebelum aktif (`refundEscrow`) | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Ubah nominal/isi perjanjian | via revisi ulang (`amend`) | via revisi ulang (`amend`) | ❌ | ❌ | ❌ |
 | Lihat audit log | ✅ (piutang sendiri) | ✅ (piutang sendiri) | ✅ (semua) | — | ❌ |
 
 ## Batasan Berdasarkan Status
@@ -56,11 +58,10 @@ Peran ditentukan **per surat piutang**. Satu akun bisa jadi kreditur di satu piu
 
 ## Role di Smart Contract
 
-| Role (OpenZeppelin AccessControl) | Pemegang | Fungsi |
-|-----------------------------------|----------|--------|
-| `DEFAULT_ADMIN_ROLE` | Multisig tim | Atur role |
-| `RELAYER_ROLE` | Wallet relayer | `mintNote`, `confirmOffchainPayment` |
-| `GUARDIAN_ROLE` | Admin + integrity service | `freeze`, `unfreeze`, `setDisputed` |
-| `MINTER_ROLE` (MockIDR) | Wallet relayer | `faucet` (testnet) |
+| Role | Pemegang | Fungsi |
+|------|----------|--------|
+| `DEFAULT_ADMIN_ROLE` | Multisig tim (default: deployer) | Grant/revoke role |
+| `ADMIN_ROLE` | Wallet admin platform | `closeDispute`, `freeze`, `unfreeze`, `pause`, `unpause` |
+| `FREEZER_ROLE` | Wallet integrity checker | Hanya `freeze` |
 
-`repay` tidak butuh role: dipanggil debitur lewat `Forwarder` (ERC-2771). `markOverdue` dan `accrue` boleh dipanggil siapa saja; dalam praktik cron worker mengantrekannya ke relayer worker dan tx dikirim dengan wallet relayer. Freeze piutang yang belum di-mint hanya terjadi di DB.
+Tidak ada role relayer: aktivasi, setor escrow, konfirmasi off-chain, dan revisi diotorisasi oleh signature para pihak, jadi relayer mana pun boleh mengirimnya. Aksi pengguna (bayar, `openDispute`, `markPaid`, `refundEscrow`, `cancelNonce`) dicek dari `_msgSender()`, langsung atau lewat `PiutangForwarder`. OVERDUE dihitung contract saat dibaca, tanpa tx. Freeze piutang yang belum aktif hanya terjadi di DB.

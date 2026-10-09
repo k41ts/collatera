@@ -10,7 +10,7 @@ ReentrancyGuard, ERC-721, ERC-2612, ERC-2771, dan ERC-1271 ditulis sendiri di `c
 
 ```bash
 npm install
-npm test                 # 77 test
+npm test                 # 82 test
 npm run coverage         # solidity-coverage
 npm run size             # ukuran bytecode vs batas 24 KB
 npm run deploy:local
@@ -91,6 +91,8 @@ Nominal memakai satuan terkecil token (`decimals`, default 2). Samakan di databa
    tepat; frontend cukup mengirim sisa utang + sedikit buffer dan permit sebesar itu). Konfirmasi off-chain yang melebihi sisa ditolak.
 8. **Pause** hanya menahan deposit, aktivasi, pembayaran, revisi, markPaid. Refund escrow, dispute, freeze tetap terbuka.
 9. Hash dokumen terkunci seumur hidup (termasuk hash lama setelah revisi dan setelah burn).
+10. **Batas nominal**: `totalOwed` maksimal `MAX_AMOUNT` (= `type(uint128).max`), agar perhitungan denda tidak overflow
+    dan membuat freeze, dispute, atau pembayaran selalu revert.
 
 ## Keterbatasan yang perlu kamu tahu
 

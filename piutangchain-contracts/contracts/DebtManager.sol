@@ -35,6 +35,9 @@ contract DebtManager is IDebtManager, EIP712, AccessControl, ReentrancyGuard, Pa
     uint16 public constant LATE_FEE_BPS = 200;
     uint256 public constant LATE_FEE_PERIOD = 30 days;
     uint256 public constant MAX_INSTALLMENTS = 24;
+    /// @dev Batas nominal (jauh di atas kebutuhan nyata). Mencegah overflow di perhitungan denda
+    ///      (tunggakan × detik × bps) yang bisa membuat freeze, dispute, dan pembayaran selalu revert.
+    uint256 public constant MAX_AMOUNT = type(uint128).max;
     uint256 private constant BPS = 10_000;
 
     // ------------------------------------------------------------- typehashes
@@ -342,7 +345,9 @@ contract DebtManager is IDebtManager, EIP712, AccessControl, ReentrancyGuard, Pa
         if (r.status != Status.ACTIVE && r.status != Status.DISPUTED) revert InvalidStatus(r.status);
         if (a.newVersion != r.version + 1) revert InvalidVersion(r.version + 1);
         if (a.deadline < block.timestamp) revert SignatureExpired();
-        if (a.newDocHash == bytes32(0) || a.newTotalOwed == 0 || a.newDueDate == 0) revert InvalidAmount();
+        if (a.newDocHash == bytes32(0) || a.newTotalOwed == 0 || a.newTotalOwed > MAX_AMOUNT || a.newDueDate == 0) {
+            revert InvalidAmount();
+        }
         if (a.newLateFeeBps != 0 && a.newLateFeeBps != LATE_FEE_BPS) revert InvalidLateFee();
         if (noteIdOfDocHash[a.newDocHash] != bytes32(0)) revert DocHashAlreadyUsed();
 
@@ -667,7 +672,7 @@ contract DebtManager is IDebtManager, EIP712, AccessControl, ReentrancyGuard, Pa
         if (n.deadline < block.timestamp) revert SignatureExpired();
         if (n.noteId == bytes32(0) || n.docHash == bytes32(0) || n.version == 0) revert InvalidAmount();
         if (n.creditor == address(0) || n.debtor == address(0) || n.creditor == n.debtor) revert InvalidParties();
-        if (n.principal == 0 || n.totalOwed < n.principal) revert InvalidAmount();
+        if (n.principal == 0 || n.totalOwed < n.principal || n.totalOwed > MAX_AMOUNT) revert InvalidAmount();
         if (n.lateFeeBps != 0 && n.lateFeeBps != LATE_FEE_BPS) revert InvalidLateFee();
         if (n.dueDate <= block.timestamp) revert InvalidDueDate();
         if (_records[n.noteId].status != Status.NONE) revert NoteAlreadyExists();

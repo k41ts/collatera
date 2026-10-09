@@ -6,7 +6,7 @@ pragma solidity 0.8.28;
 contract MockGasBurner {
     event Done(bool innerOk);
 
-    function burn() external {
+    function burn() external pure {
         while (true) {}
     }
 

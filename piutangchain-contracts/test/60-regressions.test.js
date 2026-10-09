@@ -84,3 +84,44 @@ describe("Regresi: denda tidak bisa dihapus dengan memanggil accrue() terus-mene
     expect(await manager.lateFeeOf(note.noteId)).to.equal(during);
   });
 });
+
+describe("Regresi: nominal raksasa tidak bisa memblokir freeze lewat overflow denda", () => {
+  it("totalOwed > uint128 ditolak saat aktivasi dan revisi; batas maksimum tetap bisa dibekukan saat telat", async () => {
+    const ctx = await loadFixture(f.deployAll);
+    const { manager, admin, relayer } = ctx;
+    const MAX = 2n ** 128n - 1n;
+    expect(await manager.MAX_AMOUNT()).to.equal(MAX);
+
+    // Dulu: totalOwed 2^240 → setelah lewat jatuh tempo, freeze/bayar/dispute revert panic 0x11 (overflow).
+    const tooBig = await f.buildNote(ctx, { principal: IDR(1), totalOwed: 2n ** 240n });
+    await expect(f.activateOnchain(ctx, tooBig)).to.be.revertedWithCustomError(manager, "InvalidAmount");
+
+    // Nominal di batas atas tetap aman dihitung dendanya, bahkan setelah bertahun-tahun.
+    const atMax = await f.buildNote(ctx, { principal: IDR(1), totalOwed: MAX });
+    await f.activateOnchain(ctx, atMax);
+    await time.increaseTo(Number(atMax.dueDate) + 10 * 365 * DAY);
+    await manager.connect(admin).freeze(atMax.noteId, ethers.id("integrity"));
+    expect(await manager.statusOf(atMax.noteId)).to.equal(Status.FROZEN);
+
+    // Revisi juga tidak boleh menaikkan total melewati batas.
+    const note = await f.buildNote(ctx);
+    await f.activateOnchain(ctx, note);
+    const now = await time.latest();
+    const schedule = { dueDates: [now + 30 * DAY], amounts: [MAX + 1n] };
+    const a = {
+      noteId: note.noteId,
+      newVersion: 2,
+      newDocHash: ethers.id("doc-revisi-raksasa"),
+      newScheduleHash: f.E.scheduleHash(schedule),
+      newTotalOwed: MAX + 1n,
+      newLateFeeBps: 200,
+      newDueDate: schedule.dueDates[0],
+      deadline: now + DAY,
+      creditorNonce: 88_001n,
+      debtorNonce: 88_002n,
+    };
+    const sigC = await ctx.creditor.signTypedData(ctx.domain, f.E.AMENDMENT_TYPES, a);
+    const sigD = await ctx.debtor.signTypedData(ctx.domain, f.E.AMENDMENT_TYPES, a);
+    await expect(manager.connect(relayer).amend(a, schedule, sigC, sigD)).to.be.revertedWithCustomError(manager, "InvalidAmount");
+  });
+});

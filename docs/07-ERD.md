@@ -38,12 +38,13 @@ erDiagram
         uuid creditor_id FK "null sampai pihak lawan bergabung"
         uuid debtor_id FK "null sampai pihak lawan bergabung"
         int current_version
-        string status
-        string status_before_dispute
+        string status "DRAFT|PENDING_SIGNATURE|AWAITING_DISBURSEMENT|ACTIVE|OVERDUE|DISPUTED|FROZEN|PAID|REJECTED|CANCELLED"
         string status_before_freeze
         bytes32 minted_doc_hash UK "diisi saat mint"
         string integrity_status "VERIFIED|TAMPERED|UNCHECKED"
-        numeric outstanding_amount
+        numeric outstanding_amount "cache dari contract"
+        numeric late_fee_accrued "cache dari contract"
+        timestamp disbursement_confirmed_at
         bigint token_id
         string mint_tx_hash
         string invite_token
@@ -59,7 +60,8 @@ erDiagram
         numeric interest_value
         string repayment_scheme "single|installment"
         date due_date
-        int late_fee_bps
+        int late_fee_bps "0 atau 200"
+        numeric interest_amount
         text collateral_note
         string disbursement "onchain|offchain"
         bytes32 doc_hash
@@ -99,6 +101,8 @@ erDiagram
         uuid note_id FK
         string method "onchain|offchain"
         numeric amount
+        numeric to_installments
+        numeric to_late_fee
         string status "PENDING|CONFIRMED|REJECTED"
         string proof_storage_key
         text creditor_signature
@@ -167,4 +171,5 @@ erDiagram
 - Anti double-mint di DB: `DEBT_NOTES.minted_doc_hash` unik, diisi dari versi yang di-mint (cermin `usedDocHash` di contract).
 - Burn terjadi di dalam tx `repay`/`confirm` (atau saat dispute ditutup), jadi tidak ada `kind` burn terpisah di `CHAIN_TXS`.
 - `PAYMENTS (tx_hash, log_index)` unik untuk idempotency event on-chain.
+- `DEBT_NOTES.status` ACTIVE/OVERDUE/PAID dan `INSTALLMENTS.paid_amount` diperbarui indexer dari event (`StatusChanged`, `Repaid`), bukan dari cron.
 - `AUDIT_LOGS` append-only (tanpa UPDATE/DELETE lewat RLS atau trigger).

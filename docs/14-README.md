@@ -9,7 +9,7 @@ Surat piutang (promissory note) on-chain: dibuat, ditandatangani kedua pihak, di
 - Token ERC-721 non-transferable ke wallet kreditur sebagai hak tagih
 - Pencairan pokok lewat escrow stablecoin atau transfer off-chain
 - Cicilan, pembayaran on-chain (MockIDR) dan off-chain dengan konfirmasi kreditur
-- OVERDUE otomatis, pengingat H-3 & H-0
+- OVERDUE otomatis per cicilan, late fee 2%/bulan (jika disepakati), pengingat H-3 & H-0
 - Integrity checker: hash DB vs on-chain → TAMPERED → FROZEN
 - Dispute ke admin dan audit log
 

@@ -28,7 +28,7 @@ Surat piutang yang sudah ditandatangani kedua pihak di-mint sebagai **token ERC-
 
 ## 4. Scope
 
-**In scope:** SIWE, embedded wallet (email/Google), OTP HP, draft & negosiasi, tanda tangan EIP-712 gasless, upload dokumen, hashing Keccak-256, mint ERC-721, pencairan escrow/off-chain, cicilan, pembayaran stablecoin IDR (mock di testnet), pembayaran off-chain + konfirmasi, OVERDUE otomatis, notifikasi email + in-app, pelunasan + burn, integrity checker, auto-freeze, dispute, relayer/paymaster, Sepolia, audit log.
+**In scope:** SIWE, embedded wallet (email/Google), OTP HP, draft & negosiasi, tanda tangan EIP-712 gasless, upload dokumen, hashing Keccak-256, mint ERC-721, pencairan escrow/off-chain, cicilan, pembayaran stablecoin IDR (mock di testnet), pembayaran off-chain + konfirmasi, OVERDUE otomatis, late fee 2%/bulan, notifikasi email + in-app, pelunasan + burn, integrity checker, auto-freeze, dispute, relayer/paymaster, Sepolia, audit log.
 
 **Out of scope:** pasar sekunder token, pendanaan investor/liquidity pool, credit scoring, e-KYC Dukcapil, debt collector, dokumen on-chain, on/off-ramp fiat, e-Meterai/TTE tersertifikasi, mainnet.
 
@@ -39,7 +39,8 @@ Surat piutang yang sudah ditandatangani kedua pihak di-mint sebagai **token ERC-
 - [ ] Satu hash dokumen tidak bisa menjadi dua token.
 - [ ] Pembayaran on-chain langsung mengurangi sisa utang.
 - [ ] Pembayaran off-chain tercatat hanya setelah kreditur konfirmasi.
-- [ ] Lewat jatuh tempo & belum lunas → OVERDUE otomatis.
+- [ ] Cicilan lewat jatuh tempo & belum lunas → OVERDUE otomatis (per cicilan, sama di DB dan on-chain).
+- [ ] Late fee 2% per bulan dihitung otomatis jika disepakati.
 - [ ] Lunas penuh → PAID dan token di-burn.
 - [ ] Hash bisa diverifikasi ulang kapan saja; mismatch → TAMPERED → FROZEN.
 - [ ] Piutang FROZEN menolak pembayaran, perubahan, dan burn.
@@ -50,6 +51,5 @@ Surat piutang yang sudah ditandatangani kedua pihak di-mint sebagai **token ERC-
 - Bunga/fee diizinkan di MVP atau hanya pinjaman tanpa bunga?
 - Token perlu bisa dialihkan (cessie) di versi berikutnya?
 - Siapa menanggung biaya gas relayer jangka panjang?
-- Late fee dan keterlambatan per cicilan: dihitung on-chain atau cukup off-chain? Saat ini contract hanya menyimpan `dueDate` akhir dan `outstanding` (pokok + bunga), sehingga late fee belum bisa dibayar on-chain.
 
 Detail lanjutan: alur di [02-USER-FLOW](02-USER-FLOW.md), aturan di [03-BUSINESS-RULES](03-BUSINESS-RULES.md).

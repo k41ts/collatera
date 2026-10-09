@@ -31,13 +31,14 @@ Nominal dikirim sebagai string rupiah utuh (mis. `"5000000"`); backend mengonver
 | POST | `/notes/:id/reject` | `{ reason }` → REJECTED |
 | POST | `/notes/:id/cancel` | → CANCELLED |
 | GET | `/notes/:id/typed-data` | Payload EIP-712 untuk ditandatangani |
-| POST | `/notes/:id/sign` | `{ signature, permit? }` → simpan signature; jika lengkap, enqueue mint |
-| POST | `/notes/:id/confirm-disbursement` | Debitur konfirmasi terima dana (off-chain) |
+| POST | `/notes/:id/sign` | `{ signature, permit? }` → simpan signature; jika lengkap: on-chain → enqueue mint, off-chain → AWAITING_DISBURSEMENT |
+| POST | `/notes/:id/confirm-disbursement` | Debitur konfirmasi terima dana (hanya AWAITING_DISBURSEMENT) → enqueue mint → ACTIVE |
 
 ## Pembayaran
 
 | Method | Path | Keterangan |
 |--------|------|------------|
+| GET | `/notes/:id/outstanding` | Sisa cicilan, late fee berjalan, total (dibaca dari contract `outstanding()`) |
 | GET | `/notes/:id/repay/typed-data` | Payload permit untuk bayar on-chain |
 | POST | `/notes/:id/payments/onchain` | `{ amount, permitSig }` → enqueue repay |
 | POST | `/notes/:id/payments/offchain` | Multipart `{ amount, proof }` → PENDING |
@@ -52,7 +53,7 @@ Nominal dikirim sebagai string rupiah utuh (mis. `"5000000"`); backend mengonver
 | POST | `/notes/:id/integrity-check` | Hitung ulang → `VERIFIED|TAMPERED` |
 | POST | `/notes/:id/disputes` | `{ reason, evidence[] }` → DISPUTED |
 | GET | `/admin/disputes` | Admin: daftar dispute |
-| POST | `/admin/disputes/:id/close` | `{ resolution }` → status semula |
+| POST | `/admin/disputes/:id/close` | `{ resolution }` → enqueue `setDisputed(false)`; status dihitung ulang (PAID + burn jika sisa nol) |
 | POST | `/admin/notes/:id/freeze` | `{ reason }` |
 | POST | `/admin/notes/:id/unfreeze` | Hanya jika integrity VERIFIED |
 | GET | `/admin/audit-logs?noteId=` | Audit log |
@@ -69,6 +70,7 @@ POST /api/v1/notes
   "debtType": "personal",
   "principal": "5000000",
   "interest": { "type": "none" },
+  "lateFee": true,
   "repaymentScheme": "installment",
   "installments": [
     { "dueDate": "2026-11-30", "amount": "2500000" },

@@ -27,8 +27,8 @@ flowchart LR
 | **Backend API** | Auth SIWE, CRUD draft, verifikasi signature, otorisasi per piutang, audit log |
 | **Storage** | Menyimpan dokumen terenkripsi; hanya hash yang keluar |
 | **Relayer Worker** | Mengirim tx (mint, repay, confirm) memakai ethers `Wallet` + `NonceManager`, retry |
-| **Event Indexer** | Membaca event contract lewat ethers `contract.queryFilter` (`NoteMinted`, `Repaid`, `NoteBurned`, `StatusChanged`) → update DB via Prisma secara idempotent |
-| **Cron Worker** | Tandai OVERDUE, kirim pengingat H-3/H-0, integrity check berkala |
+| **Event Indexer** | Membaca event contract lewat ethers `contract.queryFilter` (`NoteMinted`, `Repaid`, `LateFeeAccrued`, `NoteBurned`, `StatusChanged`) → update DB via Prisma secara idempotent |
+| **Cron Worker** | Panggil `markOverdue` untuk cicilan yang baru lewat jatuh tempo (status DB mengikuti event), kirim pengingat H-3/H-0, integrity check berkala |
 | **Integrity Checker** | Hitung ulang hash dari DB, bandingkan dengan on-chain → VERIFIED / TAMPERED |
 | **Smart Contracts** | `PiutangNote` (ERC-721 + escrow + repayment), `MockIDR` (ERC-20 + permit), `Forwarder` (ERC-2771) |
 
@@ -52,9 +52,11 @@ sequenceDiagram
     API->>D: notifikasi ACTIVE
 ```
 
+Untuk pencairan **off-chain**, langkah `enqueue mintNote` baru dijalankan setelah debitur memanggil `confirm-disbursement`; tanpa permit dan tanpa transfer dana di contract.
+
 ## Prinsip
 
 - **Source of truth isi perjanjian:** DB (off-chain), dikunci oleh hash on-chain.
-- **Source of truth saldo & status token:** contract; DB adalah cache hasil indexer.
+- **Source of truth saldo, late fee & status token:** contract; DB adalah cache hasil indexer. Backend tidak mengubah status ACTIVE/OVERDUE/PAID sendiri.
 - **Idempotency:** setiap event diproses berdasarkan `(txHash, logIndex)` unik.
 - **Gasless:** pengguna hanya menandatangani pesan; semua tx dikirim relayer.

@@ -33,9 +33,8 @@ struct DebtNote {
     address debtor;
     uint256 principal;       // IDR, 18 desimal mengikuti token
     uint256 interestAmount;  // 0 jika tanpa bunga
-    uint256 lateFeeBps;      // 0 jika tidak disepakati
-    uint64  dueDate;         // unix timestamp
-    bytes32 scheduleHash;    // keccak256(abi.encode(dueDates[], amounts[]))
+    uint16  lateFeeBps;      // 0 (tidak disepakati) atau 200 (2% per 30 hari)
+    bytes32 scheduleHash;    // keccak256(abi.encode(uint64[] dueDates, uint256[] amounts))
     bytes32 docHash;         // keccak256(abi.encodePacked(sorted fileHashes))
     uint8   disbursement;    // 0 = on-chain, 1 = off-chain
     uint256 creditorNonce;   // nonces[creditor] di contract
@@ -52,6 +51,8 @@ struct OffchainPayment {     // ditandatangani kreditur saat konfirmasi bayar of
 }
 ```
 
+Jadwal lengkap (`dueDates[]`, `amounts[]`, Σ = `principal + interestAmount`, maks 24 cicilan) dikirim terpisah ke `mintNote` dan dicocokkan dengan `scheduleHash`. Jatuh tempo akhir = `dueDates[last]`.
+
 Kedua pihak menandatangani struct yang **identik** (termasuk kedua nonce dan `deadline`), sehingga `termsHash` yang diverifikasi contract sama untuk dua signature.
 
 Domain: `{ name: "PiutangChain", version: "1", chainId: 11155111, verifyingContract: <PiutangNote> }`.
@@ -60,7 +61,7 @@ Domain: `{ name: "PiutangChain", version: "1", chainId: 11155111, verifyingContr
 
 1. Setiap file → `keccak256(fileBytes)` saat upload, disimpan di `documents.file_hash`.
 2. `docHash = keccak256(abi.encodePacked(sorted(fileHashes)))`.
-3. `scheduleHash = keccak256(abi.encode(dueDates[], amounts[]))`.
+3. `scheduleHash = keccak256(abi.encode(dueDates[], amounts[]))`; `dueDates` = 00:00 WIB tanggal jatuh tempo dalam unix timestamp (UTC).
 4. `termsHash = EIP-712 struct hash DebtNote` → disimpan on-chain sebagai bukti isi perjanjian.
 
 Data pribadi (nama, HP, email) **tidak** masuk payload.
@@ -69,6 +70,7 @@ Data pribadi (nama, HP, email) **tidak** masuk payload.
 
 - Nominal disimpan sebagai `NUMERIC(78,0)` (wei-like) di DB, `uint256` di contract.
 - Semua waktu dalam UTC; UI menampilkan WIB.
+- Late fee: 2% per 30 hari, pro-rata, dari cicilan terlambat (detail rumus di [11-BLOCKCHAIN-SPEC](11-BLOCKCHAIN-SPEC.md#late-fee-2-per-bulan)). Bunga (`interest_type` percent/flat) dikonversi ke `interestAmount` saat draft dan sudah termasuk di jadwal cicilan.
 - ID: UUID v7 di DB; `noteId = keccak256(uuid)` on-chain.
 - Istilah UI: "Tanda tangan" bukan "sign transaction", "Bukti digital" bukan "NFT".
 

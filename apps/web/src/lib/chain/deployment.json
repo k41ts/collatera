@@ -2,12 +2,12 @@
   "network": "sepolia",
   "chainId": 11155111,
   "stablecoinDecimals": 2,
-  "deployedAt": "2026-10-09T08:48:49.416Z",
+  "deployedAt": "2026-10-09T11:19:01.170Z",
   "addresses": {
-    "MockIDRX": "0x337256CD158F514f913532bEf49B371749617866",
-    "PiutangForwarder": "0x6Eaf3843e754a46931AE7Ec73ddCD4b2B861b307",
-    "DebtNote": "0x9EeB8b7dCB032f74A7ddA1646957ccd1fb880a23",
-    "DebtManager": "0x52E34B5DacAb8bCF5876c4c397f42940B5c735aB"
+    "MockIDRX": "0xfc88f4fb1953E9F747c3c20850FA3F09E0d42f61",
+    "PiutangForwarder": "0x1B7Abf58694e200d215d05126EE9A886d93b166f",
+    "DebtNote": "0x4301B5016CeE7103728402b001EE483CD560A290",
+    "DebtManager": "0xB74D5e837539f78D0dAFbd33247034B549560141"
   },
   "abi": {
     "DebtManager": [
@@ -61,6 +61,17 @@
       {
         "inputs": [],
         "name": "AlreadyFullyPaid",
+        "type": "error"
+      },
+      {
+        "inputs": [
+          {
+            "internalType": "uint256",
+            "name": "availableAt",
+            "type": "uint256"
+          }
+        ],
+        "name": "DisputeWindowNotElapsed",
         "type": "error"
       },
       {
@@ -216,6 +227,22 @@
       {
         "inputs": [],
         "name": "ScheduleMismatch",
+        "type": "error"
+      },
+      {
+        "inputs": [
+          {
+            "internalType": "uint256",
+            "name": "shortfall",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "tolerance",
+            "type": "uint256"
+          }
+        ],
+        "name": "SettleToleranceExceeded",
         "type": "error"
       },
       {
@@ -378,6 +405,25 @@
           }
         ],
         "name": "LateFeeAccrued",
+        "type": "event"
+      },
+      {
+        "anonymous": false,
+        "inputs": [
+          {
+            "indexed": true,
+            "internalType": "bytes32",
+            "name": "noteId",
+            "type": "bytes32"
+          },
+          {
+            "indexed": false,
+            "internalType": "uint256",
+            "name": "amount",
+            "type": "uint256"
+          }
+        ],
+        "name": "LateFeeWaived",
         "type": "event"
       },
       {
@@ -818,6 +864,19 @@
       },
       {
         "inputs": [],
+        "name": "DISPUTE_WINDOW",
+        "outputs": [
+          {
+            "internalType": "uint256",
+            "name": "",
+            "type": "uint256"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [],
         "name": "DOMAIN_SEPARATOR",
         "outputs": [
           {
@@ -928,6 +987,19 @@
             "internalType": "bytes32",
             "name": "",
             "type": "bytes32"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "SETTLE_TOLERANCE",
+        "outputs": [
+          {
+            "internalType": "uint256",
+            "name": "",
+            "type": "uint256"
           }
         ],
         "stateMutability": "view",
@@ -1323,9 +1395,27 @@
             "internalType": "bytes32",
             "name": "resolutionHash",
             "type": "bytes32"
+          },
+          {
+            "internalType": "bool",
+            "name": "waiveFee",
+            "type": "bool"
           }
         ],
         "name": "closeDispute",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+      },
+      {
+        "inputs": [
+          {
+            "internalType": "bytes32",
+            "name": "noteId",
+            "type": "bytes32"
+          }
+        ],
+        "name": "closeExpiredDispute",
         "outputs": [],
         "stateMutability": "nonpayable",
         "type": "function"
@@ -2013,6 +2103,11 @@
                 "internalType": "uint64",
                 "name": "deadline",
                 "type": "uint64"
+              },
+              {
+                "internalType": "bool",
+                "name": "settleFull",
+                "type": "bool"
               }
             ],
             "internalType": "struct PaymentConfirmation",
@@ -3292,6 +3387,16 @@
         "type": "error"
       },
       {
+        "inputs": [],
+        "name": "ManagerAlreadySet",
+        "type": "error"
+      },
+      {
+        "inputs": [],
+        "name": "NotDeployer",
+        "type": "error"
+      },
+      {
         "inputs": [
           {
             "internalType": "uint48",
@@ -3300,6 +3405,17 @@
           }
         ],
         "name": "RequestExpired",
+        "type": "error"
+      },
+      {
+        "inputs": [
+          {
+            "internalType": "address",
+            "name": "target",
+            "type": "address"
+          }
+        ],
+        "name": "TargetNotAllowed",
         "type": "error"
       },
       {
@@ -3339,6 +3455,19 @@
         "type": "event"
       },
       {
+        "anonymous": false,
+        "inputs": [
+          {
+            "indexed": true,
+            "internalType": "address",
+            "name": "manager",
+            "type": "address"
+          }
+        ],
+        "name": "ManagerSet",
+        "type": "event"
+      },
+      {
         "inputs": [],
         "name": "DOMAIN_SEPARATOR",
         "outputs": [
@@ -3346,6 +3475,32 @@
             "internalType": "bytes32",
             "name": "",
             "type": "bytes32"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "MAX_RETURN_BYTES",
+        "outputs": [
+          {
+            "internalType": "uint256",
+            "name": "",
+            "type": "uint256"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "deployer",
+        "outputs": [
+          {
+            "internalType": "address",
+            "name": "",
+            "type": "address"
           }
         ],
         "stateMutability": "view",
@@ -3408,6 +3563,19 @@
         "type": "function"
       },
       {
+        "inputs": [],
+        "name": "manager",
+        "outputs": [
+          {
+            "internalType": "address",
+            "name": "",
+            "type": "address"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
         "inputs": [
           {
             "internalType": "address",
@@ -3424,6 +3592,19 @@
           }
         ],
         "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [
+          {
+            "internalType": "address",
+            "name": "manager_",
+            "type": "address"
+          }
+        ],
+        "name": "setManager",
+        "outputs": [],
+        "stateMutability": "nonpayable",
         "type": "function"
       },
       {

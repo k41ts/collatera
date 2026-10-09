@@ -1,0 +1,64 @@
+@import "tailwindcss";
+
+/* PiutangChain: satu tampilan gelap (sesuai style guide di mockup). */
+@theme {
+  --color-midnight: #161920;
+  --color-board: #191819;
+  --color-card: #1c1e27;
+  --color-raised: #1f2230;
+  --color-bubble: #262938;
+  --color-line: #2a2d3a;
+  --color-line2: #343744;
+  --color-brand: #7f24dd;
+  --color-brand-soft: #2b2340;
+  --color-brand-tint: #e6d9fb;
+  --color-rasp: #fb006d;
+  --color-rasp-soft: #2a1520;
+  --color-tusc: #f4c842;
+  --color-lav: #d4c4fb;
+  --color-lav-ink: #24104a;
+  --color-mint: #b9f5a8;
+  --color-mint-ink: #12301a;
+  --color-butter: #f7e1a0;
+  --color-butter-ink: #3a2c05;
+  --color-peach: #f8c1a8;
+  --color-peach-ink: #3d1a0a;
+  --color-pink: #f9b8d0;
+  --color-pink-ink: #3a0f22;
+  --color-cyan: #a6eef2;
+  --color-cyan-ink: #0a2e31;
+  --color-soft: #b7b9c6;
+  --color-muted: #9a9cab;
+  --color-faint: #8a8c9a;
+  --font-sans: var(--font-poppins), "Segoe UI", system-ui, sans-serif;
+  --font-mono: var(--font-mono-face), ui-monospace, monospace;
+}
+
+:root {
+  color-scheme: dark;
+}
+
+body {
+  background: var(--color-midnight);
+  color: #ffffff;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-rasp);
+  outline-offset: 2px;
+}
+
+h1, h2, h3 {
+  text-wrap: balance;
+}
+
+input::placeholder, textarea::placeholder {
+  color: #7e8090;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+    animation: none !important;
+  }
+}

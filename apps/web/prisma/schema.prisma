@@ -1,0 +1,180 @@
+// Skema PiutangChain (lihat docs/07-ERD.md).
+// Dev memakai SQLite supaya tidak butuh Docker/Postgres. Untuk Supabase/Postgres: ganti `provider` jadi
+// "postgresql", isi DATABASE_URL, lalu `npx prisma migrate dev`. Nominal disimpan sebagai string angka
+// dalam satuan terkecil token (MockIDRX 2 desimal: Rp1 = "100") supaya portabel di SQLite & Postgres.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id              String    @id @default(uuid())
+  wallet          String    @unique // alamat checksum
+  name            String?
+  email           String?
+  phone           String?
+  phoneVerifiedAt DateTime?
+  otpCode         String?
+  otpExpiresAt    DateTime?
+  lastFaucetAt    DateTime?
+  notifyH3        Boolean   @default(true)
+  notifyH0        Boolean   @default(true)
+  notifyPayment   Boolean   @default(true)
+  notifyChat      Boolean   @default(true)
+  createdAt       DateTime  @default(now())
+
+  created  Note[]    @relation("creator")
+  credits  Note[]    @relation("creditor")
+  debts    Note[]    @relation("debtor")
+  messages Message[]
+  sigs     Signature[]
+}
+
+model AuthNonce {
+  nonce     String   @id
+  expiresAt DateTime
+  usedAt    DateTime?
+}
+
+model Note {
+  id             String   @id @default(uuid())
+  chainNoteId    String   @unique // keccak256(id)
+  inviteToken    String   @unique
+  version        Int      @default(1)
+  // DRAFT | PENDING_SIGNATURE | AWAITING_DISBURSEMENT | ACTIVE | OVERDUE | DISPUTED | FROZEN | PAID | REJECTED | CANCELLED
+  status         String   @default("DRAFT")
+  statusBeforeFreeze String?
+  creatorRole    String   // creditor | debtor
+  creatorId      String
+  creditorId     String?
+  debtorId       String?
+  counterpartyWallet String? // undangan lewat alamat wallet
+
+  title          String
+  debtType       String   // personal | business | invoice | other
+  principal      String
+  interestType   String   @default("none") // none | percent | flat
+  interestValue  String   @default("0")
+  totalOwed      String
+  lateFeeBps     Int      @default(200)
+  disbursement   String   // onchain | offchain
+  collateralNote String   @default("")
+
+  // snapshot struct Note EIP-712 untuk versi yang sedang ditandatangani (JSON string)
+  termsJson      String?
+  scheduleJson   String?
+  docHash        String?
+  noteHash       String?
+  rejectReason   String?
+  revisionNote   String?
+
+  escrowTx       String?
+  // struct Note yang dananya masih di escrow (untuk refundEscrow setelah revisi/batal/tolak)
+  escrowTermsJson String?
+  activationTx   String?
+  activatedAt    DateTime?
+  integrity      String   @default("UNCHECKED") // UNCHECKED | VERIFIED | TAMPERED
+  integrityAt    DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  creator      User  @relation("creator", fields: [creatorId], references: [id])
+  creditor     User? @relation("creditor", fields: [creditorId], references: [id])
+  debtor       User? @relation("debtor", fields: [debtorId], references: [id])
+  installments Installment[]
+  documents    Document[]
+  signatures   Signature[]
+  payments     Payment[]
+  messages     Message[]
+  events       AuditLog[]
+}
+
+model Installment {
+  id      String   @id @default(uuid())
+  noteId  String
+  seq     Int
+  dueDate DateTime // 00:00 WIB
+  amount  String
+  note    Note     @relation(fields: [noteId], references: [id], onDelete: Cascade)
+
+  @@unique([noteId, seq])
+}
+
+model Document {
+  id        String   @id @default(uuid())
+  noteId    String
+  name      String
+  mime      String
+  size      Int
+  fileHash  String   // keccak256(isi file)
+  path      String   // relatif ke folder uploads
+  createdAt DateTime @default(now())
+  note      Note     @relation(fields: [noteId], references: [id], onDelete: Cascade)
+}
+
+model Signature {
+  id        String   @id @default(uuid())
+  noteId    String
+  version   Int
+  role      String   // creditor | debtor | receipt
+  signerId  String
+  signature String
+  createdAt DateTime @default(now())
+  note      Note     @relation(fields: [noteId], references: [id], onDelete: Cascade)
+  signer    User     @relation(fields: [signerId], references: [id])
+
+  @@unique([noteId, version, role])
+}
+
+model Payment {
+  id          String   @id @default(uuid())
+  noteId      String
+  method      String   // onchain | offchain
+  amount      String
+  installment Int      @default(0)
+  status      String   @default("PENDING") // PENDING | CONFIRMED | REJECTED
+  proofPath   String?
+  proofHash   String?
+  proofName   String?
+  rejectReason String?
+  txHash      String?
+  createdAt   DateTime @default(now())
+  note        Note     @relation(fields: [noteId], references: [id], onDelete: Cascade)
+}
+
+model Message {
+  id        String   @id @default(uuid())
+  noteId    String
+  senderId  String?  // null = pesan sistem
+  body      String
+  link      String?
+  createdAt DateTime @default(now())
+  note      Note     @relation(fields: [noteId], references: [id], onDelete: Cascade)
+  sender    User?    @relation(fields: [senderId], references: [id])
+
+  @@index([noteId, createdAt])
+}
+
+model ChatRead {
+  userId String
+  noteId String
+  readAt DateTime
+
+  @@id([userId, noteId])
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  noteId    String?
+  actorId   String?
+  action    String
+  detail    String   @default("")
+  txHash    String?
+  createdAt DateTime @default(now())
+  note      Note?    @relation(fields: [noteId], references: [id], onDelete: Cascade)
+}

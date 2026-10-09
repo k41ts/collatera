@@ -18,8 +18,7 @@ Surat piutang (promissory note) on-chain: dibuat, ditandatangani kedua pihak, di
 ```
 piutangchain-contracts/   Hardhat 2: DebtManager, DebtNote, MockIDRX, PiutangForwarder (sudah ada)
 docs/                     01-PRD … 14-README
-apps/web/                 Next.js frontend (rencana)
-apps/api/                 Backend API + worker: relayer, cron, indexer (rencana)
+apps/web/                 Next.js full-stack: UI + API + relayer gasless (Prisma/SQLite dev, Postgres prod)
 ```
 
 ## Menjalankan Lokal
@@ -38,7 +37,9 @@ npm run node
 npm run deploy:local
 ```
 
-Deploy ke Sepolia: salin `piutangchain-contracts/.env.example` ke `.env`, isi RPC dan key, lalu `npm run deploy:sepolia` (lihat [10-DEPLOYMENT-PLAN](10-DEPLOYMENT-PLAN.md)). Backend dan frontend belum dibuat.
+Deploy ke Sepolia: salin `piutangchain-contracts/.env.example` ke `.env`, isi RPC dan key, lalu `npm run deploy:sepolia` (lihat [10-DEPLOYMENT-PLAN](10-DEPLOYMENT-PLAN.md)). Alamat yang sudah ter-deploy ada di `piutangchain-contracts/deployments/sepolia.json`.
+
+Website: lihat [apps/web/README.md](../apps/web/README.md) (`npm install`, isi `.env`, `npx prisma db push`, `npm run dev`).
 
 ## Test
 

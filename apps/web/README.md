@@ -1,0 +1,55 @@
+# PiutangChain Web
+
+Full-stack Next.js (App Router) untuk PiutangChain: UI + API + relayer gasless, terhubung ke kontrak di **Ethereum Sepolia** (`piutangchain-contracts/deployments/sepolia.json`).
+
+| Bagian | Isi |
+|---|---|
+| UI | Landing, Masuk (MetaMask/SIWE), Dashboard, Piutang saya (cari/filter/urut), Buat & ubah draft, Detail piutang, Tanda tangan, Chat, Profil |
+| API | `src/app/api/**`: auth SIWE, profil + OTP, faucet IDRX, draft, dokumen, tanda tangan EIP-712, escrow & aktivasi, pembayaran on-chain (forwarder) & off-chain, sengketa, integrity check, chat |
+| Relayer | `src/lib/chain/relayer.ts`: satu wallet membayar gas semua transaksi, antrean in-process, estimasi gas +30% |
+| DB | Prisma. Dev: SQLite (`prisma/dev.db`). Produksi: ganti `provider` ke `postgresql` (Supabase) |
+
+## Menjalankan
+
+```bash
+npm install
+```
+
+```bash
+cp .env.example .env
+```
+
+Isi `.env`: `SESSION_SECRET` (string acak ≥32 karakter) dan `RELAYER_PRIVATE_KEY` (wallet ber-Sepolia ETH; harus owner MockIDRX + `ADMIN_ROLE` supaya faucet dan auto-freeze jalan). Di development, kalau `RELAYER_PRIVATE_KEY` kosong, server memakai `DEPLOYER_PRIVATE_KEY` dari `piutangchain-contracts/.env`.
+
+```bash
+npx prisma db push
+```
+
+```bash
+npm run dev
+```
+
+Buka http://localhost:3000, masuk dengan MetaMask di jaringan Sepolia, verifikasi nomor HP di Profil (mode development: kode OTP tampil di layar), ambil IDRX uji dari faucet, lalu buat surat piutang. Pihak lawan masuk dengan wallet yang kamu undang.
+
+## Tes end-to-end
+
+Dengan dev server jalan, script ini memakai dua wallet acak sebagai kreditur dan debitur dan menjalankan seluruh alur di Sepolia (login, faucet, escrow, aktivasi, bayar gasless, konfirmasi off-chain, chat, cek integritas, sengketa, tamper → beku, pencairan off-chain, tandai lunas):
+
+```bash
+node scripts/e2e-api.mjs
+```
+
+## Setelah kontrak di-deploy ulang
+
+```bash
+npm run sync-contracts
+```
+
+Menyalin ABI + alamat dari `piutangchain-contracts` ke `src/lib/chain/deployment.json`.
+
+## Belum ada
+
+- Login email/Google (embedded wallet): perlu `PRIVY_APP_ID`.
+- Pengiriman SMS OTP dan email pengingat: titik sambungnya di `src/app/api/me/otp/route.ts`.
+- Antrean relayer persisten (BullMQ/Redis): sekarang in-process, cukup untuk satu instance server.
+- Menu admin terpisah: admin (wallet `ADMIN_ROLE`) menutup sengketa dan membuka pembekuan dari halaman detail piutang.

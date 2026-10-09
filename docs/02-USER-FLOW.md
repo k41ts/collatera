@@ -26,9 +26,15 @@ flowchart TD
     end
 
     K4 --> D3
-    D5 --> K6
+    D5 --> M{Metode pencairan?}
+    M -- on-chain --> K6
     K6 --> S1[[Sistem: mint token ke kreditur<br/>Escrow dilepas ke debitur, ACTIVE]]
+    M -- off-chain --> K8[Tanda tangan<br/>Lalu transfer sendiri]
+    K8 --> AW[AWAITING_DISBURSEMENT]
+    AW --> D8[Konfirmasi terima dana]
+    D8 --> S3[[Sistem: mint token ke kreditur<br/>ACTIVE]]
     S1 --> D6
+    S3 --> D6
     D7 -- bukti transfer --> K7
     K7 --> C{Sisa nol?}
     D7 -- on-chain --> C
@@ -55,7 +61,7 @@ flowchart TD
 
 - **Debitur membuat draft** (pengajuan utang): kedua lane tinggal ditukar sampai tahap tanda tangan.
 - **Pencairan off-chain:** setelah dua tanda tangan (tanpa escrow) status AWAITING_DISBURSEMENT; kreditur mentransfer sendiri, debitur konfirmasi terima dana, lalu token di-mint dan status ACTIVE.
-- **Terlambat bayar:** cicilan lewat jatuh tempo → OVERDUE + late fee 2%/bulan (jika disepakati); setelah tunggakan dibayar kembali ACTIVE.
+- **Terlambat bayar:** cicilan lewat jatuh tempo → OVERDUE + late fee 2%/bulan (jika disepakati); setelah tunggakan dan late fee dibayar kembali ACTIVE.
 - **Dispute:** dari ACTIVE atau OVERDUE, salah satu pihak bisa mengajukan → DISPUTED.
 - **Integrity gagal** di tahap mana pun → TAMPERED → FROZEN.
 - **Cancel:** pembuat bisa membatalkan selama belum dua signature → CANCELLED. Kreditur juga bisa membatalkan selama AWAITING_DISBURSEMENT.

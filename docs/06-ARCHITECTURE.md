@@ -26,9 +26,9 @@ flowchart LR
 | **Frontend** | UI draft, review, tanda tangan EIP-712, upload, dashboard piutang |
 | **Backend API** | Auth SIWE, CRUD draft, verifikasi signature, otorisasi per piutang, audit log |
 | **Storage** | Menyimpan dokumen terenkripsi; hanya hash yang keluar |
-| **Relayer Worker** | Mengirim tx (mint, repay, confirm) memakai ethers `Wallet` + `NonceManager`, retry |
+| **Relayer Worker** | Mengirim tx (mint, `Forwarder.execute` untuk repay, confirm, overdue, faucet) memakai ethers `Wallet` + `NonceManager`, retry. Satu-satunya pengirim tx dari wallet relayer |
 | **Event Indexer** | Membaca event contract lewat ethers `contract.queryFilter` (`NoteMinted`, `Repaid`, `LateFeeAccrued`, `NoteBurned`, `StatusChanged`) → update DB via Prisma secara idempotent |
-| **Cron Worker** | Panggil `markOverdue` untuk cicilan yang baru lewat jatuh tempo (status DB mengikuti event), kirim pengingat H-3/H-0, integrity check berkala |
+| **Cron Worker** | Antrekan `markOverdue` ke Relayer Worker untuk cicilan yang baru lewat jatuh tempo (status DB mengikuti event), kirim pengingat H-3/H-0, integrity check berkala |
 | **Integrity Checker** | Hitung ulang hash dari DB, bandingkan dengan on-chain → VERIFIED / TAMPERED |
 | **Smart Contracts** | `PiutangNote` (ERC-721 + escrow + repayment), `MockIDR` (ERC-20 + permit), `Forwarder` (ERC-2771) |
 

@@ -37,8 +37,7 @@ struct DebtNote {
     bytes32 scheduleHash;    // keccak256(abi.encode(uint64[] dueDates, uint256[] amounts))
     bytes32 docHash;         // keccak256(abi.encodePacked(sorted fileHashes))
     uint8   disbursement;    // 0 = on-chain, 1 = off-chain
-    uint256 creditorNonce;   // nonces[creditor] di contract
-    uint256 debtorNonce;     // nonces[debtor] di contract
+    uint256 nonce;           // acak 256-bit per versi, dibuat backend (unordered nonce)
     uint64  deadline;        // sama untuk kedua pihak, ditetapkan backend di typed-data
 }
 
@@ -46,14 +45,16 @@ struct OffchainPayment {     // ditandatangani kreditur saat konfirmasi bayar of
     uint256 tokenId;
     bytes32 paymentId;       // uuid payment → bytes32
     uint256 amount;
-    uint256 nonce;           // nonces[creditor]
+    uint256 nonce;           // acak 256-bit per konfirmasi (unordered nonce)
     uint64  deadline;
 }
 ```
 
 Jadwal lengkap (`dueDates[]`, `amounts[]`, Σ = `principal + interestAmount`, maks 24 cicilan) dikirim terpisah ke `mintNote` dan dicocokkan dengan `scheduleHash`. Jatuh tempo akhir = `dueDates[last]`.
 
-Kedua pihak menandatangani struct yang **identik** (termasuk kedua nonce dan `deadline`), sehingga `termsHash` yang diverifikasi contract sama untuk dua signature.
+Kedua pihak menandatangani struct yang **identik** (termasuk `nonce` dan `deadline`), sehingga `termsHash` yang diverifikasi contract sama untuk dua signature.
+
+**Unordered nonce:** nonce tidak berurutan, melainkan angka acak yang ditandai terpakai per signer (`usedNonces[signer][nonce]`). Dengan begitu satu wallet bisa punya banyak piutang yang menunggu tanda tangan / pencairan dan banyak konfirmasi bayar sekaligus, tanpa saling membatalkan. Saat `mintNote`, nonce yang sama ditandai terpakai untuk kreditur **dan** debitur.
 
 Domain: `{ name: "PiutangChain", version: "1", chainId: 11155111, verifyingContract: <PiutangNote> }`.
 

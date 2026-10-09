@@ -4,8 +4,8 @@
 
 | Ancaman | Dampak | Mitigasi |
 |---------|--------|----------|
-| Replay signature EIP-712 | Mint ganda / tanda tangan dipakai ulang | `nonce` per signer, `chainId`, `deadline`, nonce di-consume di contract |
-| Replay konfirmasi bayar off-chain | Sisa utang terpotong berkali-kali | Struct `OffchainPayment` berisi `paymentId`, `nonce`, `deadline`; nonce kreditur di-consume di contract |
+| Replay signature EIP-712 | Mint ganda / tanda tangan dipakai ulang | Unordered nonce acak per signer (`usedNonces[signer][nonce]`), `chainId`, `deadline`; nonce ditandai terpakai di contract |
+| Replay konfirmasi bayar off-chain | Sisa utang terpotong berkali-kali | Struct `OffchainPayment` berisi `paymentId`, `nonce`, `deadline`; `usedNonces[creditor][nonce]` ditandai terpakai di contract |
 | Double-mint dokumen sama | Satu piutang jadi dua token | `mapping(bytes32 => bool) usedDocHash` di contract + unique index `debt_notes.minted_doc_hash` di DB |
 | Data DB diubah setelah tanda tangan | Isi perjanjian dipalsukan | Integrity checker: hash ulang vs on-chain → TAMPERED → FROZEN |
 | Akses piutang orang lain (IDOR) | Bocor data pribadi | Otorisasi per piutang di setiap endpoint, RLS di Postgres |

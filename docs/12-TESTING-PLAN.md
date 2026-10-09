@@ -29,7 +29,7 @@
 | SC-11a | OVERDUE lalu bayar tunggakan cicilan 1 (cicilan 2 belum jatuh tempo) | Status kembali ACTIVE |
 | SC-11b | Cicilan Rp2.500.000 terlambat 15 hari, `lateFeeBps = 200` | Late fee = Rp25.000 (`outstanding()` bertambah) |
 | SC-11c | Late fee saat DISPUTED/FROZEN | Tidak bertambah selama periode itu |
-| SC-11d | Bayar saat ada late fee | Alokasi ke cicilan dulu, sisa ke late fee (`Repaid.toInstallments/toLateFee`) |
+| SC-11d | Bayar saat ada late fee, nominal > tunggakan | Urutan alokasi: tunggakan → late fee → cicilan berikutnya (`Repaid.toInstallments/toLateFee`) |
 | SC-12 | `repay` saat FROZEN | Revert `NoteFrozen` |
 | SC-13 | Freeze oleh non-guardian | Revert AccessControl |
 | SC-14 | DISPUTED: repay sampai nol, lalu `setDisputed(false)` | Outstanding 0, burn ditunda; saat ditutup → PAID + `NoteBurned` |
@@ -37,6 +37,9 @@
 | SC-16 | `mintNote` sebelum deadline, lalu `time.increaseTo` lewat jatuh tempo (hardhat-network-helpers) | `markOverdue` berhasil |
 | SC-17 | `confirmOffchainPayment` dengan signature yang sama dua kali | Revert (nonce terpakai) |
 | SC-18 | Freeze saat DISPUTED lalu unfreeze | Status kembali DISPUTED |
+| SC-19 | Kreditur punya 2 piutang menunggu tanda tangan; mint piutang A, lalu mint piutang B | Keduanya berhasil (nonce tidak saling membatalkan) |
+| SC-20 | `mintNote` ulang dengan nonce yang sudah terpakai | Revert `NonceUsed` |
+| SC-21 | `repay` lewat `Forwarder.execute` dengan ForwardRequest debitur | Berhasil, `_msgSender()` = debitur; ForwardRequest dari wallet lain ditolak |
 
 ## Backend
 
@@ -49,11 +52,13 @@
 | BE-05 | Upload file > 10 MB / tipe salah | 422 |
 | BE-06 | Event `Repaid` diproses dua kali | Payment hanya tercatat sekali |
 | BE-07 | Kreditur konfirmasi bayar off-chain | Payment CONFIRMED, alokasi ke cicilan tertua |
-| BE-08 | Cron overdue | `markOverdue` dikirim; status DB OVERDUE hanya setelah event `StatusChanged` + notifikasi ke kedua pihak |
-| BE-11 | Pencairan off-chain | Setelah 2 signature → AWAITING_DISBURSEMENT, belum ada mint; setelah `confirm-disbursement` → mint → ACTIVE |
-| BE-12 | `confirm-disbursement` oleh kreditur / di status lain | 403 / 409 |
+| BE-08 | Cron overdue | `markOverdue` diantrekan ke relayer; status DB OVERDUE hanya setelah event `StatusChanged` + notifikasi ke kedua pihak |
 | BE-09 | Cron reminder | Notifikasi H-3 dan H-0 terkirim tepat sekali |
 | BE-10 | Admin coba PATCH nominal | 403 |
+| BE-11 | Pencairan off-chain | Setelah 2 signature → AWAITING_DISBURSEMENT, belum ada mint; setelah `confirm-disbursement` → mint → ACTIVE |
+| BE-12 | `confirm-disbursement` oleh kreditur / di status lain | 403 / 409 |
+| BE-13 | `payments/onchain` dengan `forwardRequest.data` untuk piutang/nominal lain | 422 `FORWARD_REQUEST_INVALID` |
+| BE-14 | TAMPERED saat PENDING_SIGNATURE | FROZEN di DB saja, job mint dibatalkan, tidak ada tx `freeze` |
 
 ## Integrity / Tamper Detection
 

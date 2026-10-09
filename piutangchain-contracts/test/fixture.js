@@ -25,6 +25,7 @@ async function deployAll() {
     admin.address,
   ]);
   await debtNote.setManager(manager.target);
+  await forwarder.setManager(manager.target);
   await manager.grantRole(FREEZER_ROLE, freezer.address);
 
   await idrx.mint(creditor.address, IDR(100_000_000));

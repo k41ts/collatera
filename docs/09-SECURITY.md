@@ -10,6 +10,7 @@
 | Debitur membuka dispute saat OVERDUE agar denda berhenti | Denda terhindar tanpa batas waktu; hanya admin yang bisa menutup | Denda tetap berjalan saat DISPUTED; `closeDispute(..., waiveFee)` bisa menghapus porsi dispute; `closeExpiredDispute` bisa dipanggil siapa pun setelah `DISPUTE_WINDOW` 14 hari |
 | Admin pause saat debitur telat: pembayaran ditolak tapi denda jalan | Debitur dihukum oleh admin | `payOnchain` tidak `whenNotPaused`; fungsi lain tetap tertahan |
 | Denda dihapus dengan memanggil `accrue()` tiap blok | Denda kecil selalu dibulatkan ke 0 | Sisa pembulatan disimpan di `feeRemainder` dan dibawa ke checkpoint berikutnya |
+| Forwarder dipakai memanggil kontrak sembarang / target mengirim return data raksasa (return bomb) | Relayer kehabisan gas menyalin data; forwarder jadi proxy umum | `to` dikunci ke `DebtManager` (set satu kali), return/revert data disalin maks 4 KB |
 | Relayer memberi gas kurang ke forwarder | Permit di dalam try/catch sengaja dibuat gagal | `PiutangForwarder` membatalkan seluruh tx jika gas tersisa < `req.gas / 63` |
 | Double-mint dokumen sama | Satu piutang jadi dua token | `mapping(bytes32 => bool) usedDocHash` di contract + unique index `debt_notes.minted_doc_hash` di DB |
 | Data DB diubah setelah tanda tangan | Isi perjanjian dipalsukan | Integrity checker: hash ulang vs on-chain → TAMPERED → FROZEN |

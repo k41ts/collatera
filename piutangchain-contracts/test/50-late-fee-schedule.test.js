@@ -248,24 +248,27 @@ describe("PiutangForwarder: gas dari relayer", () => {
   it("relayer yang memberi gas kurang dari req.gas membuat seluruh transaksi gagal (nonce tidak terpakai)", async () => {
     const ctx = await loadFixture(f.deployAll);
     const target = await ethers.deployContract("MockGasBurner");
+    // forwarder hanya boleh ke manager (T5): pakai forwarder khusus yang manager-nya adalah mock ini
+    const fwd = await ethers.deployContract("PiutangForwarder");
+    await fwd.setManager(target.target);
     const r = {
       from: ctx.debtor.address,
       to: target.target,
       gas: 1_000_000n,
-      nonce: await ctx.forwarder.nonces(ctx.debtor.address),
+      nonce: await fwd.nonces(ctx.debtor.address),
       deadline: (await time.latest()) + DAY,
       data: target.interface.encodeFunctionData("run"),
     };
-    const sig = await ctx.debtor.signTypedData(E.forwarderDomain(ctx.chainId, ctx.forwarder.target), E.FORWARD_TYPES, r);
+    const sig = await ctx.debtor.signTypedData(E.forwarderDomain(ctx.chainId, fwd.target), E.FORWARD_TYPES, r);
 
     // Gas kurang: inner call di target kehabisan gas dan ditelan try/catch. Tanpa pengecekan, ini "sukses"
     // dengan innerOk=false dan nonce pengguna terpakai.
-    await expect(ctx.forwarder.connect(ctx.relayer).execute(r, sig, { gasLimit: 250_000 })).to.be.reverted;
-    expect(await ctx.forwarder.nonces(ctx.debtor.address)).to.equal(0n);
+    await expect(fwd.connect(ctx.relayer).execute(r, sig, { gasLimit: 250_000 })).to.be.reverted;
+    expect(await fwd.nonces(ctx.debtor.address)).to.equal(0n);
 
-    await expect(ctx.forwarder.connect(ctx.relayer).execute(r, sig, { gasLimit: 1_200_000 }))
+    await expect(fwd.connect(ctx.relayer).execute(r, sig, { gasLimit: 1_200_000 }))
       .to.emit(target, "Done")
       .withArgs(false); // inner call memang dibatasi 200k oleh target sendiri, bukan oleh relayer
-    expect(await ctx.forwarder.nonces(ctx.debtor.address)).to.equal(1n);
+    expect(await fwd.nonces(ctx.debtor.address)).to.equal(1n);
   });
 });

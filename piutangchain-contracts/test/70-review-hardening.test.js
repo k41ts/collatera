@@ -1,7 +1,7 @@
 const { expect } = require("chai");
 const { loadFixture } = require("@nomicfoundation/hardhat-network-helpers");
 const f = require("./fixture");
-const { ethers, time, IDR, DAY, Status } = f;
+const { ethers, time, E, IDR, DAY, Status } = f;
 
 // Regresi hasil review (branch fix/review-hardening). Satu blok describe per tugas.
 
@@ -322,5 +322,101 @@ describe("T4: pause tidak boleh menghukum debitur (opsi fallback: payOnchain tet
     await manager.connect(admin).unpause();
     await f.payOnchain(ctx, note.noteId, IDR(100_000));
     await expect(manager.connect(creditor).markPaid(note.noteId)).to.emit(manager, "NoteMarkedPaid");
+  });
+});
+
+describe("T5: forwarder hanya ke DebtManager dan return data dibatasi", () => {
+  const sign = (ctx, fwd, signer, r) => signer.signTypedData(E.forwarderDomain(ctx.chainId, fwd.target), E.FORWARD_TYPES, r);
+
+  it("manager diset satu kali oleh deployer; alamat nol / bukan kontrak / pemanggil lain ditolak", async () => {
+    const ctx = await loadFixture(f.deployAll);
+    const fwd = await ethers.deployContract("PiutangForwarder");
+    expect(await fwd.manager()).to.equal(ethers.ZeroAddress);
+    await expect(fwd.connect(ctx.stranger).setManager(ctx.manager.target)).to.be.revertedWithCustomError(fwd, "NotDeployer");
+    await expect(fwd.setManager(ethers.ZeroAddress)).to.be.revertedWithCustomError(fwd, "TargetNotContract");
+    await expect(fwd.setManager(ctx.stranger.address)).to.be.revertedWithCustomError(fwd, "TargetNotContract");
+    await expect(fwd.setManager(ctx.manager.target)).to.emit(fwd, "ManagerSet").withArgs(ctx.manager.target);
+    await expect(fwd.setManager(ctx.idrx.target)).to.be.revertedWithCustomError(fwd, "ManagerAlreadySet");
+    // forwarder fixture sudah terhubung ke manager
+    expect(await ctx.forwarder.manager()).to.equal(ctx.manager.target);
+  });
+
+  it("`to` selain DebtManager ditolak (token, kontrak lain, EOA), bahkan dengan signature sah", async () => {
+    const ctx = await loadFixture(f.deployAll);
+    const { forwarder, debtor, relayer, idrx } = ctx;
+    for (const to of [idrx.target, ctx.debtNote.target, ctx.stranger.address, ethers.ZeroAddress]) {
+      const r = {
+        from: debtor.address,
+        to,
+        gas: 200_000n,
+        nonce: await forwarder.nonces(debtor.address),
+        deadline: (await time.latest()) + DAY,
+        data: idrx.interface.encodeFunctionData("transfer", [ctx.stranger.address, 1n]),
+      };
+      await expect(forwarder.connect(relayer).execute(r, await sign(ctx, forwarder, debtor, r)), to).to.be.revertedWithCustomError(
+        forwarder,
+        "TargetNotAllowed"
+      );
+    }
+    expect(await forwarder.nonces(debtor.address)).to.equal(0n);
+  });
+
+  async function bombForwarder(ctx, size) {
+    const bomb = await ethers.deployContract("MockReturnBomb", [size]);
+    const fwd = await ethers.deployContract("PiutangForwarder");
+    await fwd.setManager(bomb.target);
+    return { bomb, fwd };
+  }
+  const bombReq = async (ctx, fwd, bomb, data) => ({
+    from: ctx.debtor.address,
+    to: bomb.target,
+    gas: 3_000_000n,
+    nonce: await fwd.nonces(ctx.debtor.address),
+    deadline: (await time.latest()) + DAY,
+    data,
+  });
+
+  it("return data besar dipotong 4 KB: relayer tidak membayar salinan ratusan KB", async () => {
+    const ctx = await loadFixture(f.deployAll);
+    const { bomb, fwd } = await bombForwarder(ctx, 100_000);
+    const r = await bombReq(ctx, fwd, bomb, "0x02");
+    const sig = await sign(ctx, fwd, ctx.debtor, r);
+    const ret = await fwd.connect(ctx.relayer).execute.staticCall(r, sig);
+    expect(ethers.dataLength(ret)).to.equal(4096);
+    const rc = await (await fwd.connect(ctx.relayer).execute(r, sig)).wait();
+    // biaya target (ekspansi memori 100 KB ≈ 30 rb gas) + overhead; salinan penuh akan jauh lebih mahal
+    expect(rc.gasUsed).to.be.lt(200_000n);
+  });
+
+  it("revert data besar: tetap diteruskan apa adanya tetapi dibatasi 4 KB", async () => {
+    const ctx = await loadFixture(f.deployAll);
+    const { bomb, fwd } = await bombForwarder(ctx, 100_000);
+    const r = await bombReq(ctx, fwd, bomb, "0x01");
+    const sig = await sign(ctx, fwd, ctx.debtor, r);
+    let data;
+    try {
+      await fwd.connect(ctx.relayer).execute.staticCall(r, sig);
+    } catch (e) {
+      data = e.data;
+    }
+    expect(data, "harus revert dengan data").to.not.equal(undefined);
+    expect(ethers.dataLength(data)).to.equal(4096);
+  });
+
+  it("revert kecil dari manager tetap diteruskan utuh (custom error)", async () => {
+    const ctx = await loadFixture(f.deployAll);
+    const data = ctx.manager.interface.encodeFunctionData("openDispute", [ethers.id("tidak-ada"), ethers.id("x")]);
+    const r = {
+      from: ctx.debtor.address,
+      to: ctx.manager.target,
+      gas: 500_000n,
+      nonce: 0n,
+      deadline: (await time.latest()) + DAY,
+      data,
+    };
+    await expect(ctx.forwarder.execute(r, await sign(ctx, ctx.forwarder, ctx.debtor, r))).to.be.revertedWithCustomError(
+      ctx.manager,
+      "NoteNotFound"
+    );
   });
 });

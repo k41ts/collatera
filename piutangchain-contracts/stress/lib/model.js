@@ -50,6 +50,7 @@ class NoteModel {
   }
 
   arrears(t) {
+    if (this.fullyPaid) return 0n; // T1: setelah lunas/markPaid view menunjuk nol
     const due = this.dueBefore(t);
     return due > this.scheduledPaid ? due - this.scheduledPaid : 0n;
   }
@@ -78,6 +79,7 @@ class NoteModel {
   }
 
   lateFee(t) {
+    if (this.fullyPaid) return 0n; // T1
     return this.lateFeeAccrued + this.pending(t).fee;
   }
 

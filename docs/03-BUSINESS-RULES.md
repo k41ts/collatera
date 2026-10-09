@@ -67,7 +67,7 @@ OVERDUE **tidak disimpan** di contract: `statusOf()` menghitungnya saat dibaca d
 ## Pembayaran
 
 - **BR-17** Pembayaran on-chain langsung mengurangi sisa utang tanpa input manual.
-- **BR-18** Pembayaran off-chain tercatat hanya setelah kreditur konfirmasi dengan signature EIP-712 (`PaymentConfirmation`, ber-`nonce`, `deadline`, dan `proofHash` unik); kreditur boleh menolak dengan alasan.
+- **BR-18** Pembayaran off-chain tercatat hanya setelah kreditur konfirmasi dengan signature EIP-712 (`PaymentConfirmation`, ber-`nonce`, `deadline`, dan `proofHash` unik); kreditur boleh menolak dengan alasan. Konfirmasi memuat flag `settleFull`: bila `true` dan nominal menutup seluruh sisa cicilan, sisa denda kecil (≤ denda 1 hari dari tunggakan) dihapus dan piutang langsung lunas, supaya konfirmasi pelunasan tidak menyisakan denda akibat jeda eksekusi.
 - **BR-19** Pembayaran sebagian diperbolehkan; dialokasikan berurutan: (1) tunggakan cicilan yang sudah jatuh tempo, tertua dulu, (2) late fee, (3) cicilan berikutnya yang belum jatuh tempo.
 - **BR-20** Sisa utang = sisa cicilan (pokok + bunga) + late fee berjalan. Pembayaran tidak boleh melebihi sisa utang.
 - **BR-21** Ada cicilan lewat jatuh tempo yang belum lunas → OVERDUE (dicek per cicilan, on-chain); kembali ACTIVE setelah tunggakan **dan** late fee dibayar.

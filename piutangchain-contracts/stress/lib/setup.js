@@ -153,6 +153,7 @@ async function signPayment(ctx, creditor, noteId, amount, deadline) {
     installmentIndex: 0,
     nonce: nextNonce(),
     deadline,
+    settleFull: false,
   };
   const sig = await creditor.signTypedData(ctx.domain, E.PAYMENT_TYPES, c);
   return { c, sig };

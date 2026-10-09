@@ -137,6 +137,7 @@ async function signPayment(ctx, noteId, amount, overrides = {}) {
     installmentIndex: 1,
     nonce: 5000n + BigInt(proofCounter),
     deadline: now + DAY,
+    settleFull: false,
     ...overrides,
   };
   const sig = await ctx.creditor.signTypedData(ctx.domain, E.PAYMENT_TYPES, c);

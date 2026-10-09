@@ -47,7 +47,7 @@ struct Note {               // ditandatangani kreditur DAN debitur (pesan identi
 }
 
 struct DisbursementReceipt { bytes32 noteHash; bytes32 proofHash; uint256 amount; uint256 nonce; uint64 deadline; } // debitur
-struct PaymentConfirmation { bytes32 noteId; uint256 amount; bytes32 proofHash; uint32 installmentIndex; uint256 nonce; uint64 deadline; } // kreditur
+struct PaymentConfirmation { bytes32 noteId; uint256 amount; bytes32 proofHash; uint32 installmentIndex; uint256 nonce; uint64 deadline; bool settleFull; } // kreditur
 struct Amendment { bytes32 noteId; uint32 newVersion; bytes32 newDocHash; bytes32 newScheduleHash; uint256 newTotalOwed; uint16 newLateFeeBps; uint64 newDueDate; uint64 deadline; uint256 creditorNonce; uint256 debtorNonce; } // keduanya
 
 struct Schedule { uint64[] dueDates; uint256[] amounts; } // TIDAK ditandatangani; dicocokkan dengan scheduleHash
@@ -79,6 +79,7 @@ struct Schedule { uint64[] dueDates; uint256[] amounts; } // TIDAK ditandatangan
 - **Aktivasi** (dua-duanya): `deadline` belum lewat, field valid (`creditor ≠ debtor`, `principal > 0`, `totalOwed ≥ principal`, `lateFeeBps` 0 atau 200, `dueDate` di masa depan), `noteId` dan `docHash` belum pernah dipakai, dua signature valid, kedua nonce dipakai, jadwal valid. On-chain: escrow harus = `principal`, lalu dana dikirim ke debitur di tx yang sama. Off-chain: `receipt.noteHash` = struct hash Note dan `receipt.amount` = `principal`.
 - **`payOnchain`**: status tersimpan ACTIVE atau DISPUTED. `amount` adalah **batas maksimal**: jika melebihi sisa utang, yang ditarik hanya sisa utang (denda bertambah per detik, jadi "bayar lunas" tidak bisa ditebak tepat). Permit cukup sebesar `amount`.
 - **`recordOffchainPayment`**: status tersimpan ACTIVE (termasuk yang terhitung OVERDUE). `proofHash` unik per piutang. Kelebihan bayar **ditolak** (`Overpayment`), karena kreditur menandatangani nominal yang benar-benar diterima.
+  - **`settleFull`** (ditandatangani kreditur): konfirmasi senilai `remaining()` saat tanda tangan baru dieksekusi beberapa detik kemudian, sehingga denda yang bertambah menyisakan sisa kecil dan piutang tetap OVERDUE. Bila `settleFull = true`, `amount` harus menutup **seluruh sisa cicilan** dan selisih ke total sisa (hanya berupa denda) harus ≤ `SETTLE_TOLERANCE` (denda 1 hari dari tunggakan saat itu: `tunggakan × 200 × 1 hari / (10.000 × 30 hari)`). Selisih itu dihapus (`LateFeeWaived`), lalu pembayaran melunasi (PAID + burn). Kalau syarat tidak terpenuhi → revert `SettleToleranceExceeded(shortfall, tolerance)`. Pokok/cicilan tidak pernah dihapus. `settleFull = false` = perilaku lama.
 - **`markPaid`**: hanya ACTIVE. Denda dihitung dulu, sisa diikhlaskan (`NoteMarkedPaid.waived`), lalu PAID + burn.
 - **`amend`**: ACTIVE atau DISPUTED; `newVersion` = versi + 1; `newDocHash` belum pernah dipakai; pokok tidak bisa diubah. Denda yang sudah berjalan dihitung dengan syarat lama dan tetap terutang. Jika total baru ≤ yang sudah dibayar dan tidak ada denda → lunas.
 - **`openDispute`**: hanya dari status tersimpan ACTIVE (termasuk OVERDUE). **`closeDispute`** mengembalikan ke ACTIVE (OVERDUE lagi bila masih ada tunggakan); jika lunas selama sengketa, PAID + burn di tx itu.
@@ -135,6 +136,7 @@ event EscrowRefunded(bytes32 indexed noteId, bytes32 indexed noteHash, address i
 event NoteActivated(bytes32 indexed noteId, address indexed creditor, address indexed debtor, bytes32 noteHash, bytes32 docHash, uint256 principal, uint256 totalOwed, uint64 dueDate, Disbursement disbursement);
 event PaymentRecorded(bytes32 indexed noteId, uint256 amount, uint256 paidTotal, uint256 remaining, bool onchain, uint32 installmentIndex, bytes32 proofHash, uint256 toLateFee);
 event LateFeeAccrued(bytes32 indexed noteId, uint256 amount, uint256 totalAccrued);
+event LateFeeWaived(bytes32 indexed noteId, uint256 amount);              // sisa denda dihapus oleh settleFull
 event NoteSettled(bytes32 indexed noteId, uint256 paidTotal);           // PAID + burn
 event NoteMarkedPaid(bytes32 indexed noteId, address indexed creditor, uint256 waived);
 event NoteAmended(bytes32 indexed noteId, uint32 newVersion, bytes32 oldDocHash, bytes32 newDocHash, bytes32 newScheduleHash, uint256 newTotalOwed, uint16 newLateFeeBps, uint64 newDueDate);
@@ -166,7 +168,7 @@ Tidak ada role relayer: fungsi yang dikirim relayer diotorisasi oleh signature p
 
 ## Errors
 
-`ZeroAddress`, `NoteNotFound`, `NoteAlreadyExists`, `DocHashAlreadyUsed`, `InvalidParties`, `InvalidAmount`, `InvalidDueDate`, `WrongDisbursement`, `SignatureExpired`, `InvalidSignature(signer)`, `NonceAlreadyUsed(signer, nonce)`, `EscrowMissing`, `EscrowAlreadyDeposited`, `NotParty`, `NotCreditor`, `NotDebtor`, `InvalidStatus(current)`, `AlreadyFullyPaid`, `Overpayment(remaining)`, `ProofAlreadyUsed`, `ReceiptMismatch`, `InvalidVersion(expected)`, `UnexpectedTransferAmount`, `InvalidLateFee`, `InvalidSchedule`, `ScheduleMismatch`, plus `AccessControlUnauthorizedAccount`, `EnforcedPause`, dan `Soulbound` (DebtNote).
+`ZeroAddress`, `NoteNotFound`, `NoteAlreadyExists`, `DocHashAlreadyUsed`, `InvalidParties`, `InvalidAmount`, `InvalidDueDate`, `WrongDisbursement`, `SignatureExpired`, `InvalidSignature(signer)`, `NonceAlreadyUsed(signer, nonce)`, `EscrowMissing`, `EscrowAlreadyDeposited`, `NotParty`, `NotCreditor`, `NotDebtor`, `InvalidStatus(current)`, `AlreadyFullyPaid`, `Overpayment(remaining)`, `ProofAlreadyUsed`, `ReceiptMismatch`, `InvalidVersion(expected)`, `UnexpectedTransferAmount`, `InvalidLateFee`, `InvalidSchedule`, `ScheduleMismatch`, `SettleToleranceExceeded(shortfall, tolerance)`, plus `AccessControlUnauthorizedAccount`, `EnforcedPause`, dan `Soulbound` (DebtNote).
 
 ## Keterbatasan
 

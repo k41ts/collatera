@@ -39,6 +39,7 @@ struct PaymentConfirmation {
     uint32 installmentIndex;
     uint256 nonce;
     uint64 deadline;
+    bool settleFull; //    true = kreditur menyatakan pelunasan penuh: sisa denda kecil (≤ toleransi) dihapus
 }
 
 /// @dev Revisi setelah ACTIVE. Ditandatangani ulang kreditur DAN debitur. Pokok tidak bisa diubah.

@@ -107,7 +107,7 @@ Nominal memakai satuan terkecil token (`decimals`, default 2). Samakan di databa
 3. **Jadwal cicilan** disimpan on-chain. Alokasi pembayaran (BR-19): tunggakan cicilan (tertua dulu) → denda → cicilan berikutnya.
    `OVERDUE` bertahan sampai tunggakan **dan** denda lunas. `installmentIndex` di pembayaran hanya informasi (event).
 4. **Pencairan off-chain**: token baru di-mint setelah debitur menandatangani receipt (dalam satu transaksi), sehingga tidak ada token untuk utang yang uangnya belum cair.
-5. **DISPUTED**: pembayaran on-chain tetap masuk; burn ditahan sampai `closeDispute`; konfirmasi off-chain dan `markPaid` ditolak. `amend` tetap boleh (jalan keluar sengketa sesuai PRD).
+5. **DISPUTED**: denda tetap berjalan (admin bisa waive lewat `closeDispute(..., true)`; siapa pun bisa `closeExpiredDispute` setelah 14 hari); pembayaran on-chain tetap masuk; burn ditahan sampai dispute ditutup; konfirmasi off-chain dan `markPaid` ditolak. `amend` tetap boleh (jalan keluar sengketa sesuai PRD).
 6. **FROZEN** menolak pembayaran, revisi, dispute baru, markPaid, dan burn. Hanya `ACTIVE`/`DISPUTED` yang bisa dibekukan: piutang `PAID` sudah final.
 7. **Kelebihan bayar**: on-chain dipotong ke sisa utang (denda bertambah per detik, jadi nominal "lunas" tidak bisa ditebak
    tepat; frontend cukup mengirim sisa utang + sedikit buffer dan permit sebesar itu). Konfirmasi off-chain yang melebihi sisa ditolak.

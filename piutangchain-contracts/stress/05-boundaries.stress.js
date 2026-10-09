@@ -277,7 +277,7 @@ describe("STRESS 5 · batas ekstrem: waktu, nominal, durasi, debu, gas, pause", 
     expect(g.statusOf < 150_000n, "statusOf (dipanggil backend/indexer)").to.equal(true);
   });
 
-  it("saat kontrak di-pause: bayar/aktivasi/revisi ditahan, tapi refund, dispute, freeze tetap jalan; denda tetap berjalan", async () => {
+  it("saat kontrak di-pause: aktivasi/markPaid ditahan (bayar on-chain tetap jalan), tapi refund, dispute, freeze tetap jalan; denda tetap berjalan", async () => {
     const ctx = await loadFixture(fixture);
     const { manager, relayer, admin, freezer } = ctx;
     const [creditor, , debtor] = ctx.parties;
@@ -309,7 +309,8 @@ describe("STRESS 5 · batas ekstrem: waktu, nominal, durasi, debu, gas, pause", 
     await time.increaseTo(now + 5 * DAY);
     await manager.connect(admin).pause();
     const feeBefore = await manager.lateFeeOf(e.note.noteId);
-    await expect(manager.connect(debtor).payOnchain(e.note.noteId, IDR(1), 0, NO_PERMIT)).to.be.revertedWithCustomError(manager, "EnforcedPause");
+    // T4: payOnchain sengaja tetap jalan saat pause (denda berjalan, debitur harus bisa membayar)
+    await manager.connect(debtor).payOnchain(e.note.noteId, IDR(1), 0, NO_PERMIT);
     await expect(manager.connect(relayer).activateOnchain(pending, schedule, sigC, sigD)).to.be.revertedWithCustomError(manager, "EnforcedPause");
     await expect(manager.connect(creditor).markPaid(e.note.noteId)).to.be.revertedWithCustomError(manager, "EnforcedPause");
     await time.increase(10 * DAY);

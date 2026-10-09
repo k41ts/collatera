@@ -312,7 +312,7 @@ describe("Smart account (ERC-1271)", () => {
 });
 
 describe("Pause, role, dan konstruktor", () => {
-  it("pause menahan deposit/aktivasi/pembayaran/revisi; refund & dispute & freeze tetap jalan", async () => {
+  it("pause menahan deposit/aktivasi/markPaid/revisi; refund, dispute, freeze, dan bayar on-chain debitur tetap jalan", async () => {
     const ctx = await loadFixture(f.deployAll);
     const { manager, admin, creditor, debtor, freezer, stranger } = ctx;
     const live = await f.buildNote(ctx);
@@ -330,7 +330,7 @@ describe("Pause, role, dan konstruktor", () => {
     const n2 = await f.buildNote(ctx);
     const s2 = await f.signNote(creditor, ctx, n2);
     await expect(manager.depositEscrow(n2, s2, NO_PERMIT)).to.be.revertedWithCustomError(manager, "EnforcedPause");
-    await expect(manager.connect(debtor).payOnchain(live.noteId, 1, 1, NO_PERMIT)).to.be.revertedWithCustomError(manager, "EnforcedPause");
+    // payOnchain sengaja tetap terbuka saat pause (denda tetap berjalan); lihat T4 di 70-review-hardening
     await expect(manager.connect(creditor).markPaid(live.noteId)).to.be.revertedWithCustomError(manager, "EnforcedPause");
 
     // jalan keluar tetap terbuka

@@ -26,6 +26,7 @@ class NoteModel {
     this.scheduledPaid = 0n;
     this.lateFeeAccrued = 0n;
     this.feeRemainder = 0n;
+    this.disputeFee = 0n; // denda yang menumpuk sejak dispute dibuka (BR-21a baru)
     this.paid = 0n;
     this.feePaid = 0n;
   }
@@ -50,6 +51,7 @@ class NoteModel {
   }
 
   arrears(t) {
+    if (this.fullyPaid) return 0n; // T1: setelah lunas/markPaid view menunjuk nol
     const due = this.dueBefore(t);
     return due > this.scheduledPaid ? due - this.scheduledPaid : 0n;
   }
@@ -58,7 +60,7 @@ class NoteModel {
   pending(t) {
     t = BigInt(t);
     const rem = this.feeRemainder;
-    if (this.bps === 0n || this.status !== S.ACTIVE) return { fee: 0n, rem };
+    if (this.bps === 0n || (this.status !== S.ACTIVE && this.status !== S.DISPUTED)) return { fee: 0n, rem };
     let seg = this.last;
     if (t <= seg) return { fee: 0n, rem };
     let cum = 0n;
@@ -78,6 +80,7 @@ class NoteModel {
   }
 
   lateFee(t) {
+    if (this.fullyPaid) return 0n; // T1
     return this.lateFeeAccrued + this.pending(t).fee;
   }
 
@@ -98,6 +101,7 @@ class NoteModel {
     this.last = BigInt(t);
     this.feeRemainder = rem;
     this.lateFeeAccrued += fee;
+    if (this.status === S.DISPUTED) this.disputeFee += fee;
   }
 
   /** Nama error yang diharapkan, atau null jika pembayaran sah. */
@@ -141,14 +145,21 @@ class NoteModel {
   }
   openDispute(t) {
     this.accrue(t);
+    this.disputeFee = 0n;
     this.status = S.DISPUTED;
   }
 
   closeDisputeError() {
     return this.status === S.DISPUTED ? null : "InvalidStatus";
   }
-  closeDispute(t) {
+  closeDispute(t, waive = false) {
     this.accrue(t);
+    if (waive) {
+      const w = this.disputeFee < this.lateFeeAccrued ? this.disputeFee : this.lateFeeAccrued;
+      this.lateFeeAccrued -= w;
+      if (w > 0n && this.scheduledPaid === this.totalOwed && this.lateFeeAccrued === 0n) this.fullyPaid = true;
+    }
+    this.disputeFee = 0n;
     this.status = S.ACTIVE;
     if (this.fullyPaid) this.status = S.PAID;
   }

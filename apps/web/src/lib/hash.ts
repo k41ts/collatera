@@ -11,6 +11,9 @@ export function canonicalJson(obj: Record<string, string | number>): string {
 }
 
 export type PayloadFields = {
+  // noteId on-chain: tanpa ini dua perjanjian identik tanpa dokumen menghasilkan docHash sama dan aktivasi
+  // kedua ditolak kontrak (DocHashAlreadyUsed, docHash dikunci seumur hidup).
+  noteId: string;
   title: string;
   debtType: string;
   interestType: string;

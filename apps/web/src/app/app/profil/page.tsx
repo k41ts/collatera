@@ -104,7 +104,7 @@ export default function ProfilePage() {
             {otpSent !== null && (
               <div className="flex flex-wrap items-end gap-3">
                 <div className="min-w-0 flex-[1_1_160px]">
-                  <Field label="Kode OTP (6 digit)" htmlFor="otp" hint={otpSent ? `Mode development: kodenya ${otpSent}` : "Cek SMS kamu"}>
+                  <Field label="Kode OTP (6 digit)" htmlFor="otp" hint={otpSent ? `Mode demo (SMS belum aktif): kodenya ${otpSent}` : "Cek SMS kamu"}>
                     <input id="otp" inputMode="numeric" maxLength={6} value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))} className={`${input} tracking-[0.3em]`} />
                   </Field>
                 </div>

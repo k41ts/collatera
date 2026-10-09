@@ -16,7 +16,7 @@ export const POST = handler<Ctx>(async (_req, user, { params }) => {
   const onchain = await reader().manager.getNote(n.chainNoteId);
   const sched = scheduleOf(n);
   const checks = [
-    { label: "Hash dokumen & isi perjanjian", db: docHash(payloadOf(n, Number(onchain.version)), rehashDocuments(n)), chain: onchain.docHash },
+    { label: "Hash dokumen & isi perjanjian", db: docHash(payloadOf(n, Number(onchain.version)), await rehashDocuments(n)), chain: onchain.docHash },
     { label: "Jadwal cicilan", db: scheduleHash(sched.dueDates, sched.amounts), chain: onchain.scheduleHash },
     { label: "Nominal pokok", db: n.principal, chain: onchain.principal.toString() },
     { label: "Total utang", db: n.totalOwed, chain: onchain.totalOwed.toString() },

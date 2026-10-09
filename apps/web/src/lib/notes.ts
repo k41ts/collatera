@@ -1,6 +1,4 @@
 // Logika domain surat piutang di server (docs/03-BUSINESS-RULES.md).
-import fs from "node:fs";
-import path from "node:path";
 import { hexlify, randomBytes } from "ethers";
 import { db } from "./db";
 import { ApiError } from "./api";
@@ -18,7 +16,8 @@ export const noteInclude = {
   creditor: true,
   debtor: true,
   installments: { orderBy: { seq: "asc" as const } },
-  documents: { orderBy: { createdAt: "asc" as const } },
+  // tanpa kolom data (isi file) supaya setiap request tidak menarik sampai 20 MB
+  documents: { orderBy: { createdAt: "asc" as const }, select: { id: true, noteId: true, name: true, mime: true, size: true, fileHash: true, createdAt: true } },
   signatures: true,
   payments: { orderBy: { createdAt: "desc" as const } },
   events: { orderBy: { createdAt: "desc" as const }, take: 30 },
@@ -94,20 +93,15 @@ export function splitInstallments(total: bigint, count: number, firstDue: Date) 
   });
 }
 
-export function uploadsDir() {
-  return path.resolve(process.cwd(), process.env.UPLOAD_DIR || "uploads");
-}
-
-/** Hitung ulang hash file dari storage (bukan dari kolom DB) supaya penggantian file terdeteksi. */
-export function rehashDocuments(n: FullNote): string[] {
-  return n.documents.map((d) => {
-    const p = path.join(uploadsDir(), d.path);
-    return fs.existsSync(p) ? fileHash(fs.readFileSync(p)) : "0x" + "00".repeat(32);
-  });
+/** Hitung ulang hash dari isi file yang tersimpan (bukan dari kolom fileHash) supaya penggantian file terdeteksi. */
+export async function rehashDocuments(n: FullNote): Promise<string[]> {
+  const docs = await db.document.findMany({ where: { noteId: n.id }, orderBy: { createdAt: "asc" }, select: { data: true } });
+  return docs.map((d) => fileHash(d.data));
 }
 
 export function payloadOf(n: FullNote, version = n.version) {
   return {
+    noteId: n.chainNoteId,
     title: n.title,
     debtType: n.debtType,
     interestType: n.interestType,

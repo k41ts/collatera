@@ -2,7 +2,7 @@
 // Semua pengiriman tx diserialkan lewat satu antrean in-process supaya nonce wallet relayer tidak bentrok.
 import fs from "node:fs";
 import path from "node:path";
-import { Contract, JsonRpcProvider, NonceManager, Wallet, type TransactionReceipt, type TransactionRequest, type TransactionResponse } from "ethers";
+import { Contract, JsonRpcProvider, Wallet, type TransactionReceipt, type TransactionRequest, type TransactionResponse } from "ethers";
 import { ABI, ADDR, CHAIN_ID } from "./config";
 
 function relayerKey(): string {
@@ -21,7 +21,7 @@ function relayerKey(): string {
 
 type Chain = {
   provider: JsonRpcProvider;
-  signer: NonceManager;
+  signer: Wallet;
   address: string;
   manager: Contract;
   idrx: Contract;
@@ -37,12 +37,12 @@ export function chain(): Chain {
   const provider = new JsonRpcProvider(process.env.SEPOLIA_RPC_URL || "https://ethereum-sepolia-rpc.publicnode.com", CHAIN_ID, {
     staticNetwork: true,
   });
-  const wallet = new Wallet(relayerKey(), provider);
-  const signer = new NonceManager(wallet);
+  // Tanpa NonceManager: di Vercel tiap request bisa jatuh ke instance berbeda, jadi penghitung nonce lokal basi.
+  const signer = new Wallet(relayerKey(), provider);
   g.__chain = {
     provider,
     signer,
-    address: wallet.address,
+    address: signer.address,
     manager: new Contract(ADDR.DebtManager, ABI.DebtManager, signer),
     idrx: new Contract(ADDR.MockIDRX, ABI.MockIDRX, signer),
     forwarder: new Contract(ADDR.PiutangForwarder, ABI.PiutangForwarder, signer),
@@ -91,13 +91,23 @@ export async function relay(label: string, build: (c: Chain) => Promise<Transact
           }
         }
       }
-      const tx: TransactionResponse = await c.signer.sendTransaction(req);
+      // Nonce diambil ulang (pending) tepat sebelum kirim. Kalau sudah terpakai (instance lain baru mengirim, atau
+      // node RPC tertinggal), ambil lagi dan kirim ulang.
+      let tx: TransactionResponse | undefined;
+      for (let i = 0; !tx; i++) {
+        try {
+          req.nonce = await c.provider.getTransactionCount(c.address, "pending");
+          tx = await c.signer.sendTransaction(req);
+        } catch (e) {
+          if (i >= 5 || !isNonceError(e)) throw e;
+          await new Promise((r) => setTimeout(r, 1500 + Math.random() * 1500));
+        }
+      }
       hash = tx.hash;
       const rc = await tx.wait(1);
       if (!rc || rc.status !== 1) throw new ChainError(`${label} gagal di blockchain`);
       return rc;
     } catch (e) {
-      c.signer.reset(); // nonce bisa tidak sinkron setelah gagal
       const reason = decodeRevert(e);
       console.error(`[relayer] ${label} gagal${hash ? ` (tx ${hash})` : ""}: ${reason}`);
       throw new ChainError(`${label} gagal: ${reason}${hash ? ` (tx ${hash})` : ""}`, reason);
@@ -106,6 +116,12 @@ export async function relay(label: string, build: (c: Chain) => Promise<Transact
   const p = c.queue.then(run, run);
   c.queue = p.catch(() => undefined);
   return p;
+}
+
+function isNonceError(e: unknown): boolean {
+  const err = e as { code?: string; shortMessage?: string; message?: string; info?: { error?: { message?: string } } };
+  const text = `${err?.shortMessage ?? ""} ${err?.message ?? ""} ${err?.info?.error?.message ?? ""}`.toLowerCase();
+  return err?.code === "NONCE_EXPIRED" || err?.code === "REPLACEMENT_UNDERPRICED" || /nonce (too low|has already been used)|already known|replacement transaction underpriced/.test(text);
 }
 
 function decodeRevert(e: unknown): string {

@@ -6,15 +6,44 @@ const fs = require("fs");
 const path = require("path");
 const { ethers, network } = require("hardhat");
 
-async function main() {
+const LOCAL_NETWORKS = ["hardhat", "localhost"];
+const NL = String.fromCharCode(10);
+
+/** Peringatan deploy (fungsi murni, diuji di test/70). Dicetak keras oleh main(). */
+function deployWarnings({ networkName, admin, deployer, freezer }) {
+  const w = [];
+  if (!LOCAL_NETWORKS.includes(networkName) && admin.toLowerCase() === deployer.toLowerCase()) {
+    w.push(
+      [
+        `!!! PERINGATAN: ADMIN == DEPLOYER di network '${networkName}'.`,
+        "!!! Satu key memegang DEFAULT_ADMIN_ROLE + ADMIN_ROLE (freeze, pause, closeDispute). Key bocor = semua piutang bisa dibekukan.",
+        "!!! Set ADMIN_ADDRESS ke multisig sebelum dipakai dengan dana nyata. closeExpiredDispute hanya mitigasi sengketa menggantung.",
+      ].join(NL)
+    );
+  }
+  if (freezer && admin.toLowerCase() !== deployer.toLowerCase()) {
+    w.push(
+      [
+        "!!! FREEZER_ROLE BELUM diberikan (ADMIN_ADDRESS bukan deployer). Admin harus menjalankan manual:",
+        `!!!   DebtManager.grantRole(keccak256("FREEZER_ROLE"), ${freezer})`,
+      ].join(NL)
+    );
+  }
+  return w;
+}
+
+async function main({ quiet = false, writeFile = true } = {}) {
+  const log = (...a) => (quiet ? undefined : console.log(...a));
   const [deployer] = await ethers.getSigners();
   const admin = process.env.ADMIN_ADDRESS || deployer.address;
   const decimals = Number(process.env.STABLECOIN_DECIMALS || 2);
   const faucetAmount = BigInt(process.env.FAUCET_AMOUNT_IDR || 10_000_000) * 10n ** BigInt(decimals);
 
-  console.log(`Network   : ${network.name}`);
-  console.log(`Deployer  : ${deployer.address}`);
-  console.log(`Admin     : ${admin}`);
+  log(`Network   : ${network.name}`);
+  log(`Deployer  : ${deployer.address}`);
+  log(`Admin     : ${admin}`);
+  const warnings = deployWarnings({ networkName: network.name, admin, deployer: deployer.address, freezer: process.env.FREEZER_ADDRESS });
+  if (!quiet) for (const w of warnings) console.warn(NL + w + NL);
 
   // Berurutan: tunggu tiap deploy ter-mine dulu. RPC publik yang di-load-balance bisa mengembalikan nonce
   // basi kalau tx berikutnya dikirim sebelum yang sebelumnya masuk blok ("replacement transaction underpriced").
@@ -33,12 +62,14 @@ async function main() {
   await (await forwarder.setManager(manager.target)).wait();
 
   if (process.env.FREEZER_ADDRESS) {
-    if (admin !== deployer.address) {
-      console.log("! ADMIN_ADDRESS bukan deployer: grant FREEZER_ROLE harus dilakukan admin secara manual.");
-    } else {
+    // Peringatan "belum diberikan" sudah dicetak di atas bila admin bukan deployer.
+    if (admin.toLowerCase() === deployer.address.toLowerCase()) {
       const FREEZER_ROLE = ethers.id("FREEZER_ROLE");
       await (await manager.grantRole(FREEZER_ROLE, process.env.FREEZER_ADDRESS)).wait();
-      console.log(`FREEZER_ROLE → ${process.env.FREEZER_ADDRESS}`);
+      if (!(await manager.hasRole(FREEZER_ROLE, process.env.FREEZER_ADDRESS))) {
+        throw new Error("grant FREEZER_ROLE gagal diverifikasi");
+      }
+      log(`FREEZER_ROLE diberikan dan terverifikasi → ${process.env.FREEZER_ADDRESS}`);
     }
   }
 
@@ -63,15 +94,22 @@ async function main() {
       DebtManager: [debtNote.target, idrx.target, forwarder.target, admin],
     },
   };
-  const dir = path.join(__dirname, "..", "deployments");
-  fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(path.join(dir, `${network.name}.json`), JSON.stringify(out, null, 2));
+  if (writeFile) {
+    const dir = path.join(__dirname, "..", "deployments");
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, `${network.name}.json`), JSON.stringify(out, null, 2));
+  }
 
-  console.log(out.contracts);
-  console.log(`Disimpan di deployments/${network.name}.json`);
+  log(out.contracts);
+  if (writeFile) log(`Disimpan di deployments/${network.name}.json`);
+  return { manager: manager.target, forwarder: forwarder.target, warnings };
 }
 
-main().catch((e) => {
-  console.error(e);
-  process.exitCode = 1;
-});
+module.exports = { main, deployWarnings };
+
+if (require.main === module) {
+  main().catch((e) => {
+    console.error(e);
+    process.exitCode = 1;
+  });
+}

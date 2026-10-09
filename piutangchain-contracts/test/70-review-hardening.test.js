@@ -420,3 +420,37 @@ describe("T5: forwarder hanya ke DebtManager dan return data dibatasi", () => {
     );
   });
 });
+
+describe("T6: deploy.js — FREEZER_ROLE jelas dan peringatan admin tunggal", () => {
+  const deployScript = require("../scripts/deploy.js");
+  const A = "0x000000000000000000000000000000000000dEaD";
+  const B = "0x000000000000000000000000000000000000bEEF";
+
+  it("peringatan keras bila admin == deployer di network selain hardhat/localhost", () => {
+    const w = deployScript.deployWarnings({ networkName: "sepolia", admin: A, deployer: A, freezer: undefined });
+    expect(w.join("\n")).to.match(/ADMIN == DEPLOYER/);
+    expect(deployScript.deployWarnings({ networkName: "hardhat", admin: A, deployer: A }).length).to.equal(0);
+    expect(deployScript.deployWarnings({ networkName: "localhost", admin: A, deployer: A }).length).to.equal(0);
+    expect(deployScript.deployWarnings({ networkName: "sepolia", admin: B, deployer: A }).length).to.equal(0);
+  });
+
+  it("admin bukan deployer + FREEZER_ADDRESS: peringatan memuat perintah grant manual yang jelas", () => {
+    const w = deployScript.deployWarnings({ networkName: "sepolia", admin: B, deployer: A, freezer: A });
+    expect(w.join("\n")).to.match(/grantRole/);
+    expect(w.join("\n")).to.include(A);
+  });
+
+  it("deploy dengan FREEZER_ADDRESS memberi FREEZER_ROLE dan memverifikasinya on-chain", async () => {
+    const ctx = await loadFixture(f.deployAll);
+    process.env.FREEZER_ADDRESS = ctx.freezer.address;
+    try {
+      const res = await deployScript.main({ quiet: true, writeFile: false });
+      const manager = await ethers.getContractAt("DebtManager", res.manager);
+      expect(await manager.hasRole(f.FREEZER_ROLE, ctx.freezer.address)).to.equal(true);
+      const forwarder = await ethers.getContractAt("PiutangForwarder", res.forwarder);
+      expect(await forwarder.manager()).to.equal(res.manager);
+    } finally {
+      delete process.env.FREEZER_ADDRESS;
+    }
+  });
+});

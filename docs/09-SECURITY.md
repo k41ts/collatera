@@ -57,3 +57,9 @@
 | API key (RPC, Resend, OTP, Privy) | Secret manager |
 
 `.env*` masuk `.gitignore`; gunakan `.env.example` tanpa nilai asli.
+
+## Keterbatasan Admin Tunggal
+
+- Satu key `ADMIN_ROLE` bisa `freeze`, `pause`, dan `closeDispute` untuk piutang mana pun; tidak ada timelock atau kontrak tambahan di versi ini. Mitigasi: pakai multisig sebagai `ADMIN_ADDRESS`.
+- `scripts/deploy.js` mencetak peringatan keras bila admin == deployer di network selain hardhat/localhost, dan memberi `FREEZER_ROLE` (terverifikasi) bila `FREEZER_ADDRESS` diset dan admin adalah deployer; kalau tidak, skrip mencetak perintah `grantRole` yang harus dijalankan admin.
+- Admin yang hilang/tidak aktif tidak bisa menggantung sengketa selamanya: `closeExpiredDispute` bisa dipanggil siapa pun setelah 14 hari (tanpa waive). Ini mitigasi, bukan pengganti tata kelola admin. FROZEN tetap hanya bisa dibuka admin.

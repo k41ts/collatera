@@ -1,0 +1,27 @@
+# Claude
+.claude/
+claude/
+CLAUDE.md
+CLAUDE.local.md
+graphify-out/
+
+# Env & secrets
+.env
+.env.*
+!.env.example
+
+# Node
+node_modules/
+.next/
+dist/
+
+# Hardhat
+artifacts/
+cache/
+typechain-types/
+coverage/
+coverage.json
+
+# OS
+.DS_Store
+Thumbs.db

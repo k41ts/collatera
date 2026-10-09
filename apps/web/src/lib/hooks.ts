@@ -67,8 +67,14 @@ export function useApi<T>(path: string | null, pollMs?: number) {
   useEffect(() => {
     refresh();
     if (!pollMs) return;
-    const t = setInterval(refresh, pollMs);
-    return () => clearInterval(t);
+    // Tab di belakang tidak ikut polling; begitu tab dibuka lagi langsung ambil data terbaru.
+    const t = setInterval(() => document.visibilityState === "visible" && refresh(), pollMs);
+    const onShow = () => document.visibilityState === "visible" && refresh();
+    document.addEventListener("visibilitychange", onShow);
+    return () => {
+      clearInterval(t);
+      document.removeEventListener("visibilitychange", onShow);
+    };
   }, [refresh, pollMs]);
 
   return { data, error, loading, refresh, setData };

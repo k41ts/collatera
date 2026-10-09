@@ -19,20 +19,26 @@ export const GET = handler(async (_req, user) => {
     },
     orderBy: { updatedAt: "desc" },
   });
-  const reads = await db.chatRead.findMany({ where: { userId: user.id } });
-  const readAt = new Map(reads.map((r) => [r.noteId, r.readAt]));
+  // Jumlah pesan belum dibaca semua surat dalam satu query (bukan satu query per surat).
+  const ids = notes.map((n) => n.id);
+  const unreadRows = ids.length
+    ? await db.$queryRaw<{ noteId: string; n: number }[]>`
+        SELECT m."noteId", COUNT(*)::int AS n
+        FROM "Message" m
+        LEFT JOIN "ChatRead" r ON r."noteId" = m."noteId" AND r."userId" = ${user.id}
+        WHERE m."noteId" = ANY(${ids}) AND m."senderId" <> ${user.id} AND m."createdAt" > COALESCE(r."readAt", 'epoch'::timestamp)
+        GROUP BY m."noteId"`
+    : [];
+  const unreadOf = new Map(unreadRows.map((r) => [r.noteId, r.n]));
 
-  const items = await Promise.all(
-    notes.map(async (n) => {
+  const items = notes.map((n) => {
       const role = roleOf(n, user);
       const other = role === "creditor" ? n.debtor : n.creditor;
       // PAID bisa lewat markPaid (sisa diikhlaskan) tanpa catatan pembayaran: anggap lunas penuh.
       const paid = n.status === "PAID" ? BigInt(n.totalOwed) : n.payments.reduce((s, p) => s + BigInt(p.amount), BigInt(0));
       let cum = BigInt(0);
       const next = n.installments.find((i) => (cum += BigInt(i.amount)) > paid);
-      const unread = await db.message.count({
-        where: { noteId: n.id, NOT: { senderId: user.id }, createdAt: { gt: readAt.get(n.id) ?? new Date(0) } },
-      });
+      const unread = unreadOf.get(n.id) ?? 0;
       const mySig = n.signatures.some((s) => s.version === n.version && s.signerId === user.id && s.role !== "receipt");
       return {
         id: n.id,
@@ -59,8 +65,7 @@ export const GET = handler(async (_req, user) => {
         unread,
         updatedAt: n.updatedAt,
       };
-    }),
-  );
+  });
   return ok({ notes: items });
 });
 

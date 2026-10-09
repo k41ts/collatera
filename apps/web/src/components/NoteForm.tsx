@@ -154,7 +154,7 @@ export default function NoteForm({ initial, noteId }: { initial?: NoteFormValues
           </div>
           <label className="col-span-full flex cursor-pointer items-start gap-3 text-sm">
             <input type="checkbox" checked={v.lateFee} onChange={(e) => set("lateFee", e.target.checked)} className="mt-0.5 h-5 w-5 accent-brand" />
-            <span>Berlakukan denda terlambat <strong className="font-semibold">2% per bulan</strong> dari cicilan yang terlambat<br /><span className="text-[13px] text-faint">Dihitung kontrak per detik, tidak berbunga, berhenti saat sengketa atau beku.</span></span>
+            <span>Berlakukan denda terlambat <strong className="font-semibold">2% per bulan</strong> dari cicilan yang terlambat<br /><span className="text-[13px] text-faint">Dihitung kontrak per detik, tidak berbunga, tetap berjalan saat sengketa (admin bisa menghapusnya), berhenti saat beku.</span></span>
           </label>
           <div className="col-span-full">
             <Field label="Catatan jaminan (opsional)" htmlFor="jaminan">

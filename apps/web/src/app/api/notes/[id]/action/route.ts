@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { ApiError, handler, ok } from "@/lib/api";
 import { audit, buildTerms, displayName, loadNote, requirePhone, roleOf, systemMessage } from "@/lib/notes";
 import { NOTE_TYPES } from "@/lib/chain/eip712";
+import { relay } from "@/lib/chain/relayer";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -13,6 +14,7 @@ const Body = z.discriminatedUnion("action", [
   z.object({ action: z.literal("cancel") }),
   z.object({ action: z.literal("reject"), reason: z.string().trim().min(5, "Tulis alasan minimal 5 huruf").max(500) }),
   z.object({ action: z.literal("revise"), reason: z.string().trim().min(5, "Tulis apa yang perlu diubah").max(500) }),
+  z.object({ action: z.literal("closeExpiredDispute") }),
 ]);
 
 export const POST = handler<Ctx>(async (req, user, { params }) => {
@@ -54,6 +56,17 @@ export const POST = handler<Ctx>(async (req, user, { params }) => {
     await systemMessage(n.id, `${name} membatalkan surat piutang.` + (n.escrowTermsJson ? " Kreditur bisa menarik dana escrow di halaman detail." : ""));
     await audit(n.id, user.id, "CANCEL");
     return ok();
+  }
+
+  // Sengketa lewat 14 hari tanpa keputusan admin: pihak mana pun boleh menutupnya (tanpa hapus denda).
+  if (body.action === "closeExpiredDispute") {
+    if (!role) throw new ApiError(403, "FORBIDDEN", "Hanya pihak di surat ini yang bisa menutup sengketa.");
+    if (n.status !== "DISPUTED") throw new ApiError(409, "INVALID_STATUS", "Surat ini tidak sedang sengketa.");
+    const rc = await relay("Tutup sengketa kedaluwarsa", (c) => c.manager.closeExpiredDispute.populateTransaction(n.chainNoteId));
+    await db.note.update({ where: { id: n.id }, data: { status: "ACTIVE" } });
+    await systemMessage(n.id, `${name} menutup sengketa yang lewat 14 hari tanpa keputusan admin. Denda selama sengketa tetap terutang.`);
+    await audit(n.id, user.id, "CLOSE_EXPIRED_DISPUTE", "", rc.hash);
+    return ok({ txHash: rc.hash });
   }
 
   // reject / revise: hanya pihak lawan, saat menunggu tanda tangan

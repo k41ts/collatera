@@ -93,7 +93,7 @@ export default function ProfilePage() {
             <div className="flex flex-wrap items-end gap-3">
               <div className="min-w-0 flex-[1_1_220px]">
                 <Field label={u.phoneVerifiedAt ? `Terverifikasi ${fmtDate(u.phoneVerifiedAt)}` : "Nomor HP"} htmlFor="hp">
-                  <input id="hp" inputMode="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+62812…" className={input} />
+                  <input id="hp" inputMode="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="0812… atau +62812…" className={input} />
                 </Field>
               </div>
               <Button variant="secondary" className="w-full sm:w-auto" disabled={!!busy || phone.length < 9} onClick={() => run("otp", async () => {

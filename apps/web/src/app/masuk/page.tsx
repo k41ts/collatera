@@ -33,7 +33,7 @@ function LoginInner() {
 
   return (
     <div className="flex min-h-screen items-center justify-center px-4 py-12">
-      <div className="flex w-full max-w-[440px] flex-col gap-6 rounded-[24px] border border-line bg-card p-8">
+      <div className="flex w-full max-w-[440px] flex-col gap-6 rounded-[24px] border border-line bg-card p-6 sm:p-8">
         <Link href="/" className="flex items-center gap-2.5 text-white no-underline">
           <Logo />
           <span className="text-lg font-semibold">piutangchain</span>

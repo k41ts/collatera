@@ -25,7 +25,9 @@ function ChatInner() {
       .filter((n) => n.role && (!qq || `${n.party} ${n.title} ${n.code}`.toLowerCase().includes(qq)))
       .sort((a, b) => new Date(b.lastMessageAt ?? b.updatedAt).getTime() - new Date(a.lastMessageAt ?? a.updatedAt).getTime());
   }, [list, q]);
-  const activeId = params.get("note") ?? convos[0]?.id ?? null;
+  // Layar kecil: tanpa ?note= tampilkan daftar; dengan ?note= tampilkan satu percakapan penuh.
+  const chosen = params.get("note");
+  const activeId = chosen ?? convos[0]?.id ?? null;
   const active = list?.notes.find((n) => n.id === activeId) ?? null;
   const { data: thread, refresh } = useApi<{ messages: Msg[] }>(activeId ? `/api/notes/${activeId}/messages` : null, 5000);
   const [draft, setDraft] = useState("");
@@ -61,21 +63,21 @@ function ChatInner() {
       : ["Sudah saya cek, terima kasih", "Saya cek mutasi dulu ya", "Kapan bisa dibayar?"];
 
   return (
-    <div className="flex flex-col gap-5">
-      <div className="flex flex-col gap-1.5">
+    <div className="flex flex-col gap-4 sm:gap-5">
+      <div className={`flex flex-col gap-1.5 ${chosen ? "max-lg:hidden" : ""}`}>
         <span className="text-[13px] text-faint">Satu percakapan untuk setiap surat piutang</span>
-        <h1 className="text-[32px] font-semibold tracking-tight">Chat</h1>
+        <h1 className="text-[26px] font-semibold tracking-tight sm:text-[32px]">Chat</h1>
       </div>
 
       <div className="flex flex-wrap items-stretch gap-4">
-        <section aria-label="Daftar percakapan" className="flex min-w-0 flex-[1_1_300px] flex-col gap-2.5 rounded-[20px] border border-line bg-card p-3.5 lg:max-w-[360px]">
+        <section aria-label="Daftar percakapan" className={`min-w-0 flex-[1_1_300px] flex-col gap-2.5 rounded-[20px] border border-line bg-card p-2.5 sm:p-3.5 lg:flex lg:max-w-[360px] ${chosen ? "hidden" : "flex"}`}>
           <label htmlFor="cari-chat" className="sr-only">Cari percakapan</label>
           <input id="cari-chat" type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Cari nama atau piutang" className={`${input} text-[13px]`} />
           {convos.length === 0 && <p className="p-3 text-sm text-muted">Belum ada percakapan. Chat muncul untuk setiap surat piutang kamu.</p>}
           {convos.map((c) => {
             const on = c.id === activeId;
             return (
-              <button key={c.id} type="button" aria-pressed={on} onClick={() => router.replace(`/app/chat?note=${c.id}`)} className={`flex w-full items-start gap-3 rounded-[14px] border p-3 text-left ${on ? "border-brand bg-brand-soft" : "border-transparent hover:bg-raised"}`}>
+              <button key={c.id} type="button" aria-pressed={on && !!chosen} onClick={() => router.push(`/app/chat?note=${c.id}`)} className={`flex w-full items-start gap-3 rounded-[14px] border p-3 text-left ${on ? "lg:border-brand lg:bg-brand-soft" : ""} border-transparent hover:bg-raised`}>
                 <Avatar name={c.party} />
                 <span className="flex min-w-0 flex-1 flex-col gap-0.5">
                   <span className="flex justify-between gap-2"><span className="truncate text-sm font-semibold">{c.party}</span><span className="flex-none text-[11px] text-faint">{c.lastMessageAt ? time(c.lastMessageAt) : ""}</span></span>
@@ -88,24 +90,30 @@ function ChatInner() {
           })}
         </section>
 
-        <section aria-label="Percakapan" className="flex min-h-[560px] min-w-0 flex-[999_1_480px] flex-col overflow-hidden rounded-[20px] border border-line bg-card">
+        <section aria-label="Percakapan" className={`min-w-0 flex-[999_1_480px] flex-col overflow-hidden rounded-[20px] border border-line bg-card max-lg:h-[calc(100dvh-8.5rem)] max-lg:min-h-[420px] lg:flex lg:min-h-[560px] ${chosen ? "flex" : "hidden"}`}>
           {!active ? (
             <p className="m-auto p-6 text-sm text-muted">Pilih percakapan di kiri.</p>
           ) : (
             <>
-              <header className="flex flex-wrap items-center gap-3 border-b border-line px-4.5 py-4">
+              <header className="flex items-center gap-2.5 border-b border-line px-3 py-3 sm:gap-3 sm:px-4.5 sm:py-4">
+                <button type="button" onClick={() => router.push("/app/chat")} aria-label="Kembali ke daftar percakapan" className="-ml-1 flex h-10 w-10 flex-none items-center justify-center rounded-xl text-soft hover:bg-raised hover:text-white lg:hidden">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M15 18l-6-6 6-6" /></svg>
+                </button>
                 <Avatar name={active.party} />
                 <div className="flex min-w-0 flex-1 flex-col">
-                  <span className="font-semibold">{active.party}</span>
+                  <span className="truncate font-semibold">{active.party}</span>
                   <span className="truncate text-xs text-faint">{active.code} · {active.title} · kamu {active.role === "creditor" ? "kreditur" : "debitur"}</span>
                 </div>
-                <StatusPill status={active.status} />
-                <Link href={`/app/piutang/${active.id}`} className="inline-flex min-h-10 items-center rounded-full border border-line2 px-3.5 text-[13px] font-medium text-white no-underline">Lihat detail piutang</Link>
+                <span className="max-sm:hidden"><StatusPill status={active.status} /></span>
+                <Link href={`/app/piutang/${active.id}`} className="inline-flex min-h-10 flex-none items-center rounded-full border border-line2 px-3.5 text-[13px] font-medium text-white no-underline">
+                  <span className="sm:hidden">Detail</span>
+                  <span className="max-sm:hidden">Lihat detail piutang</span>
+                </Link>
               </header>
-              <div className="mx-4 mt-3.5 rounded-xl bg-raised px-3 py-2.5 text-xs leading-relaxed text-muted">
+              <div className="mx-3 mt-3 rounded-xl bg-raised px-3 py-2 text-[11px] leading-relaxed text-muted sm:mx-4 sm:mt-3.5 sm:py-2.5 sm:text-xs">
                 Chat tersimpan di server PiutangChain, bukan di blockchain, dan <strong className="font-semibold text-white">tidak mengubah isi perjanjian</strong>. Perubahan nominal atau jadwal tetap lewat revisi yang ditandatangani berdua.
               </div>
-              <ol aria-label="Pesan" aria-live="polite" className="flex max-h-[60vh] min-h-[320px] flex-1 flex-col gap-3 overflow-y-auto px-4 py-4">
+              <ol aria-label="Pesan" aria-live="polite" className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto overscroll-contain px-3 py-4 sm:px-4 lg:max-h-[60vh] lg:min-h-[320px]">
                 {(thread?.messages ?? []).map((m) =>
                   m.kind === "event" ? (
                     <li key={m.id} className="flex justify-center">
@@ -116,7 +124,7 @@ function ChatInner() {
                     </li>
                   ) : (
                     <li key={m.id} className={`flex ${m.kind === "me" ? "justify-end" : "justify-start"}`}>
-                      <div className={`flex max-w-[72%] flex-col gap-1 px-3.5 py-2.5 ${m.kind === "me" ? "rounded-[16px_16px_4px_16px] bg-brand" : "rounded-[16px_16px_16px_4px] bg-bubble"}`}>
+                      <div className={`flex max-w-[85%] flex-col gap-1 px-3.5 py-2.5 sm:max-w-[72%] ${m.kind === "me" ? "rounded-[16px_16px_4px_16px] bg-brand" : "rounded-[16px_16px_16px_4px] bg-bubble"}`}>
                         <span className="whitespace-pre-wrap text-sm leading-relaxed [overflow-wrap:anywhere]">{m.body}</span>
                         <span className={`self-end text-[11px] ${m.kind === "me" ? "text-brand-tint" : "text-faint"}`}>{time(m.createdAt)}</span>
                       </div>
@@ -125,17 +133,17 @@ function ChatInner() {
                 )}
                 <li ref={endRef} aria-hidden />
               </ol>
-              <div className="flex flex-col gap-2.5 border-t border-line px-4 pb-4 pt-3">
-                <div className="flex flex-wrap gap-2">
+              <div className="flex flex-col gap-2.5 border-t border-line px-3 pb-3 pt-3 sm:px-4 sm:pb-4">
+                <div className="-mx-3 flex gap-2 overflow-x-auto px-3 no-scrollbar [scrollbar-width:none] sm:mx-0 sm:flex-wrap sm:px-0">
                   {quick.map((t) => (
-                    <button key={t} type="button" disabled={sending} onClick={() => send(t)} className="min-h-9 rounded-full border border-line2 px-3 text-xs text-lav">{t}</button>
+                    <button key={t} type="button" disabled={sending} onClick={() => send(t)} className="min-h-9 flex-none whitespace-nowrap rounded-full border border-line2 px-3 text-xs text-lav">{t}</button>
                   ))}
                 </div>
                 {error && <p role="alert" className="text-sm text-pink">{error}</p>}
                 <form onSubmit={(e) => { e.preventDefault(); send(draft); }} className="flex items-center gap-2.5">
                   <label htmlFor="pesan" className="sr-only">Tulis pesan</label>
-                  <input id="pesan" value={draft} onChange={(e) => setDraft(e.target.value)} placeholder={`Tulis pesan ke ${active.party.split(" ")[0]}…`} autoComplete="off" maxLength={2000} className={`${input} flex-1 text-sm`} />
-                  <button type="submit" disabled={sending || !draft.trim()} className="h-[46px] flex-none rounded-xl bg-brand px-5 text-sm font-medium disabled:opacity-50">Kirim</button>
+                  <input id="pesan" value={draft} onChange={(e) => setDraft(e.target.value)} placeholder={`Tulis pesan ke ${active.party.split(" ")[0]}…`} autoComplete="off" maxLength={2000} className={`${input} min-w-0 flex-1 text-base sm:text-sm`} />
+                  <button type="submit" disabled={sending || !draft.trim()} className="h-[46px] flex-none rounded-xl bg-brand px-4 text-sm font-medium disabled:opacity-50 sm:px-5">Kirim</button>
                 </form>
               </div>
             </>

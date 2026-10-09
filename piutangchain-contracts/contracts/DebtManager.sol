@@ -144,6 +144,7 @@ contract DebtManager is IDebtManager, EIP712, AccessControl, ReentrancyGuard, Pa
         uint256 totalOwed; //         = jumlah semua cicilan
         uint256 scheduledPaid; //     pembayaran yang dialokasikan ke cicilan (≤ totalOwed)
         uint256 lateFeeAccrued; //    denda yang sudah dihitung dan belum dibayar
+        uint256 feeRemainder; //      sisa pembulatan denda (pembilang, < BPS × LATE_FEE_PERIOD), dibawa ke checkpoint berikutnya
         uint256 paid; //              total semua pembayaran (cicilan + denda)
         uint64[] dueDates;
         uint256[] amounts;
@@ -203,12 +204,19 @@ contract DebtManager is IDebtManager, EIP712, AccessControl, ReentrancyGuard, Pa
     }
 
     /// @notice Kreditur menarik kembali dana escrow selama piutang belum aktif. Tetap bisa saat pause.
+    ///         Signature Note kreditur ikut dibatalkan, supaya tidak bisa dipakai pihak lain untuk menyetor ulang
+    ///         dana kreditur (lewat allowance yang tersisa) lalu mengaktifkan piutang yang sudah ditinggalkan.
     function refundEscrow(Note calldata n) external nonReentrant {
         if (_msgSender() != n.creditor) revert NotCreditor();
         bytes32 nHash = _noteHash(n);
         uint256 amount = escrowOf[nHash];
         if (amount == 0) revert EscrowMissing();
         delete escrowOf[nHash];
+        // Bukan _useNonce: refund tetap harus jalan walau kreditur sudah cancelNonce lebih dulu.
+        if (!nonceUsed[n.creditor][n.creditorNonce]) {
+            nonceUsed[n.creditor][n.creditorNonce] = true;
+            emit NonceCancelled(n.creditor, n.creditorNonce);
+        }
         stablecoin.safeTransfer(n.creditor, amount);
         emit EscrowRefunded(n.noteId, nHash, n.creditor, amount);
     }
@@ -579,13 +587,20 @@ contract DebtManager is IDebtManager, EIP712, AccessControl, ReentrancyGuard, Pa
         return due > r.scheduledPaid ? due - r.scheduledPaid : 0;
     }
 
+    function _pendingFee(Record storage r) private view returns (uint256 fee) {
+        (fee, ) = _pendingFeeParts(r);
+    }
+
     /// @dev Denda sejak checkpoint terakhir: Σ tunggakan_segmen × durasi_segmen × bps / (10.000 × 30 hari).
     ///      Segmen dipotong di setiap jatuh tempo, jadi hasilnya tepat walau tidak ada yang memanggil accrue.
+    ///      Sisa pembagian dibawa lewat `feeRemainder`, jadi seberapa sering pun accrue dipanggil, totalnya sama
+    ///      dengan satu kali hitung (tidak bisa dihapus dengan memanggil accrue tiap blok).
     ///      Hanya berjalan saat ACTIVE (berhenti saat DISPUTED/FROZEN/PAID).
-    function _pendingFee(Record storage r) private view returns (uint256) {
-        if (r.lateFeeBps == 0 || r.status != Status.ACTIVE) return 0;
+    function _pendingFeeParts(Record storage r) private view returns (uint256 fee, uint256 remainder) {
+        remainder = r.feeRemainder;
+        if (r.lateFeeBps == 0 || r.status != Status.ACTIVE) return (0, remainder);
         uint256 segStart = r.lastAccrualAt;
-        if (block.timestamp <= segStart) return 0;
+        if (block.timestamp <= segStart) return (0, remainder);
         uint256 paidSched = r.scheduledPaid;
         uint256 cum;
         uint256 weighted;
@@ -600,12 +615,15 @@ contract DebtManager is IDebtManager, EIP712, AccessControl, ReentrancyGuard, Pa
             cum += r.amounts[i];
         }
         if (cum > paidSched) weighted += (cum - paidSched) * (block.timestamp - segStart);
-        return (weighted * r.lateFeeBps) / (BPS * LATE_FEE_PERIOD);
+        uint256 numerator = weighted * r.lateFeeBps + remainder;
+        fee = numerator / (BPS * LATE_FEE_PERIOD);
+        remainder = numerator % (BPS * LATE_FEE_PERIOD);
     }
 
     function _accrue(bytes32 noteId, Record storage r) private {
-        uint256 fee = _pendingFee(r);
+        (uint256 fee, uint256 remainder) = _pendingFeeParts(r);
         r.lastAccrualAt = uint64(block.timestamp);
+        r.feeRemainder = remainder;
         if (fee != 0) {
             r.lateFeeAccrued += fee;
             emit LateFeeAccrued(noteId, fee, r.lateFeeAccrued);

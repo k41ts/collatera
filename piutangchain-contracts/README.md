@@ -18,6 +18,28 @@ cp .env.example .env     # isi RPC + key, lalu:
 npm run deploy:sepolia   # tulis deployments/sepolia.json
 ```
 
+### Stress test (folder `stress/`)
+
+Terpisah dari `npm test` karena lebih lama (sekitar 3 menit dengan pengaturan bawaan):
+
+```bash
+npm run test:stress
+STRESS_SEEDS=200 STRESS_STEPS=150 npm run test:stress   # lebih banyak seed & langkah (jauh lebih lama)
+STRESS_SEED=24317 STRESS_SEEDS=1 npm run test:stress    # ulangi persis satu seed yang gagal
+```
+
+| File | Isi |
+|---|---|
+| `stress/lib/model.js` | Model bayangan: denda, alokasi, dan status ditulis ulang di JS (BigInt) dari aturan bisnis |
+| `01-fuzz-lifecycle` | Ratusan aksi acak pada satu piutang; setelah setiap aksi kontrak dibandingkan dengan model sampai satuan terkecil |
+| `02-multi-note` | 10 piutang bersamaan antar 8 pihak (peran bergantian): isolasi, konservasi token, kepemilikan NFT |
+| `03-escrow-race` | Tabrakan noteId/docHash/nonce, setor/refund/aktivasi/cancel acak; saldo kontrak selalu = Σ escrow |
+| `04-signature-attacks` | Signature malleable, domain salah, mutasi tiap field, replay lintas struct/piutang, ERC-1271, forwarder palsu, spoofing calldata, permit front-run |
+| `05-boundaries` | Detik tepat jatuh tempo/deadline, 1 sen vs `uint128`, telat 50 tahun, serangan debu, batas gas, pause |
+
+Suite ini sudah diuji dengan *mutation testing*: 8 bug yang sengaja ditanam (urutan alokasi, denda saat dispute,
+detik jatuh tempo, sisa pembulatan, nonce refund, replay bukti, unfreeze, burn saat dispute) semuanya tertangkap.
+
 Jika binary compiler tidak bisa diunduh (jaringan terbatas): `npm i --no-save solc@0.8.28` lalu jalankan dengan `SOLCJS=1`.
 
 ## Kontrak

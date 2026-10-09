@@ -42,7 +42,7 @@ hanya ada di backend: piutang baru lahir on-chain saat aktivasi.
 | Kreditur tanda tangan + setor dana (on-chain) | `depositEscrow(note, sigKreditur, permit)` |
 | Debitur tanda tangan → mint, dana lepas, ACTIVE | `activateOnchain(note, schedule, sigKreditur, sigDebitur)` |
 | Pencairan off-chain: debitur konfirmasi terima dana | `activateOffchain(note, schedule, sigK, sigD, receipt, sigReceipt)` |
-| Tarik dana escrow sebelum aktif | `refundEscrow(note)` |
+| Tarik dana escrow sebelum aktif (signature kreditur ikut batal) | `refundEscrow(note)` |
 | Bayar on-chain (`amount` = batas maksimal, yang ditarik hanya sisa utang) | `payOnchain(noteId, amount, installmentIndex, permit)` |
 | Bayar off-chain, dikonfirmasi kreditur | `recordOffchainPayment(confirmation, sigKreditur)` |
 | Kreditur menandai lunas | `markPaid(noteId)` |

@@ -1,0 +1,20 @@
+{
+  "name": "piutangchain-contracts",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Smart contracts PiutangChain (Hardhat, tanpa OpenZeppelin)",
+  "scripts": {
+    "compile": "hardhat compile",
+    "test": "hardhat test",
+    "coverage": "hardhat coverage",
+    "size": "node scripts/size.js",
+    "node": "hardhat node",
+    "deploy:local": "hardhat run scripts/deploy.js --network hardhat",
+    "deploy:sepolia": "hardhat run scripts/deploy.js --network sepolia"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^6.1.0",
+    "hardhat": "^2.26.0",
+    "dotenv": "^16.4.5"
+  }
+}

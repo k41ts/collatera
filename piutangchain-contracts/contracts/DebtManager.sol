@@ -288,12 +288,15 @@ contract DebtManager is IDebtManager, EIP712, AccessControl, ReentrancyGuard, Pa
     ///         `amount` adalah batas maksimal: jika melebihi sisa utang, yang ditarik hanya sisa utang (denda
     ///         bertambah per detik, jadi "bayar lunas" tidak bisa ditebak tepat). Permit cukup sebesar `amount`.
     ///         Tetap diterima saat DISPUTED; ditolak saat FROZEN/PAID.
+    ///         SENGAJA tanpa `whenNotPaused` (T4): denda tetap berjalan saat pause, jadi debitur harus tetap bisa
+    ///         membayar. Fungsi ini hanya memindahkan dana debitur ke kreditur dan mencatatnya; semua fungsi lain
+    ///         tetap tertahan saat pause.
     function payOnchain(
         bytes32 noteId,
         uint256 amount,
         uint32 installmentIndex,
         Permit calldata permit
-    ) external nonReentrant whenNotPaused {
+    ) external nonReentrant {
         Record storage r = _get(noteId);
         address payer = _msgSender();
         if (payer != r.debtor) revert NotDebtor();

@@ -7,7 +7,7 @@ Full-stack Next.js (App Router) untuk PiutangChain: UI + API + relayer gasless, 
 | UI | Landing, Masuk (MetaMask/SIWE), Dashboard, Piutang saya (cari/filter/urut), Buat & ubah draft, Detail piutang, Tanda tangan, Chat, Profil |
 | API | `src/app/api/**`: auth SIWE, profil + OTP, faucet IDRX, draft, dokumen, tanda tangan EIP-712, escrow & aktivasi, pembayaran on-chain (forwarder) & off-chain, sengketa, integrity check, chat |
 | Relayer | `src/lib/chain/relayer.ts`: satu wallet membayar gas semua transaksi, antrean in-process, estimasi gas +30% |
-| DB | Prisma. Dev: SQLite (`prisma/dev.db`). Produksi: ganti `provider` ke `postgresql` (Supabase) |
+| DB | Prisma + PostgreSQL (Supabase), dev maupun produksi. File upload disimpan di DB (bytea) |
 
 ## Menjalankan
 
@@ -19,7 +19,7 @@ npm install
 cp .env.example .env
 ```
 
-Isi `.env`: `SESSION_SECRET` (string acak ≥32 karakter) dan `RELAYER_PRIVATE_KEY` (wallet ber-Sepolia ETH; harus owner MockIDRX + `ADMIN_ROLE` supaya faucet dan auto-freeze jalan). Di development, kalau `RELAYER_PRIVATE_KEY` kosong, server memakai `DEPLOYER_PRIVATE_KEY` dari `piutangchain-contracts/.env`.
+Isi `.env`: `DATABASE_URL` (Supabase "Transaction pooler", port 6543, `?pgbouncer=true&connection_limit=1`), `DIRECT_URL` (Supabase "Direct connection" atau "Session pooler", port 5432), `SESSION_SECRET` (string acak ≥32 karakter) dan `RELAYER_PRIVATE_KEY` (wallet ber-Sepolia ETH; harus owner MockIDRX + `ADMIN_ROLE` supaya faucet dan auto-freeze jalan). Di development, kalau `RELAYER_PRIVATE_KEY` kosong, server memakai `DEPLOYER_PRIVATE_KEY` dari `piutangchain-contracts/.env`.
 
 ```bash
 npx prisma db push
@@ -28,6 +28,8 @@ npx prisma db push
 ```bash
 npm run dev
 ```
+
+Kalau muncul `the URL must start with the protocol file:`, berarti Prisma Client masih hasil schema SQLite lama (branch yang dibuat sebelum pindah ke Postgres). Merge `origin/main`, jalankan `npx prisma generate`, lalu restart dev server.
 
 Buka http://localhost:3000, masuk dengan MetaMask di jaringan Sepolia, verifikasi nomor HP di Profil (mode development: kode OTP tampil di layar), ambil IDRX uji dari faucet, lalu buat surat piutang. Pihak lawan masuk dengan wallet yang kamu undang.
 

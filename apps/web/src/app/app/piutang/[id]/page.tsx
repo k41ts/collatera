@@ -8,6 +8,7 @@ import { useApi } from "@/lib/hooks";
 import { fmtRp, rupiahToUnits, unitsToRupiah } from "@/lib/money";
 import { txUrl } from "@/lib/chain/config";
 import { splitSig } from "@/lib/chain/eip712";
+import RevisionModal from "./RevisionModal";
 
 type Payment = { id: string; method: string; amount: string; installment: number; status: string; proofName: string | null; rejectReason: string | null; txHash: string | null; createdAt: string };
 type Detail = {
@@ -37,6 +38,7 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
   const { data, error, refresh } = useApi<Detail>(`/api/notes/${id}`);
   const [busy, setBusy] = useState<string | null>(null);
   const [msg, setMsg] = useState<{ tone: "ok" | "error" | "info"; text: string; tx?: string } | null>(null);
+  const [reviseOpen, setReviseOpen] = useState(false);
 
   if (error) return <Notice tone="error">{error}</Notice>;
   if (!data) return <p className="text-muted">Memuat…</p>;
@@ -44,17 +46,20 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
   const role = me.role;
   const isLive = LIVE.includes(n.status);
 
-  /** Jalankan aksi dengan status sibuk + pesan hasil. */
-  async function run(key: string, fn: () => Promise<{ txHash?: string } | unknown>, okText: string) {
+  /** Jalankan aksi dengan status sibuk + pesan hasil. Mengembalikan pesan error, atau null bila berhasil. */
+  async function run(key: string, fn: () => Promise<{ txHash?: string } | unknown>, okText: string): Promise<string | null> {
     setBusy(key);
     setMsg({ tone: "info", text: "Memproses… konfirmasi di MetaMask bila diminta, lalu tunggu transaksi masuk blok (±15 detik)." });
     try {
       const r = (await fn()) as { txHash?: string } | undefined;
       setMsg({ tone: "ok", text: okText, tx: r?.txHash });
       await refresh();
+      return null;
     } catch (e) {
       const err = e as { code?: string | number; message: string };
-      setMsg({ tone: "error", text: err.code === 4001 || err.code === "ACTION_REJECTED" ? "Dibatalkan di MetaMask." : err.message });
+      const text = err.code === 4001 || err.code === "ACTION_REJECTED" ? "Dibatalkan di MetaMask." : err.message;
+      setMsg({ tone: "error", text });
+      return text;
     } finally {
       setBusy(null);
     }
@@ -214,12 +219,20 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
                 </Button>
                 {!me.isCreator && (
                   <>
-                    <Button variant="secondary" disabled={!!busy} onClick={() => { const r = ask("Apa yang perlu diubah?"); if (r) run("revise", () => action({ action: "revise", reason: r }), "Permintaan revisi terkirim."); }}>Minta revisi</Button>
+                    <Button variant="secondary" disabled={!!busy} aria-haspopup="dialog" onClick={() => setReviseOpen(true)}>Minta revisi</Button>
                     <Button variant="danger" disabled={!!busy} onClick={() => { const r = ask("Alasan penolakan (wajib, final):"); if (r) run("reject", () => action({ action: "reject", reason: r }), "Surat ditolak."); }}>Tolak</Button>
                   </>
                 )}
               </div>
             </>
+          )}
+          {!me.isCreator && role && (
+            <RevisionModal
+              open={reviseOpen}
+              version={n.version}
+              onClose={() => setReviseOpen(false)}
+              onSubmit={(reason) => run("revise", () => action({ action: "revise", reason }), "Permintaan revisi terkirim. Surat kembali ke draft untuk diperbaiki pembuat.")}
+            />
           )}
           {me.isCreator && (
             <div><Button variant="danger" disabled={!!busy} onClick={() => window.confirm("Batalkan surat ini?") && run("cancel", () => action({ action: "cancel" }), "Surat dibatalkan.")}>Batalkan surat</Button></div>

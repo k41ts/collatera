@@ -12,7 +12,7 @@
 
 ## Smart Contract
 
-Test ada di `piutangchain-contracts/test/` (81 test, semua lulus per 9 Okt 2026). Helper bersama di `fixture.js`.
+Test ada di `piutangchain-contracts/test/` (138 test, semua lulus per 9 Okt 2026; hitungan nyata dari `SOLCJS=1 npx hardhat test`). Suite stress terpisah di `piutangchain-contracts/stress/` (`npm run test:stress`, 68 test). Helper bersama di `fixture.js`.
 
 | File | Yang dicakup |
 |------|--------------|
@@ -21,7 +21,9 @@ Test ada di `piutangchain-contracts/test/` (81 test, semua lulus per 9 Okt 2026)
 | `20-security.test.js` | Satu docHash = satu token, replay nonce, signature salah/kedaluwarsa/domain lain, validasi field, escrow (refund, deposit ganda), batas pembayaran, smart account (ERC-1271), pause dan role |
 | `30-dispute-freeze-amend.test.js` | Dispute (buka/tutup, lunas saat dispute), freeze/unfreeze (termasuk dari DISPUTED), integrity check end-to-end, revisi `amend`, aksi pengguna lewat forwarder |
 | `40-hostile-token.test.js` | Token tanpa return value, token yang return false, fee-on-transfer ditolak, re-entrancy diblok |
-| `50-late-fee-schedule.test.js` | Jadwal on-chain, OVERDUE per cicilan, denda 2%/30 hari per segmen, alokasi tunggakan → denda → cicilan berikutnya, denda berhenti saat DISPUTED/FROZEN, validasi jadwal (maks 24), cek gas forwarder |
+| `50-late-fee-schedule.test.js` | Jadwal on-chain, OVERDUE per cicilan, denda 2%/30 hari per segmen, alokasi tunggakan → denda → cicilan berikutnya, denda tetap jalan saat DISPUTED dan berhenti saat FROZEN, validasi jadwal (maks 24), cek gas forwarder |
+| `70-review-hardening.test.js` | Regresi hasil review (T1–T7): view konsisten setelah `markPaid`; `settleFull`; denda tetap jalan saat DISPUTED + `closeDispute(waiveFee)` + `closeExpiredDispute`; `payOnchain` saat pause; forwarder terkunci ke DebtManager + batas return data; `deploy.js`; ERC-1271 wallet jahat (return sampah, revert, reentrancy, bakar gas, return-bomb, cabut validitas) |
+| `80-reference-model.test.js` | Model referensi denda BigInt (integral tunggakan × waktu, bukan checkpoint) vs kontrak, 24 seed tetap; invariant: saldo manager = escrow belum aktif, aliran dana debitur↔kreditur, PAID ⇔ token ter-burn, denda tidak turun kecuali dibayar |
 | `60-regressions.test.js` | `refundEscrow` membatalkan signature kreditur; denda tidak bisa dihapus dengan `accrue()` tiap blok (`feeRemainder`) |
 
 Skenario wajib yang harus tetap ada di suite:
@@ -40,7 +42,11 @@ Skenario wajib yang harus tetap ada di suite:
 | SC-10 | `transferFrom` / `approve` DebtNote | Revert `Soulbound` |
 | SC-11 | Cicilan pertama lewat jatuh tempo | `statusOf` = OVERDUE; bayar tunggakan + denda → ACTIVE lagi |
 | SC-12 | Cicilan Rp400.000 terlambat 15 hari | Denda Rp4.000 |
-| SC-13 | Denda saat DISPUTED/FROZEN | Tidak bertambah |
+| SC-13 | Denda saat DISPUTED / FROZEN | DISPUTED: tetap bertambah (admin bisa `waiveFee`); FROZEN: tidak bertambah |
+| SC-19 | Dispute > 14 hari | `closeExpiredDispute` oleh siapa pun; sebelum itu `DisputeWindowNotElapsed` |
+| SC-20 | Konfirmasi off-chain `settleFull` | Sisa denda ≤ 1 hari dihapus, lunas; di atas toleransi `SettleToleranceExceeded` |
+| SC-21 | Pause saat OVERDUE | `payOnchain` tetap jalan; fungsi lain `EnforcedPause` |
+| SC-22 | Forwarder dengan `to` selain DebtManager | `TargetNotAllowed` |
 | SC-14 | Lunas saat DISPUTED | Burn ditahan; `closeDispute` → PAID + burn |
 | SC-15 | Bayar, konfirmasi off-chain, revisi saat FROZEN | Revert `InvalidStatus` |
 | SC-16 | `freeze` oleh akun tanpa role / `unfreeze` oleh FREEZER | Revert `AccessControlUnauthorizedAccount` |

@@ -63,4 +63,4 @@ Peran ditentukan **per surat piutang**. Satu akun bisa jadi kreditur di satu piu
 | `GUARDIAN_ROLE` | Admin + integrity service | `freeze`, `unfreeze`, `setDisputed` |
 | `MINTER_ROLE` (MockIDR) | Wallet relayer | `faucet` (testnet) |
 
-`repay` tidak butuh role: dipanggil debitur lewat `Forwarder` (ERC-2771). `markOverdue` dan `accrue` boleh dipanggil siapa saja, dalam praktik oleh cron worker.
+`repay` tidak butuh role: dipanggil debitur lewat `Forwarder` (ERC-2771). `markOverdue` dan `accrue` boleh dipanggil siapa saja; dalam praktik cron worker mengantrekannya ke relayer worker dan tx dikirim dengan wallet relayer. Freeze piutang yang belum di-mint hanya terjadi di DB.

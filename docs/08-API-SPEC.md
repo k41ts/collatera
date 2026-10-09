@@ -39,8 +39,8 @@ Nominal dikirim sebagai string rupiah utuh (mis. `"5000000"`); backend mengonver
 | Method | Path | Keterangan |
 |--------|------|------------|
 | GET | `/notes/:id/outstanding` | Sisa cicilan, late fee berjalan, total (dibaca dari contract `outstanding()`) |
-| GET | `/notes/:id/repay/typed-data` | Payload permit untuk bayar on-chain |
-| POST | `/notes/:id/payments/onchain` | `{ amount, permitSig }` → enqueue repay |
+| GET | `/notes/:id/repay/typed-data?amount=` | Typed data permit MockIDR + domain & `nonce` Forwarder + `deadline` (lihat [11-BLOCKCHAIN-SPEC](11-BLOCKCHAIN-SPEC.md#bayar-on-chain-lewat-forwarder)) |
+| POST | `/notes/:id/payments/onchain` | `{ amount, permit: { deadline, v, r, s }, forwardRequest: { from, to, value, gas, deadline, data, signature } }` → backend cek `data` = `repay(tokenId, amount, permit)` → enqueue `Forwarder.execute` |
 | POST | `/notes/:id/payments/offchain` | Multipart `{ amount, proof }` → PENDING |
 | GET | `/payments/:id/typed-data` | Payload EIP-712 `OffchainPayment` untuk konfirmasi kreditur |
 | POST | `/payments/:id/confirm` | Kreditur `{ signature }` → CONFIRMED |
@@ -84,6 +84,6 @@ POST /api/v1/notes
 ## Error
 
 `{ "error": { "code": "NOTE_FROZEN", "message": "…" } }`
-Kode umum: `UNAUTHORIZED` 401, `FORBIDDEN` 403, `PHONE_NOT_VERIFIED` 403, `NOT_FOUND` 404, `INVALID_STATUS` 409, `DOC_HASH_EXISTS` 409, `SIGNATURE_INVALID` 422, `SIGNATURE_EXPIRED` 422, `FILE_INVALID` 422, `NOTE_FROZEN` 423, `RATE_LIMITED` 429.
+Kode umum: `UNAUTHORIZED` 401, `FORBIDDEN` 403, `PHONE_NOT_VERIFIED` 403, `NOT_FOUND` 404, `INVALID_STATUS` 409, `DOC_HASH_EXISTS` 409, `SIGNATURE_INVALID` 422, `SIGNATURE_EXPIRED` 422, `NONCE_USED` 409, `FORWARD_REQUEST_INVALID` 422, `FILE_INVALID` 422, `NOTE_FROZEN` 423, `RATE_LIMITED` 429.
 
 Header `Idempotency-Key` wajib untuk `/notes/:id/sign`, `/notes/:id/payments/*`, `/payments/:id/confirm`, dan `/notes/:id/confirm-disbursement`.

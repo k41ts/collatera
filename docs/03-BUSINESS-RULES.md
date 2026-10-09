@@ -16,7 +16,7 @@ stateDiagram-v2
     AWAITING_DISBURSEMENT --> CANCELLED: dibatalkan kreditur
     AWAITING_DISBURSEMENT --> PENDING_SIGNATURE: signature kedaluwarsa (tanda tangan ulang)
     ACTIVE --> OVERDUE: ada cicilan lewat jatuh tempo
-    OVERDUE --> ACTIVE: tunggakan cicilan dibayar
+    OVERDUE --> ACTIVE: tunggakan + late fee dibayar
     ACTIVE --> PAID: lunas
     OVERDUE --> PAID: dilunasi
     ACTIVE --> DISPUTED
@@ -28,6 +28,9 @@ stateDiagram-v2
 ```
 
 **FROZEN** bisa terjadi dari status apa pun saat integrity check menghasilkan TAMPERED. Hanya admin yang bisa membukanya setelah data diperbaiki; piutang kembali ke DISPUTED jika sebelumnya DISPUTED, selain itu status dihitung ulang (ACTIVE/OVERDUE/PAID).
+
+- **Sebelum mint** (DRAFT, PENDING_SIGNATURE, AWAITING_DISBURSEMENT): belum ada token, jadi freeze **hanya di DB** (`status_before_freeze` disimpan, job `mintNote` yang antre dibatalkan). Unfreeze mengembalikan status DB sebelumnya; signature yang sudah lewat `deadline` harus ditandatangani ulang.
+- **Setelah mint**: freeze di DB **dan** on-chain lewat `freeze(tokenId)`; status DB mengikuti event `StatusChanged`.
 
 `AWAITING_DISBURSEMENT` hanya ada di DB (belum ada token). Status sejak ACTIVE mengikuti contract lewat indexer.
 
@@ -48,7 +51,7 @@ stateDiagram-v2
 ## Tanda Tangan & Tokenisasi
 
 - **BR-09** Signature memakai EIP-712 atas canonical payload (semua field + hash dokumen).
-- **BR-10** Signature punya `nonce`, `chainId`, dan `deadline`; signature kedaluwarsa ditolak.
+- **BR-10** Signature punya `nonce` acak (unordered, sekali pakai per signer), `chainId`, dan `deadline`; signature kedaluwarsa atau nonce terpakai ditolak. Banyak piutang dan konfirmasi bayar dari wallet yang sama boleh berjalan paralel.
 - **BR-11** Token di-mint hanya jika dua signature valid, ke wallet kreditur.
 - **BR-12** Hash dokumen yang sudah pernah dipakai ditolak contract (anti double-mint).
 - **BR-13** Token **non-transferable** di versi ini.
@@ -63,9 +66,9 @@ stateDiagram-v2
 
 - **BR-17** Pembayaran on-chain langsung mengurangi sisa utang tanpa input manual.
 - **BR-18** Pembayaran off-chain tercatat hanya setelah kreditur konfirmasi dengan signature EIP-712 (`OffchainPayment`, ber-`nonce` dan `deadline`); kreditur boleh menolak dengan alasan.
-- **BR-19** Pembayaran sebagian diperbolehkan; dialokasikan ke cicilan tertua dulu, sisanya ke late fee.
+- **BR-19** Pembayaran sebagian diperbolehkan; dialokasikan berurutan: (1) tunggakan cicilan yang sudah jatuh tempo, tertua dulu, (2) late fee, (3) cicilan berikutnya yang belum jatuh tempo.
 - **BR-20** Sisa utang = sisa cicilan (pokok + bunga) + late fee berjalan. Pembayaran tidak boleh melebihi sisa utang.
-- **BR-21** Ada cicilan lewat jatuh tempo yang belum lunas → OVERDUE (dicek per cicilan, on-chain); kembali ACTIVE setelah tunggakan dibayar.
+- **BR-21** Ada cicilan lewat jatuh tempo yang belum lunas → OVERDUE (dicek per cicilan, on-chain); kembali ACTIVE setelah tunggakan **dan** late fee dibayar.
 - **BR-21a** Late fee **2% per bulan (30 hari)** dari cicilan yang terlambat, pro-rata harian, tidak majemuk, hanya jika disepakati di perjanjian (`lateFeeBps` 0 atau 200). Tidak bertambah selama DISPUTED atau FROZEN.
 - **BR-22** Sisa utang nol → PAID, token di-burn, bukti lunas berisi txHash dikirim ke kedua pihak.
 

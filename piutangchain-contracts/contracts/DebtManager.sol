@@ -480,7 +480,7 @@ contract DebtManager is IDebtManager, EIP712, AccessControl, ReentrancyGuard, Pa
             principal: r.principal,
             totalOwed: r.totalOwed,
             lateFeeBps: r.lateFeeBps,
-            lateFeeAccrued: r.lateFeeAccrued + _pendingFee(r),
+            lateFeeAccrued: _lateFee(r),
             scheduledPaid: r.scheduledPaid,
             paid: r.paid,
             dueDate: r.dueDate,
@@ -519,8 +519,7 @@ contract DebtManager is IDebtManager, EIP712, AccessControl, ReentrancyGuard, Pa
 
     /// @notice Denda yang belum dibayar, termasuk yang berjalan sampai saat ini.
     function lateFeeOf(bytes32 noteId) external view returns (uint256) {
-        Record storage r = _get(noteId);
-        return r.lateFeeAccrued + _pendingFee(r);
+        return _lateFee(_get(noteId));
     }
 
     /// @notice Simpan denda berjalan ke storage (checkpoint). Opsional: semua fungsi tulis sudah memanggilnya.
@@ -587,9 +586,18 @@ contract DebtManager is IDebtManager, EIP712, AccessControl, ReentrancyGuard, Pa
         }
     }
 
+    /// @dev Setelah fullyPaid (lunas atau diikhlaskan lewat markPaid) tunggakan dan denda dianggap nol,
+    ///      walau storage (`scheduledPaid`, `lateFeeAccrued`) sengaja tidak direset.
     function _arrears(Record storage r) private view returns (uint256) {
+        if (r.fullyPaid) return 0;
         uint256 due = _dueBefore(r, block.timestamp);
         return due > r.scheduledPaid ? due - r.scheduledPaid : 0;
+    }
+
+    /// @dev Denda yang belum dibayar (tersimpan + berjalan); 0 jika sudah fullyPaid.
+    function _lateFee(Record storage r) private view returns (uint256) {
+        if (r.fullyPaid) return 0;
+        return r.lateFeeAccrued + _pendingFee(r);
     }
 
     function _pendingFee(Record storage r) private view returns (uint256 fee) {

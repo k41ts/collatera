@@ -38,6 +38,32 @@
   color-scheme: dark;
 }
 
+html {
+  /* Lompatan ke #anchor tidak tertutup header sticky di layar kecil */
+  scroll-padding-top: 5rem;
+  -webkit-text-size-adjust: 100%;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
+/* iOS Safari memperbesar halaman saat fokus ke input < 16px. */
+@media (max-width: 639px) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
+
+/* Area geser horizontal (filter, tab) tanpa scrollbar. */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
 body {
   background: var(--color-midnight);
   color: #ffffff;

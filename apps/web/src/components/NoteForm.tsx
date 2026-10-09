@@ -96,9 +96,9 @@ export default function NoteForm({ initial, noteId }: { initial?: NoteFormValues
     <form onSubmit={submit} className="flex flex-wrap items-start gap-5">
       <div className="flex min-w-0 flex-[999_1_560px] flex-col gap-5">
         {!noteId && (
-          <fieldset className="flex flex-col gap-4 rounded-[20px] border border-line bg-card p-5">
+          <fieldset className="flex flex-col gap-4 rounded-[20px] border border-line bg-card p-4 sm:p-5">
             <legend className="px-1.5 text-base font-semibold">Peranmu</legend>
-            <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-3">
+            <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,220px),1fr))] gap-3">
               {([["creditor", "Saya kreditur", "Saya meminjamkan uang atau punya tagihan."], ["debtor", "Saya debitur", "Saya mengajukan utang ke pihak lain."]] as const).map(([k, t, b]) => (
                 <button key={k} type="button" aria-pressed={v.role === k} onClick={() => set("role", k)} className={card(v.role === k)}>
                   <span className="font-semibold">{t}</span>
@@ -109,7 +109,7 @@ export default function NoteForm({ initial, noteId }: { initial?: NoteFormValues
           </fieldset>
         )}
 
-        <fieldset className="grid grid-cols-[repeat(auto-fit,minmax(240px,1fr))] gap-4 rounded-[20px] border border-line bg-card p-5">
+        <fieldset className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,240px),1fr))] gap-4 rounded-[20px] border border-line bg-card p-4 sm:p-5">
           <legend className="px-1.5 text-base font-semibold">Isi perjanjian</legend>
           <div className="col-span-full">
             <Field label="Judul" htmlFor="judul">
@@ -146,7 +146,7 @@ export default function NoteForm({ initial, noteId }: { initial?: NoteFormValues
             <span id="label-cicilan" className="text-[13px] text-soft">Jumlah cicilan (bulanan)</span>
             <div role="group" aria-labelledby="label-cicilan" className="flex flex-wrap gap-2">
               {[1, 2, 3, 4, 6, 12].map((n) => (
-                <button key={n} type="button" aria-pressed={v.installmentCount === n} onClick={() => set("installmentCount", n)} className={`min-h-11 min-w-14 rounded-xl border px-4 text-sm ${v.installmentCount === n ? "border-brand bg-brand font-semibold" : "border-line2 bg-midnight text-soft"}`}>
+                <button key={n} type="button" aria-pressed={v.installmentCount === n} onClick={() => set("installmentCount", n)} className={`min-h-11 min-w-14 flex-[1_1_auto] rounded-xl border px-4 text-sm sm:flex-none ${v.installmentCount === n ? "border-brand bg-brand font-semibold" : "border-line2 bg-midnight text-soft"}`}>
                   {n === 1 ? "Sekali lunas" : `${n}x`}
                 </button>
               ))}
@@ -154,7 +154,7 @@ export default function NoteForm({ initial, noteId }: { initial?: NoteFormValues
           </div>
           <label className="col-span-full flex cursor-pointer items-start gap-3 text-sm">
             <input type="checkbox" checked={v.lateFee} onChange={(e) => set("lateFee", e.target.checked)} className="mt-0.5 h-5 w-5 accent-brand" />
-            <span>Berlakukan denda terlambat <strong className="font-semibold">2% per bulan</strong> dari cicilan yang terlambat<br /><span className="text-[13px] text-faint">Dihitung kontrak per detik, tidak berbunga, tetap berjalan saat sengketa (admin bisa menghapusnya), berhenti saat beku.</span></span>
+            <span>Berlakukan denda terlambat <strong className="font-semibold">2% per bulan</strong> dari cicilan yang terlambat<br /><span className="text-[13px] text-faint">Dihitung kontrak per detik, tidak berbunga, berhenti saat sengketa atau beku.</span></span>
           </label>
           <div className="col-span-full">
             <Field label="Catatan jaminan (opsional)" htmlFor="jaminan">
@@ -163,24 +163,24 @@ export default function NoteForm({ initial, noteId }: { initial?: NoteFormValues
           </div>
         </fieldset>
 
-        <fieldset className="flex flex-col gap-4 rounded-[20px] border border-line bg-card p-5">
+        <fieldset className="flex flex-col gap-4 rounded-[20px] border border-line bg-card p-4 sm:p-5">
           <legend className="px-1.5 text-base font-semibold">Dokumen pendukung</legend>
-          <label htmlFor="dokumen" className="relative flex cursor-pointer flex-col items-center gap-1.5 rounded-2xl border-[1.5px] border-dashed border-[#4a3a7a] bg-[#1a1730] p-6 text-center">
+          <label htmlFor="dokumen" className="relative flex cursor-pointer flex-col items-center gap-1.5 rounded-2xl border-[1.5px] border-dashed border-[#4a3a7a] bg-[#1a1730] p-5 text-center sm:p-6">
             <span className="text-sm font-medium">Upload kuitansi, invoice, atau kontrak</span>
             <span className="text-xs text-faint">PDF, JPG, atau PNG · maks 10 MB per file · maks 5 file</span>
             <input id="dokumen" type="file" multiple accept=".pdf,.jpg,.jpeg,.png" className="sr-only" onChange={(e) => setFiles(Array.from(e.target.files ?? []).slice(0, 5))} />
           </label>
           {files.length > 0 && (
             <div className="flex flex-wrap gap-2">
-              {files.map((f) => <span key={f.name} className="rounded-[10px] bg-brand-soft px-3 py-2 text-[13px] text-lav">{f.name} · {Math.ceil(f.size / 1024)} KB</span>)}
+              {files.map((f) => <span key={f.name} className="max-w-full rounded-[10px] bg-brand-soft px-3 py-2 text-[13px] text-lav [overflow-wrap:anywhere]">{f.name} · {Math.ceil(f.size / 1024)} KB</span>)}
             </div>
           )}
           <p className="text-xs text-faint">Hash setiap file ikut dikunci di blockchain. File yang diganti setelah tanda tangan akan terdeteksi.</p>
         </fieldset>
 
-        <fieldset className="flex flex-col gap-4 rounded-[20px] border border-line bg-card p-5">
+        <fieldset className="flex flex-col gap-4 rounded-[20px] border border-line bg-card p-4 sm:p-5">
           <legend className="px-1.5 text-base font-semibold">Pencairan dana</legend>
-          <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-3">
+          <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,220px),1fr))] gap-3">
             {([["onchain", "Escrow stablecoin (IDRX)", "Kreditur setor saat tanda tangan, dana cair otomatis ke debitur saat aktif."], ["offchain", "Transfer sendiri", "Kreditur transfer bank atau tunai, debitur mengonfirmasi terima dana."]] as const).map(([k, t, b]) => (
               <button key={k} type="button" aria-pressed={v.disbursement === k} onClick={() => set("disbursement", k)} className={card(v.disbursement === k)}>
                 <span className="font-semibold">{t}</span>
@@ -190,7 +190,7 @@ export default function NoteForm({ initial, noteId }: { initial?: NoteFormValues
           </div>
         </fieldset>
 
-        <fieldset className="flex flex-col gap-3 rounded-[20px] border border-line bg-card p-5">
+        <fieldset className="flex flex-col gap-3 rounded-[20px] border border-line bg-card p-4 sm:p-5">
           <legend className="px-1.5 text-base font-semibold">Pihak lawan</legend>
           <Field label={`Alamat wallet ${v.role === "creditor" ? "debitur" : "kreditur"}`} htmlFor="wallet" hint="Pihak lawan masuk dengan wallet ini untuk melihat dan menandatangani surat.">
             <input id="wallet" required value={v.counterpartyWallet} onChange={(e) => set("counterpartyWallet", e.target.value)} placeholder="0x…" className={`${input} font-mono text-sm ${v.counterpartyWallet && !walletOk ? "border-rasp" : ""}`} />
@@ -199,12 +199,12 @@ export default function NoteForm({ initial, noteId }: { initial?: NoteFormValues
       </div>
 
       <aside className="flex min-w-0 flex-[1_1_340px] flex-col gap-4 lg:sticky lg:top-6">
-        <section aria-label="Ringkasan draft" className="flex flex-col gap-4 rounded-[22px] bg-brand p-5">
+        <section aria-label="Ringkasan draft" className="flex flex-col gap-4 rounded-[22px] bg-brand p-4 sm:p-5">
           <span className="self-start rounded-md bg-white/20 px-2.5 py-1 text-[11px] font-semibold tracking-wider">{noteId ? "UBAH DRAFT" : "DRAFT BARU"}</span>
           <span className="text-xl font-semibold leading-snug [overflow-wrap:anywhere]">{v.title.trim() || "Tanpa judul"}</span>
           <div className="flex flex-col gap-0.5">
             <span className="text-[13px] text-brand-tint">Total yang harus dibayar debitur</span>
-            <span className="text-[32px] font-semibold tabular-nums">{fmtRpWhole(total)}</span>
+            <span className="text-[28px] font-semibold leading-tight tabular-nums [overflow-wrap:anywhere] sm:text-[32px]">{fmtRpWhole(total)}</span>
           </div>
           <ol className="flex max-h-[320px] flex-col gap-1.5 overflow-y-auto text-[13px]">
             {schedule.map((s) => (

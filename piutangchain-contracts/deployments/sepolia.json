@@ -1,15 +1,15 @@
 {
   "network": "sepolia",
   "chainId": 11155111,
-  "deployedAt": "2026-10-09T08:48:49.416Z",
+  "deployedAt": "2026-10-09T11:19:01.170Z",
   "deployer": "0x66a54d4851a71a63bC99766995fa12D680AF2D76",
   "admin": "0x66a54d4851a71a63bC99766995fa12D680AF2D76",
   "stablecoinDecimals": 2,
   "contracts": {
-    "MockIDRX": "0x337256CD158F514f913532bEf49B371749617866",
-    "PiutangForwarder": "0x6Eaf3843e754a46931AE7Ec73ddCD4b2B861b307",
-    "DebtNote": "0x9EeB8b7dCB032f74A7ddA1646957ccd1fb880a23",
-    "DebtManager": "0x52E34B5DacAb8bCF5876c4c397f42940B5c735aB"
+    "MockIDRX": "0xfc88f4fb1953E9F747c3c20850FA3F09E0d42f61",
+    "PiutangForwarder": "0x1B7Abf58694e200d215d05126EE9A886d93b166f",
+    "DebtNote": "0x4301B5016CeE7103728402b001EE483CD560A290",
+    "DebtManager": "0xB74D5e837539f78D0dAFbd33247034B549560141"
   },
   "constructorArgs": {
     "MockIDRX": [
@@ -20,9 +20,9 @@
     "PiutangForwarder": [],
     "DebtNote": [],
     "DebtManager": [
-      "0x9EeB8b7dCB032f74A7ddA1646957ccd1fb880a23",
-      "0x337256CD158F514f913532bEf49B371749617866",
-      "0x6Eaf3843e754a46931AE7Ec73ddCD4b2B861b307",
+      "0x4301B5016CeE7103728402b001EE483CD560A290",
+      "0xfc88f4fb1953E9F747c3c20850FA3F09E0d42f61",
+      "0x1B7Abf58694e200d215d05126EE9A886d93b166f",
       "0x66a54d4851a71a63bC99766995fa12D680AF2D76"
     ]
   }

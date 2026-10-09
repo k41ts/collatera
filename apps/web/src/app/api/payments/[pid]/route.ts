@@ -33,6 +33,8 @@ export const GET = handler<Ctx>(async (_req, user, { params }) => {
       installmentIndex: p.installment,
       nonce: BigInt(hexlify(randomBytes(32))).toString(),
       deadline: Math.floor(Date.now() / 1000) + 3600,
+      // Bukti menutup seluruh sisa: sisa denda kecil yang bertambah sampai tx masuk blok ikut dihapus kontrak.
+      settleFull: BigInt(p.amount) >= remaining,
     },
     remaining: remaining.toString(),
   });
@@ -43,7 +45,7 @@ const Body = z.discriminatedUnion("action", [
     action: z.literal("confirm"),
     signature: z.string().regex(/^0x[0-9a-fA-F]{130}$/),
     message: z.object({
-      noteId: z.string(), amount: z.string(), proofHash: z.string(), installmentIndex: z.number(), nonce: z.string(), deadline: z.number(),
+      noteId: z.string(), amount: z.string(), proofHash: z.string(), installmentIndex: z.number(), nonce: z.string(), deadline: z.number(), settleFull: z.boolean(),
     }),
   }),
   z.object({ action: z.literal("reject"), reason: z.string().trim().min(5, "Tulis alasan penolakan").max(300) }),

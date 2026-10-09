@@ -31,6 +31,7 @@ type Detail = {
 
 const TYPES: Record<string, string> = { personal: "Pinjaman pribadi", business: "Bisnis", invoice: "Invoice", other: "Lainnya" };
 const LIVE = ["ACTIVE", "OVERDUE", "DISPUTED", "FROZEN"];
+const DISPUTE_WINDOW_MS = 14 * 24 * 3600 * 1000;
 
 export default function NoteDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -43,6 +44,8 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
   const { note: n, me, chain } = data;
   const role = me.role;
   const isLive = LIVE.includes(n.status);
+  const disputedAt = n.events.find((e) => e.action === "DISPUTE")?.createdAt;
+  const disputeExpired = !!disputedAt && Date.now() - new Date(disputedAt).getTime() > DISPUTE_WINDOW_MS;
 
   /** Jalankan aksi dengan status sibuk + pesan hasil. */
   async function run(key: string, fn: () => Promise<{ txHash?: string } | unknown>, okText: string) {
@@ -151,8 +154,15 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
             <Button variant="secondary" disabled={!!busy} onClick={() => {
               const r = ask("Ringkasan keputusan admin:");
               if (!r) return;
-              run("close", () => forwardAction({ noteId: id, wallet: me.wallet, fn: "closeDispute", args: [n.chainNoteId, keccak256(toUtf8Bytes(r))], purpose: "closeDispute" }), "Sengketa ditutup.");
+              const waive = window.confirm("Hapus denda yang menumpuk selama sengketa? OK = hapus denda, Batal = denda tetap terutang.");
+              run("close", () => forwardAction({ noteId: id, wallet: me.wallet, fn: "closeDispute", args: [n.chainNoteId, keccak256(toUtf8Bytes(r)), waive], purpose: "closeDispute", reason: r }), "Sengketa ditutup.");
             }}>Tutup sengketa (admin)</Button>
+          )}
+          {n.status === "DISPUTED" && role && disputeExpired && (
+            <Button variant="secondary" disabled={!!busy} onClick={() => {
+              if (!window.confirm("Sengketa sudah lewat 14 hari tanpa keputusan admin. Tutup sekarang? Denda selama sengketa tetap terutang.")) return;
+              run("expire", () => api(`/api/notes/${id}/action`, { method: "POST", json: { action: "closeExpiredDispute" } }), "Sengketa ditutup.");
+            }}>Tutup sengketa (lewat 14 hari)</Button>
           )}
           {me.isAdmin && n.status === "FROZEN" && (
             <Button variant="secondary" disabled={!!busy} onClick={() => {

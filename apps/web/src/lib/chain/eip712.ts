@@ -38,6 +38,7 @@ export const PAYMENT_TYPES = {
     { name: "installmentIndex", type: "uint32" },
     { name: "nonce", type: "uint256" },
     { name: "deadline", type: "uint64" },
+    { name: "settleFull", type: "bool" },
   ],
 };
 

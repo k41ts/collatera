@@ -16,10 +16,14 @@ async function main() {
   console.log(`Deployer  : ${deployer.address}`);
   console.log(`Admin     : ${admin}`);
 
+  // Berurutan: tunggu tiap deploy ter-mine dulu. RPC publik yang di-load-balance bisa mengembalikan nonce
+  // basi kalau tx berikutnya dikirim sebelum yang sebelumnya masuk blok ("replacement transaction underpriced").
   const idrx = await ethers.deployContract("MockIDRX", [decimals, deployer.address, faucetAmount]);
+  await idrx.waitForDeployment();
   const forwarder = await ethers.deployContract("PiutangForwarder");
+  await forwarder.waitForDeployment();
   const debtNote = await ethers.deployContract("DebtNote");
-  await Promise.all([idrx, forwarder, debtNote].map((c) => c.waitForDeployment()));
+  await debtNote.waitForDeployment();
 
   const manager = await ethers.deployContract("DebtManager", [debtNote.target, idrx.target, forwarder.target, admin]);
   await manager.waitForDeployment();

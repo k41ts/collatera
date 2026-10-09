@@ -89,10 +89,10 @@ async function main() {
   const sigD = await debtor.signTypedData(mDomain, E.NOTE_TYPES, note);
   await send("activateOnchain", manager.connect(relayer).activateOnchain(note, schedule, sigC, sigD));
   const tokenId = BigInt(note.noteId);
-  check("status ACTIVE", (await manager.statusOf(note.noteId)) === 1n);
-  check("DebtNote dimiliki kreditur", (await debtNote.ownerOf(tokenId)) === creditor.address);
-  check("debitur menerima pokok", (await idrx.balanceOf(debtor.address)) === principal * 2n);
-  check("verifyHash cocok", await manager.verifyHash(note.noteId, note.docHash));
+  await check("status ACTIVE", async () => (await manager.statusOf(note.noteId)) === 1n);
+  await check("DebtNote dimiliki kreditur", async () => (await debtNote.ownerOf(tokenId)) === creditor.address);
+  await check("debitur menerima pokok", async () => (await idrx.balanceOf(debtor.address)) === principal * 2n);
+  await check("verifyHash cocok", async () => await manager.verifyHash(note.noteId, note.docHash));
 
   // 5. Debitur bayar lewat forwarder (gasless: permit + ForwardRequest)
   const payViaForwarder = async (label, amount, installmentIndex) => {
@@ -105,23 +105,28 @@ async function main() {
     await send(label, forwarder.connect(relayer).execute(req, sig, { gasLimit: 1_000_000n }));
   };
   await payViaForwarder("cicilan 1 lewat forwarder", IDR(100_000), 1);
-  check("sisa utang Rp100.000", (await manager.remaining(note.noteId)) === IDR(100_000));
+  await check("sisa utang Rp100.000", async () => (await manager.remaining(note.noteId)) === IDR(100_000));
   // `amount` adalah batas maksimal: kirim lebih, contract hanya menarik sisa utang.
   await payViaForwarder("pelunasan lewat forwarder", IDR(150_000), 2);
 
   // 6. Lunas: PAID + burn
-  check("status PAID", (await manager.statusOf(note.noteId)) === 3n);
-  check("sisa utang 0", (await manager.remaining(note.noteId)) === 0n);
-  check("DebtNote di-burn", await debtNote.ownerOf(tokenId).then(() => false, () => true));
-  check("kreditur menerima Rp200.000", (await idrx.balanceOf(creditor.address)) === principal);
-  check("kreditur & debitur tidak pernah punya ETH", (await ethers.provider.getBalance(creditor.address)) === 0n && (await ethers.provider.getBalance(debtor.address)) === 0n);
+  await check("status PAID", async () => (await manager.statusOf(note.noteId)) === 3n);
+  await check("sisa utang 0", async () => (await manager.remaining(note.noteId)) === 0n);
+  await check("DebtNote di-burn", async () => await debtNote.ownerOf(tokenId).then(() => false, () => true));
+  await check("kreditur menerima Rp200.000", async () => (await idrx.balanceOf(creditor.address)) === principal);
+  await check("kreditur & debitur tidak pernah punya ETH", async () => (await ethers.provider.getBalance(creditor.address)) === 0n && (await ethers.provider.getBalance(debtor.address)) === 0n);
 
   console.log(`\nSmoke test LULUS. noteId ${note.noteId}`);
 }
 
-function check(label, ok) {
-  if (!ok) throw new Error(`✘ ${label}`);
-  console.log(`  ✓ ${label}`);
+// RPC publik di-load-balance: pembacaan tepat setelah tx bisa datang dari node yang tertinggal satu-dua blok.
+// Ulangi sebentar sebelum menyatakan gagal.
+async function check(label, fn, tries = 10) {
+  for (let i = 0; i < tries; i++) {
+    if (await fn()) return console.log(`  ✓ ${label}`);
+    await new Promise((r) => setTimeout(r, 2000));
+  }
+  throw new Error(`✘ ${label}`);
 }
 
 main().catch((e) => {

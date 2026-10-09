@@ -1,0 +1,29 @@
+{
+  "network": "sepolia",
+  "chainId": 11155111,
+  "deployedAt": "2026-10-09T08:48:49.416Z",
+  "deployer": "0x66a54d4851a71a63bC99766995fa12D680AF2D76",
+  "admin": "0x66a54d4851a71a63bC99766995fa12D680AF2D76",
+  "stablecoinDecimals": 2,
+  "contracts": {
+    "MockIDRX": "0x337256CD158F514f913532bEf49B371749617866",
+    "PiutangForwarder": "0x6Eaf3843e754a46931AE7Ec73ddCD4b2B861b307",
+    "DebtNote": "0x9EeB8b7dCB032f74A7ddA1646957ccd1fb880a23",
+    "DebtManager": "0x52E34B5DacAb8bCF5876c4c397f42940B5c735aB"
+  },
+  "constructorArgs": {
+    "MockIDRX": [
+      2,
+      "0x66a54d4851a71a63bC99766995fa12D680AF2D76",
+      "1000000000"
+    ],
+    "PiutangForwarder": [],
+    "DebtNote": [],
+    "DebtManager": [
+      "0x9EeB8b7dCB032f74A7ddA1646957ccd1fb880a23",
+      "0x337256CD158F514f913532bEf49B371749617866",
+      "0x6Eaf3843e754a46931AE7Ec73ddCD4b2B861b307",
+      "0x66a54d4851a71a63bC99766995fa12D680AF2D76"
+    ]
+  }
+}

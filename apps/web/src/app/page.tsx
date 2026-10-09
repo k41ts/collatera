@@ -23,7 +23,7 @@ const STEPS = [
 const FEATURES = [
   { tag: "TANDA TANGAN", t: "Aktif hanya setelah dua tanda tangan", b: "Kreditur dan debitur menandatangani isi yang sama persis. Satu dokumen tidak bisa jadi dua piutang.", c: "bg-brand-soft text-lav" },
   { tag: "PEMBAYARAN", t: "Stablecoin atau transfer bank", b: "Bayar on-chain langsung mengurangi sisa utang. Transfer bank tercatat setelah kreditur mengonfirmasi bukti.", c: "bg-[#1e3324] text-mint" },
-  { tag: "DENDA", t: "Denda 2% per bulan, dihitung kontrak", b: "Hanya jika disepakati. Dihitung per hari dari cicilan yang terlambat dan berhenti saat sengketa.", c: "bg-[#3a3017] text-butter" },
+  { tag: "DENDA", t: "Denda 2% per bulan, dihitung kontrak", b: "Hanya jika disepakati. Dihitung per hari dari cicilan yang terlambat. Tetap berjalan saat sengketa, admin bisa menghapusnya.", c: "bg-[#3a3017] text-butter" },
   { tag: "SENGKETA", t: "Ada masalah? Ajukan sengketa", b: "Admin meninjau riwayat, tapi tidak bisa mengubah isi perjanjian. Perubahan hanya lewat revisi berdua.", c: "bg-[#3a1626] text-pink" },
   { tag: "PRIVASI", t: "Data pribadi tidak masuk blockchain", b: "Nama, nomor HP, dan dokumen disimpan di server. Yang dikunci on-chain hanya hash dan nominal.", c: "bg-[#13303a] text-cyan" },
 ];

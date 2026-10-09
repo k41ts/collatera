@@ -60,6 +60,10 @@ export const POST = handler<Ctx>(async (req, user, { params }) => {
       if (!body.reason || body.reason.length < 10) throw new ApiError(422, "REASON_REQUIRED", "Jelaskan alasan sengketa (min. 10 huruf).");
       if (call.args[1] !== keccak256(toUtf8Bytes(body.reason))) throw bad("Alasan tidak cocok dengan yang ditandatangani.");
       break;
+    case "closeDispute":
+      if (!body.reason) throw new ApiError(422, "REASON_REQUIRED", "Tulis ringkasan keputusan.");
+      if (call.args[1] !== keccak256(toUtf8Bytes(body.reason))) throw bad("Ringkasan tidak cocok dengan yang ditandatangani.");
+      break;
     case "markPaid":
     case "refund":
       if (role !== "creditor") throw new ApiError(403, "FORBIDDEN", "Hanya kreditur yang bisa melakukan ini.");
@@ -94,7 +98,8 @@ export const POST = handler<Ctx>(async (req, user, { params }) => {
     await db.note.update({ where: { id: n.id }, data: { escrowTermsJson: null } });
     await systemMessage(n.id, `${name} menarik dana escrow. Tanda tangannya untuk versi itu ikut batal.`);
   } else {
-    await systemMessage(n.id, body.purpose === "closeDispute" ? "Admin menutup sengketa." : "Admin membuka pembekuan piutang.");
+    const closeText = `Admin menutup sengketa: "${body.reason}".` + (call.args[2] ? " Denda selama sengketa dihapus." : " Denda selama sengketa tetap terutang.");
+    await systemMessage(n.id, body.purpose === "closeDispute" ? closeText : "Admin membuka pembekuan piutang.");
   }
   await audit(n.id, user.id, body.purpose.toUpperCase(), body.reason ?? "", rc.hash);
   return ok({ txHash: rc.hash });

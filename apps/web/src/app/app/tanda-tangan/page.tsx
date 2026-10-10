@@ -3,6 +3,7 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { Avatar, StatusPill, fmtDate, input } from "@/components/ui";
 import { fmtRp } from "@/lib/money";
+import { SignGridSkeleton } from "@/components/Skeleton";
 import { needsMySignature, useApi, type NoteSummary } from "@/lib/hooks";
 
 type Tab = "mine" | "waiting" | "done";
@@ -58,7 +59,7 @@ export default function SignListPage() {
       <p className="max-w-[760px] text-sm text-muted">{HINT[tab]}</p>
 
       {loading ? (
-        <p className="text-muted">Memuat…</p>
+        <SignGridSkeleton />
       ) : cards.length === 0 ? (
         <div className="flex flex-col items-center gap-2.5 rounded-[20px] border border-dashed border-line2 px-5 py-10 text-center sm:px-6 sm:py-12">
           <span className="text-lg font-semibold">Tidak ada surat di sini</span>

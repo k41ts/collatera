@@ -4,8 +4,9 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Avatar, Logo } from "./ui";
 import { MenuButton, useDisclosure } from "./MobileMenu";
+import { useToast } from "./Toast";
 import { api } from "@/lib/client";
-import { needsMySignature, useApi, type NoteSummary } from "@/lib/hooks";
+import { hasRevisionAlert, needsMySignature, useApi, type NoteSummary } from "@/lib/hooks";
 
 const I = {
   dash: <path d="M3 3h7v9H3zM14 3h7v5h-7zM14 12h7v9h-7zM3 16h7v5H3z" />,
@@ -21,16 +22,70 @@ const Icon = ({ children, size = 18 }: { children: ReactNode; size?: number }) =
   </svg>
 );
 
+/** Apakah percakapan surat ini sedang tampil di layar halaman Chat (tidak perlu toast). */
+function isChatOpen(noteId: string, notes: NoteSummary[]) {
+  if (window.location.pathname !== "/app/chat") return false;
+  const chosen = new URLSearchParams(window.location.search).get("note");
+  if (chosen) return chosen === noteId;
+  // Tanpa ?note=, layar tablet/desktop otomatis membuka percakapan terbaru; HP menampilkan daftar saja.
+  if (!window.matchMedia("(min-width: 768px)").matches) return false;
+  const latest = notes
+    .filter((n) => n.role)
+    .sort((a, b) => new Date(b.lastMessageAt ?? b.updatedAt).getTime() - new Date(a.lastMessageAt ?? a.updatedAt).getTime())[0];
+  return latest?.id === noteId;
+}
+
 export default function AppShell({ wallet, name, children }: { wallet: string; name: string | null; children: ReactNode }) {
   const path = usePathname();
   const router = useRouter();
-  const { data } = useApi<{ notes: NoteSummary[] }>("/api/notes", 15000);
+  const { data } = useApi<{ notes: NoteSummary[]; me?: string }>("/api/notes", 10000);
   const notes = data?.notes ?? [];
   const toSign = notes.filter(needsMySignature).length;
   const unread = notes.reduce((s, n) => s + n.unread, 0);
+  const revisions = notes.filter(hasRevisionAlert).length;
   const display = name || `${wallet.slice(0, 6)}…${wallet.slice(-4)}`;
   const menu = useDisclosure();
+  const toast = useToast();
   const drawerRef = useRef<HTMLElement>(null);
+  const seenUnread = useRef<Map<string, number> | null>(null);
+  const switching = useRef(false);
+  // Sesi login disimpan di satu cookie untuk seluruh browser. Kalau di tab lain masuk dengan akun berbeda, tab ini
+  // diam-diam ikut memakai akun itu (nama di sidebar masih akun lama, notifikasi jadi salah). Muat ulang agar sinkron.
+  const sessionSwitched = !!data?.me && data.me.toLowerCase() !== wallet.toLowerCase();
+  useEffect(() => {
+    if (!sessionSwitched || switching.current) return;
+    switching.current = true;
+    toast.info("Akun berganti", { description: "Browser ini sekarang masuk dengan akun lain (dari tab lain). Halaman dimuat ulang…" });
+    const t = setTimeout(() => window.location.reload(), 1800);
+    return () => clearTimeout(t);
+  }, [sessionSwitched, toast]);
+
+  // Toast saat ada pesan chat masuk: bandingkan jumlah belum-dibaca tiap surat dengan polling sebelumnya.
+  // Polling pertama hanya jadi patokan (pesan lama tidak dimunculkan), dan percakapan yang sedang terbuka dilewati.
+  useEffect(() => {
+    if (!data || sessionSwitched) return;
+    const prev = seenUnread.current;
+    seenUnread.current = new Map(data.notes.map((n) => [n.id, n.unread]));
+    if (!prev) return;
+    for (const n of data.notes) {
+      const added = n.unread - (prev.get(n.id) ?? 0);
+      if (added <= 0 || n.lastMessageMine || isChatOpen(n.id, data.notes)) continue;
+      const preview = (n.lastMessage ?? "").length > 120 ? `${n.lastMessage!.slice(0, 117)}…` : n.lastMessage ?? "";
+      toast.chat(
+        n.lastMessageFrom ? (added > 1 ? `${added} pesan baru dari ${n.lastMessageFrom}` : `Pesan baru dari ${n.lastMessageFrom}`) : `Kabar baru · ${n.code}`,
+        {
+          description: (
+            <>
+              <span className="line-clamp-2 text-white/90">{preview}</span>
+              <span className="mt-0.5 block truncate text-xs text-faint">{n.code} · {n.title}</span>
+            </>
+          ),
+          link: { href: `/app/chat?note=${n.id}`, label: n.lastMessageFrom ? "Balas →" : "Lihat →" },
+          duration: 6000,
+        },
+      );
+    }
+  }, [data, toast, sessionSwitched]);
   const [lastPath, setLastPath] = useState(path);
 
   // Tutup drawer setiap kali halaman berganti.
@@ -63,7 +118,7 @@ export default function AppShell({ wallet, name, children }: { wallet: string; n
 
   const items: { href: string; label: string; icon: ReactNode; badge?: number; badgeCls?: string; exact?: boolean }[] = [
     { href: "/app", label: "Dashboard", icon: I.dash, exact: true },
-    { href: "/app/piutang", label: "Piutang saya", icon: I.notes },
+    { href: "/app/piutang", label: "Piutang saya", icon: I.notes, badge: revisions, badgeCls: "bg-butter text-butter-ink" },
     { href: "/app/tanda-tangan", label: "Tanda tangan", icon: I.sign, badge: toSign, badgeCls: "bg-rasp text-white" },
     { href: "/app/chat", label: "Chat", icon: I.chat, badge: unread, badgeCls: "bg-brand-soft text-lav" },
     { href: "/app/piutang/baru", label: "Buat surat piutang", icon: I.plus, exact: true },
@@ -73,7 +128,13 @@ export default function AppShell({ wallet, name, children }: { wallet: string; n
   const current = items.find((i) => isActive(i.href, i.exact))?.label ?? (path === "/app/profil" ? "Profil" : "");
 
   async function logout() {
-    await api("/api/auth/logout", { method: "POST" });
+    try {
+      await api("/api/auth/logout", { method: "POST" });
+    } catch (e) {
+      toast.error("Gagal keluar", { description: (e as Error).message });
+      return;
+    }
+    toast.success("Kamu sudah keluar", { description: "Sampai jumpa lagi." });
     router.push("/");
     router.refresh();
   }
@@ -94,7 +155,7 @@ export default function AppShell({ wallet, name, children }: { wallet: string; n
           >
             <Icon size={20}>{I.plus}</Icon>
           </Link>
-          <MenuButton open={menu.open} onClick={menu.toggle} controls="menu-aplikasi" badge={toSign + unread} ref={menu.buttonRef} />
+          <MenuButton open={menu.open} onClick={menu.toggle} controls="menu-aplikasi" badge={toSign + unread + revisions} ref={menu.buttonRef} />
         </div>
       </header>
 

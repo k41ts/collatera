@@ -2,9 +2,10 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { isAddress } from "ethers";
-import { Button, Field, Notice, Spinner, input } from "./ui";
+import { Button, Field, Spinner, input } from "./ui";
 import { api } from "@/lib/client";
 import { fmtRpWhole } from "@/lib/money";
+import { useToast } from "./Toast";
 
 export type NoteFormValues = {
   role: "creditor" | "debtor";
@@ -43,10 +44,10 @@ export function defaultValues(): NoteFormValues {
 
 export default function NoteForm({ initial, noteId }: { initial?: NoteFormValues; noteId?: string }) {
   const router = useRouter();
+  const toast = useToast();
   const [v, setV] = useState<NoteFormValues>(() => initial ?? defaultValues());
   const [files, setFiles] = useState<File[]>([]);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const set = <K extends keyof NoteFormValues>(k: K, val: NoteFormValues[K]) => setV((p) => ({ ...p, [k]: val }));
 
   const principal = BigInt(v.principal.replace(/\D/g, "") || "0");
@@ -66,11 +67,16 @@ export default function NoteForm({ initial, noteId }: { initial?: NoteFormValues
   }, [total, v.installmentCount, v.firstDue]);
 
   const walletOk = isAddress(v.counterpartyWallet.trim());
+  // Saat mengubah draft, wallet pihak lawan sudah terkunci (server juga menolak perubahan).
+  const walletLocked = !!noteId && !!initial?.counterpartyWallet;
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    setError(null);
-    if (!walletOk) return setError("Alamat wallet pihak lawan tidak valid (0x… 42 karakter).");
+    if (!walletOk) {
+      toast.error("Alamat wallet tidak valid", { description: "Isi alamat wallet pihak lawan dengan format 0x… (42 karakter)." });
+      document.getElementById("wallet")?.focus();
+      return;
+    }
     setBusy(true);
     try {
       const body = { ...v, principal: v.principal.replace(/\D/g, ""), interestValue: v.interestType === "flat" ? v.interestValue.replace(/\D/g, "") || "0" : v.interestValue || "0", counterpartyWallet: v.counterpartyWallet.trim() };
@@ -82,22 +88,29 @@ export default function NoteForm({ initial, noteId }: { initial?: NoteFormValues
         fd.append("file", f);
         await api(`/api/notes/${id}/documents`, { method: "POST", body: fd });
       }
+      toast.success(noteId ? "Perubahan draft disimpan" : "Draft berhasil disimpan", {
+        description: files.length
+          ? `${files.length} dokumen ikut diunggah. Cek lagi lalu kirim untuk tanda tangan.`
+          : "Cek lagi isinya, lalu kirim untuk tanda tangan.",
+      });
       router.push(`/app/piutang/${id}`);
       router.refresh();
     } catch (err) {
-      setError((err as Error).message);
+      toast.error(noteId ? "Perubahan draft gagal disimpan" : "Draft gagal disimpan", { description: (err as Error).message });
       setBusy(false);
     }
   }
 
+  // <legend> bawaan browser digambar menumpang di garis border atas kartu; float + w-full menjadikannya judul di dalam kartu.
+  const legend = "float-left col-span-full w-full p-0 text-base font-semibold";
   const card = (on: boolean) => `flex flex-col items-start gap-1.5 rounded-2xl border-[1.5px] p-4 text-left ${on ? "border-brand bg-brand-soft" : "border-line2 bg-midnight"}`;
 
   return (
-    <form onSubmit={submit} className="flex flex-wrap items-start gap-5">
-      <div className="flex min-w-0 flex-[999_1_560px] flex-col gap-5">
+    <form onSubmit={submit} className="flex flex-col gap-5 lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(300px,360px)] lg:items-start xl:grid-cols-[minmax(0,1fr)_380px]">
+      <div className="flex min-w-0 flex-col gap-5">
         {!noteId && (
           <fieldset className="flex flex-col gap-4 rounded-[20px] border border-line bg-card p-4 sm:p-5">
-            <legend className="px-1.5 text-base font-semibold">Peranmu</legend>
+            <legend className={legend}>Peranmu</legend>
             <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,220px),1fr))] gap-3">
               {([["creditor", "Saya kreditur", "Saya meminjamkan uang atau punya tagihan."], ["debtor", "Saya debitur", "Saya mengajukan utang ke pihak lain."]] as const).map(([k, t, b]) => (
                 <button key={k} type="button" aria-pressed={v.role === k} onClick={() => set("role", k)} className={card(v.role === k)}>
@@ -110,7 +123,7 @@ export default function NoteForm({ initial, noteId }: { initial?: NoteFormValues
         )}
 
         <fieldset className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,240px),1fr))] gap-4 rounded-[20px] border border-line bg-card p-4 sm:p-5">
-          <legend className="px-1.5 text-base font-semibold">Isi perjanjian</legend>
+          <legend className={legend}>Isi perjanjian</legend>
           <div className="col-span-full">
             <Field label="Judul" htmlFor="judul">
               <input id="judul" required value={v.title} onChange={(e) => set("title", e.target.value)} placeholder="Mis. Pinjaman renovasi warung" className={input} />
@@ -164,7 +177,7 @@ export default function NoteForm({ initial, noteId }: { initial?: NoteFormValues
         </fieldset>
 
         <fieldset className="flex flex-col gap-4 rounded-[20px] border border-line bg-card p-4 sm:p-5">
-          <legend className="px-1.5 text-base font-semibold">Dokumen pendukung</legend>
+          <legend className={legend}>Dokumen pendukung</legend>
           <label htmlFor="dokumen" className="relative flex cursor-pointer flex-col items-center gap-1.5 rounded-2xl border-[1.5px] border-dashed border-[#4a3a7a] bg-[#1a1730] p-5 text-center sm:p-6">
             <span className="text-sm font-medium">Upload kuitansi, invoice, atau kontrak</span>
             <span className="text-xs text-faint">PDF, JPG, atau PNG · maks 10 MB per file · maks 5 file</span>
@@ -179,7 +192,7 @@ export default function NoteForm({ initial, noteId }: { initial?: NoteFormValues
         </fieldset>
 
         <fieldset className="flex flex-col gap-4 rounded-[20px] border border-line bg-card p-4 sm:p-5">
-          <legend className="px-1.5 text-base font-semibold">Pencairan dana</legend>
+          <legend className={legend}>Pencairan dana</legend>
           <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,220px),1fr))] gap-3">
             {([["onchain", "Escrow stablecoin (IDRX)", "Kreditur setor saat tanda tangan, dana cair otomatis ke debitur saat aktif."], ["offchain", "Transfer sendiri", "Kreditur transfer bank atau tunai, debitur mengonfirmasi terima dana."]] as const).map(([k, t, b]) => (
               <button key={k} type="button" aria-pressed={v.disbursement === k} onClick={() => set("disbursement", k)} className={card(v.disbursement === k)}>
@@ -191,13 +204,33 @@ export default function NoteForm({ initial, noteId }: { initial?: NoteFormValues
         </fieldset>
 
         <fieldset className="flex flex-col gap-3 rounded-[20px] border border-line bg-card p-4 sm:p-5">
-          <legend className="px-1.5 text-base font-semibold">Pihak lawan</legend>
-          <Field label={`Alamat wallet ${v.role === "creditor" ? "debitur" : "kreditur"}`} htmlFor="wallet" hint="Pihak lawan masuk dengan wallet ini untuk melihat dan menandatangani surat.">
-            <input id="wallet" required value={v.counterpartyWallet} onChange={(e) => set("counterpartyWallet", e.target.value)} placeholder="0x…" className={`${input} font-mono text-sm ${v.counterpartyWallet && !walletOk ? "border-rasp" : ""}`} />
+          <legend className={legend}>Pihak lawan</legend>
+          <Field
+            label={`Alamat wallet ${v.role === "creditor" ? "debitur" : "kreditur"}`}
+            htmlFor="wallet"
+            hint={walletLocked ? "Wallet pihak lawan tidak bisa diubah setelah draft dibuat. Kalau alamatnya salah, batalkan draft ini lalu buat surat baru." : "Pihak lawan masuk dengan wallet ini untuk melihat dan menandatangani surat."}
+          >
+            <div className="relative">
+              <input
+                id="wallet"
+                required
+                disabled={walletLocked}
+                value={v.counterpartyWallet}
+                onChange={(e) => set("counterpartyWallet", e.target.value)}
+                placeholder="0x…"
+                className={`${input} font-mono text-sm [overflow-wrap:anywhere] ${walletLocked ? "cursor-not-allowed border-line bg-raised pr-11 text-soft" : ""} ${!walletLocked && v.counterpartyWallet && !walletOk ? "border-rasp" : ""}`}
+              />
+              {walletLocked && (
+                <svg className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 text-faint" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                  <rect x="5" y="11" width="14" height="10" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" />
+                </svg>
+              )}
+            </div>
           </Field>
         </fieldset>
       </div>
 
+      {/* Layar lebar: ringkasan menempel di kanan selama halaman di-scroll; tombol simpan di sini hanya di desktop (≥ 1280px). */}
       <aside className="flex min-w-0 flex-[1_1_340px] flex-col gap-4 lg:sticky lg:top-6">
         <section aria-label="Ringkasan draft" className="flex flex-col gap-4 rounded-[22px] bg-brand p-4 sm:p-5">
           <span className="self-start rounded-md bg-white/20 px-2.5 py-1 text-[11px] font-semibold tracking-wider">{noteId ? "UBAH DRAFT" : "DRAFT BARU"}</span>
@@ -216,12 +249,22 @@ export default function NoteForm({ initial, noteId }: { initial?: NoteFormValues
           </ol>
           <span className="text-xs text-brand-tint">{v.lateFee ? "Denda 2% per bulan dari cicilan yang terlambat." : "Tanpa denda keterlambatan."}</span>
         </section>
-        {error && <Notice tone="error">{error}</Notice>}
-        <Button type="submit" variant="rasp" disabled={busy} className="min-h-[52px] font-semibold">
+        <Button type="submit" variant="rasp" disabled={busy} className="min-h-[52px] flex-none font-semibold max-xl:hidden">
           {busy && <Spinner />} {noteId ? "Simpan perubahan" : "Simpan draft"}
         </Button>
-        <p className="text-xs leading-relaxed text-faint">Draft belum mengikat. Setelah disimpan, cek lagi lalu klik <strong className="text-soft">Kirim untuk tanda tangan</strong>. Piutang baru aktif setelah kedua pihak tanda tangan.</p>
+        <p className="flex-none text-xs leading-relaxed text-faint">Draft belum mengikat. Setelah disimpan, cek lagi lalu klik <strong className="text-soft">Kirim untuk tanda tangan</strong>. Piutang baru aktif setelah kedua pihak tanda tangan.</p>
       </aside>
+
+      {/* HP & tablet (< 1280px): satu-satunya tombol simpan ada di footer yang menempel di bawah layar. */}
+      <div className="sticky bottom-0 z-20 -mx-4 -mb-12 flex items-center gap-3 border-t border-line bg-board/95 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur supports-[backdrop-filter]:bg-board/80 sm:-mx-6 sm:px-6 lg:col-span-full lg:-mx-10 lg:px-10 xl:hidden">
+        <span className="flex min-w-0 flex-1 flex-col">
+          <span className="text-[11px] text-faint">Total dibayar debitur</span>
+          <span className="truncate text-base font-semibold tabular-nums">{fmtRpWhole(total)}</span>
+        </span>
+        <Button type="submit" variant="rasp" disabled={busy} className="min-h-12 flex-none px-6 font-semibold">
+          {busy && <Spinner />} {noteId ? "Simpan perubahan" : "Simpan draft"}
+        </Button>
+      </div>
     </form>
   );
 }

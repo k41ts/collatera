@@ -3,6 +3,7 @@
 import { BrowserProvider, Contract, Interface, type Eip1193Provider, type TypedDataField } from "ethers";
 import { ABI, ADDR, CHAIN_ID } from "./chain/config";
 import { FORWARD_TYPES, PERMIT_TYPES, forwarderDomain, splitSig, tokenDomain } from "./chain/eip712";
+import { feeFor } from "./appFee";
 
 declare global {
   interface Window {
@@ -23,11 +24,49 @@ export async function api<T = unknown>(path: string, init?: RequestInit & { json
 
 export const hasWallet = () => typeof window !== "undefined" && !!window.ethereum;
 
+/** HP/tablet (Android, iPhone, iPad termasuk iPadOS yang mengaku "Macintosh"). */
+export function isMobileDevice() {
+  if (typeof navigator === "undefined") return false;
+  return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
+}
+
+/**
+ * Tunggu provider wallet tersedia. Ekstensi desktop menyuntik `window.ethereum` sebelum halaman jalan, tapi browser
+ * di dalam aplikasi MetaMask (HP) kadang baru menyuntiknya sesaat kemudian dan memberi sinyal `ethereum#initialized`.
+ */
+export function waitForWallet(timeoutMs = 1500): Promise<boolean> {
+  if (typeof window === "undefined") return Promise.resolve(false);
+  if (window.ethereum) return Promise.resolve(true);
+  return new Promise((resolve) => {
+    const done = () => {
+      window.removeEventListener("ethereum#initialized", done);
+      clearTimeout(t);
+      resolve(!!window.ethereum);
+    };
+    const t = setTimeout(done, timeoutMs);
+    window.addEventListener("ethereum#initialized", done, { once: true });
+  });
+}
+
+/**
+ * Tautan resmi MetaMask untuk membuka halaman ini di browser dalam aplikasi MetaMask (HP). Di sana wallet tersedia
+ * seperti ekstensi, jadi login & tanda tangan memakai alur yang sama persis dengan desktop.
+ */
+export function metamaskDeepLink(path = typeof window !== "undefined" ? window.location.pathname + window.location.search : "/") {
+  const host = typeof window !== "undefined" ? window.location.host : "";
+  return `https://metamask.app.link/dapp/${host}${path}`;
+}
+
+const NO_WALLET = () =>
+  isMobileDevice()
+    ? "Wallet tidak ditemukan. Buka PiutangChain dari browser di dalam aplikasi MetaMask."
+    : "MetaMask tidak ditemukan. Pasang ekstensi MetaMask dulu.";
+
 const SEPOLIA_HEX = "0x" + CHAIN_ID.toString(16);
 
 export async function ensureNetwork() {
   const eth = window.ethereum;
-  if (!eth) throw new Error("MetaMask tidak ditemukan. Pasang ekstensi MetaMask dulu.");
+  if (!eth) throw new Error(NO_WALLET());
   const current = (await eth.request({ method: "eth_chainId" })) as string;
   if (current?.toLowerCase() === SEPOLIA_HEX) return;
   try {
@@ -60,7 +99,7 @@ export async function getSigner(expected?: string) {
 /** Sign-In with Ethereum (EIP-4361). */
 export async function loginWithWallet() {
   const eth = window.ethereum;
-  if (!eth) throw new Error("MetaMask tidak ditemukan. Pasang ekstensi MetaMask dulu.");
+  if (!eth) throw new Error(NO_WALLET());
   await eth.request({ method: "eth_requestAccounts" });
   const { signer } = await getSigner();
   const address = await signer.getAddress();
@@ -98,6 +137,7 @@ export async function forwardAction(opts: {
   args: unknown[];
   purpose: string;
   reason?: string;
+  fee?: { value: string; deadline: number; signature: string };
 }) {
   const { provider, signer } = await getSigner(opts.wallet);
   const forwarder = new Contract(ADDR.PiutangForwarder, ABI.PiutangForwarder, provider);
@@ -113,27 +153,48 @@ export async function forwardAction(opts: {
   const signature = await signer.signTypedData(forwarderDomain, FORWARD_TYPES, request);
   return api<{ txHash: string }>(`/api/notes/${opts.noteId}/forward`, {
     method: "POST",
-    json: { purpose: opts.purpose, reason: opts.reason, request, signature },
+    json: { purpose: opts.purpose, reason: opts.reason, request, signature, fee: opts.fee },
   });
 }
 
-/** Bayar on-chain: tanda tangani permit IDRX lalu ForwardRequest payOnchain (dua tanda tangan, tanpa gas). */
-export async function payOnchain(opts: { noteId: string; chainNoteId: string; wallet: string; amount: string; installment: number }) {
+/**
+ * Bayar on-chain: tanda tangani permit IDRX lalu ForwardRequest payOnchain (tanpa gas).
+ * Jika pajak aplikasi aktif, debitur juga menandatangani permit kedua (nonce berikutnya) agar relayer bisa menarik
+ * pajak ke wallet pajak setelah pembayaran berhasil.
+ */
+export async function payOnchain(opts: {
+  noteId: string;
+  chainNoteId: string;
+  wallet: string;
+  amount: string;
+  installment: number;
+  appFee?: { bps: number; spender: string } | null;
+}) {
   const { provider, signer } = await getSigner(opts.wallet);
   const idrx = new Contract(ADDR.MockIDRX, ABI.MockIDRX, provider);
   const [nonce, balance] = await Promise.all([idrx.nonces(opts.wallet), idrx.balanceOf(opts.wallet)]);
-  if (balance < BigInt(opts.amount)) throw new Error("Saldo IDRX kamu kurang. Ambil dari faucet di halaman Profil.");
+  const fee = opts.appFee ? feeFor(BigInt(opts.amount), opts.appFee.bps) : BigInt(0);
+  if (balance < BigInt(opts.amount) + fee)
+    throw new Error(fee > BigInt(0) ? "Saldo IDRX kamu kurang untuk pembayaran + pajak aplikasi. Ambil dari faucet di halaman Profil." : "Saldo IDRX kamu kurang. Ambil dari faucet di halaman Profil.");
   const deadline = Math.floor(Date.now() / 1000) + 3600;
   const permitSig = await signer.signTypedData(tokenDomain, PERMIT_TYPES, {
     owner: opts.wallet, spender: ADDR.DebtManager, value: opts.amount, nonce, deadline,
   });
   const permit = { deadline, ...splitSig(permitSig) };
+  let feePermit: { value: string; deadline: number; signature: string } | undefined;
+  if (opts.appFee && fee > BigInt(0)) {
+    const signature = await signer.signTypedData(tokenDomain, PERMIT_TYPES, {
+      owner: opts.wallet, spender: opts.appFee.spender, value: fee.toString(), nonce: BigInt(nonce) + BigInt(1), deadline,
+    });
+    feePermit = { value: fee.toString(), deadline, signature };
+  }
   return forwardAction({
     noteId: opts.noteId,
     wallet: opts.wallet,
     fn: "payOnchain",
     args: [opts.chainNoteId, opts.amount, opts.installment, permit],
     purpose: "pay",
+    fee: feePermit,
   });
 }
 

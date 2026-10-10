@@ -26,6 +26,8 @@ export type NoteSummary = {
   revisionNote: string | null;
   lastMessage: string | null;
   lastMessageAt: string | null;
+  lastMessageFrom: string | null;
+  lastMessageMine: boolean;
   unread: number;
   updatedAt: string;
 };

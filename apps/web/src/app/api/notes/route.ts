@@ -15,7 +15,7 @@ export const GET = handler(async (_req, user) => {
       installments: { orderBy: { seq: "asc" } },
       payments: { where: { status: "CONFIRMED" }, select: { amount: true } },
       signatures: true,
-      messages: { orderBy: { createdAt: "desc" }, take: 1 },
+      messages: { orderBy: { createdAt: "desc" }, take: 1, include: { sender: true } },
     },
     orderBy: { updatedAt: "desc" },
   });
@@ -70,11 +70,15 @@ export const GET = handler(async (_req, user) => {
         documents: 0,
         lastMessage: n.messages[0]?.body ?? null,
         lastMessageAt: n.messages[0]?.createdAt ?? null,
+        // null = pesan sistem (kejadian di surat), selain itu nama pengirim.
+        lastMessageFrom: n.messages[0]?.sender ? displayName(n.messages[0].sender) : null,
+        lastMessageMine: n.messages[0]?.senderId === user.id,
         unread,
         updatedAt: n.updatedAt,
       };
   });
-  return ok({ notes: items });
+  // `me`: wallet pemilik sesi, dipakai klien untuk mendeteksi sesi yang berganti akun di tab lain.
+  return ok({ notes: items, me: user.wallet });
 });
 
 export const POST = handler(async (req, user) => {

@@ -131,7 +131,7 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
       <nav aria-label="Breadcrumb" className="flex gap-2 text-[13px] text-faint">
         <Link href="/app/piutang" className="text-soft no-underline">Piutang saya</Link>
         <span aria-hidden>/</span>
-        <span>{n.code}</span>
+        <span className="min-w-0 truncate">{n.code}</span>
       </nav>
 
       <header className="flex flex-wrap items-start justify-between gap-4 sm:gap-5">
@@ -144,7 +144,7 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
             <span className="rounded-md bg-raised px-2.5 py-1 text-[11px] font-medium text-soft">{TYPES[n.debtType]} · versi {n.version}</span>
           </div>
           <h1 className="text-[26px] font-extrabold leading-tight tracking-[-0.035em] [overflow-wrap:anywhere] sm:text-[34px]">{n.title}</h1>
-          <span className="text-sm leading-relaxed text-muted">
+          <span className="text-sm leading-relaxed text-muted [overflow-wrap:anywhere]">
             Kamu <strong className="font-semibold text-ink">{role === "creditor" ? "kreditur" : role === "debtor" ? "debitur" : "pengamat"}</strong>
             {data.other ? ` · ${data.other.name} ${role === "creditor" ? "debitur" : "kreditur"}` : n.counterpartyWallet ? ` · menunggu ${short(n.counterpartyWallet)} bergabung` : ""}
             {n.activatedAt ? ` · aktif sejak ${fmtDate(n.activatedAt)}` : ` · dibuat ${fmtDate(n.createdAt)}`}
@@ -331,7 +331,7 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
       {(n.status === "REJECTED" || n.status === "CANCELLED") && (
         <Card className="flex flex-col gap-2">
           <h2 className="text-lg font-bold">{n.status === "REJECTED" ? "Surat ditolak" : "Surat dibatalkan"}</h2>
-          {n.rejectReason && <p className="text-sm text-muted">Alasan: “{n.rejectReason}”</p>}
+          {n.rejectReason && <p className="text-sm text-muted [overflow-wrap:anywhere]">Alasan: “{n.rejectReason}”</p>}
         </Card>
       )}
 
@@ -365,7 +365,7 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
               {chain && BigInt(chain.lateFee) > BigInt(0) && <Stat k="Bunga belum dibayar" v={fmtRp(chain.lateFee)} />}
               {chain && BigInt(chain.overdue) > BigInt(0) && <Stat k="Tunggakan" v={fmtRp(chain.overdue)} />}
             </dl>
-            {n.collateralNote && <p className="text-[13px] text-brand-tint">Jaminan: {n.collateralNote}</p>}
+            {n.collateralNote && <p className="text-[13px] text-brand-tint [overflow-wrap:anywhere]">Jaminan: {n.collateralNote}</p>}
           </section>
 
           <Card className="flex flex-col gap-3.5">
@@ -425,7 +425,7 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
               )}
               {pending.map((p) => (
                 <div key={p.id} className="flex flex-wrap items-center gap-4 rounded-2xl border border-dashed border-butter p-3.5 sm:p-4">
-                  <a href={`/api/files/proof/${p.id}`} target="_blank" rel="noreferrer" className="flex h-[96px] w-[80px] items-center justify-center rounded-[10px] bg-line p-2 text-center text-[11px] text-faint underline">{p.proofName ?? "bukti"}</a>
+                  <a href={`/api/files/proof/${p.id}`} target="_blank" rel="noreferrer" className="flex h-[96px] w-[80px] items-center justify-center rounded-[10px] bg-line p-2 text-center text-[11px] text-faint underline [overflow-wrap:anywhere]">{p.proofName ?? "bukti"}</a>
                   <div className="flex min-w-0 flex-[1_1_240px] flex-col gap-1.5">
                     <span className="self-start rounded-md bg-butter px-2 py-1 text-[11px] font-semibold text-butter-ink">{role === "creditor" ? "MENUNGGU KONFIRMASIMU" : "MENUNGGU KREDITUR"}</span>
                     <span className="font-medium">Transfer {fmtRp(p.amount)}{p.installment ? ` untuk cicilan ${p.installment}` : ""}</span>
@@ -484,7 +484,7 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
                   <Avatar name={party?.name ?? "?"} seed={w ?? ""} />
                   <div className="flex min-w-0 flex-col">
                     <span className="truncate text-sm font-medium">{party?.name ?? "Belum bergabung"}{w && w.toLowerCase() === me.wallet.toLowerCase() ? " (kamu)" : ""}</span>
-                    <span className="text-xs text-faint">{label as string} · {short(w)}</span>
+                    <span className="truncate text-xs text-faint">{label as string} · {short(w)}</span>
                   </div>
                 </div>
               );
@@ -542,8 +542,9 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
               {n.events.map((e, i) => (
                 <li key={i} className="flex gap-2.5">
                   <span aria-hidden className="mt-1.5 h-2.5 w-2.5 flex-none rounded-full bg-lav" />
-                  <div className="flex flex-col gap-0.5">
-                    <span>{EVENT[e.action] ?? e.action}{e.detail ? ` · ${e.detail}` : ""}</span>
+                  <div className="flex min-w-0 flex-col gap-0.5">
+                    {/* Alamat wallet di catatan riwayat dipendekkan; teks panjang lain dipatahkan supaya tidak meluber. */}
+                    <span className="[overflow-wrap:anywhere]">{EVENT[e.action] ?? e.action}{e.detail ? ` · ${e.detail.replace(/0x[0-9a-fA-F]{40}/g, (a) => short(a))}` : ""}</span>
                     <span className="text-xs text-faint">
                       {fmtDate(e.createdAt, true)}
                       {e.txHash && <> · <a href={txUrl(e.txHash) ?? "#"} target="_blank" rel="noreferrer" className="text-lav">tx ↗</a></>}

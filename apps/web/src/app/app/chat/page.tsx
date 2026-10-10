@@ -137,8 +137,8 @@ function ChatInner() {
                     </li>
                   ) : m.kind === "event" ? (
                     <li key={m.id} className="flex justify-center">
-                      <div className="flex flex-wrap items-center justify-center gap-2 rounded-full border border-line bg-midnight px-3.5 py-1.5 text-center text-xs text-soft">
-                        <span>{m.body}</span><span className="text-faint">· {time(m.createdAt)}</span>
+                      <div className="flex max-w-full flex-wrap items-center justify-center gap-2 rounded-[15px] border border-line bg-midnight px-3.5 py-1.5 text-center text-xs text-soft">
+                        <span className="min-w-0 [overflow-wrap:anywhere]">{m.body}</span><span className="text-faint">· {time(m.createdAt)}</span>
                         {m.link && <Link href={m.link} className="font-medium text-lav">Lihat</Link>}
                       </div>
                     </li>

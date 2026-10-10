@@ -76,7 +76,12 @@ export default function AppShell({ wallet, name, children }: { wallet: string; n
   const current = items.find((i) => isActive(i.href, i.exact))?.label ?? (path === "/app/profil" ? "Profil" : "");
 
   async function logout() {
-    await api("/api/auth/logout", { method: "POST" });
+    try {
+      await api("/api/auth/logout", { method: "POST" });
+    } catch (e) {
+      toast.error("Gagal keluar", { description: (e as Error).message });
+      return;
+    }
     toast.success("Kamu sudah keluar", { description: "Sampai jumpa lagi." });
     router.push("/");
     router.refresh();

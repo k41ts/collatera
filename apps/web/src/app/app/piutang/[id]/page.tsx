@@ -65,8 +65,14 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
       return null;
     } catch (e) {
       const err = e as { code?: string | number; message: string };
-      const text = err.code === 4001 || err.code === "ACTION_REJECTED" ? "Dibatalkan di MetaMask." : err.message;
-      setMsg({ tone: "error", text });
+      const cancelled = err.code === 4001 || err.code === "ACTION_REJECTED";
+      const text = cancelled ? "Dibatalkan di MetaMask." : err.message;
+      setMsg(null);
+      // Aksi dari modal: error ditampilkan di dalam modal (modal menutupi toast), jadi toast tidak perlu.
+      if (!document.querySelector("dialog[open]")) {
+        if (cancelled) toast.info("Dibatalkan di MetaMask", { description: "Tidak ada yang diubah." });
+        else toast.error("Gagal memproses", { description: text });
+      }
       return text;
     } finally {
       setBusy(null);

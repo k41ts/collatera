@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { Avatar, Button, Card, Field, Notice, Spinner, fmtDate, input } from "@/components/ui";
+import { Avatar, Button, Card, Field, Spinner, fmtDate, input } from "@/components/ui";
 import { api } from "@/lib/client";
 import { useApi, type Me } from "@/lib/hooks";
 import { fmtRp } from "@/lib/money";
@@ -16,7 +16,6 @@ export default function ProfilePage() {
   const [code, setCode] = useState("");
   const [otpSent, setOtpSent] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
-  const [msg, setMsg] = useState<{ tone: "ok" | "error" | "info"; text: string; tx?: string } | null>(null);
   const toast = useToast();
 
   useEffect(() => {
@@ -31,7 +30,6 @@ export default function ProfilePage() {
 
   async function run(key: string, fn: () => Promise<unknown>, ok: string, tx?: (r: unknown) => string | undefined) {
     setBusy(key);
-    setMsg(null);
     try {
       const r = await fn();
       const hash = tx?.(r);
@@ -39,7 +37,7 @@ export default function ProfilePage() {
       toast.success(ok, link ? { link: { href: link, label: "Lihat transaksi ↗", external: true } } : undefined);
       await refresh();
     } catch (e) {
-      setMsg({ tone: "error", text: (e as Error).message });
+      toast.error("Gagal menyimpan", { description: (e as Error).message });
     } finally {
       setBusy(null);
     }
@@ -74,7 +72,6 @@ export default function ProfilePage() {
         </dl>
       </section>
 
-      {msg && <Notice tone={msg.tone}>{msg.text} {msg.tx && txUrl(msg.tx) && <a href={txUrl(msg.tx)!} target="_blank" rel="noreferrer" className="underline">Lihat transaksi ↗</a>}</Notice>}
 
       <div className="flex flex-wrap items-start gap-5">
         <div className="flex min-w-0 flex-[999_1_480px] flex-col gap-5">

@@ -23,11 +23,49 @@ export async function api<T = unknown>(path: string, init?: RequestInit & { json
 
 export const hasWallet = () => typeof window !== "undefined" && !!window.ethereum;
 
+/** HP/tablet (Android, iPhone, iPad termasuk iPadOS yang mengaku "Macintosh"). */
+export function isMobileDevice() {
+  if (typeof navigator === "undefined") return false;
+  return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
+}
+
+/**
+ * Tunggu provider wallet tersedia. Ekstensi desktop menyuntik `window.ethereum` sebelum halaman jalan, tapi browser
+ * di dalam aplikasi MetaMask (HP) kadang baru menyuntiknya sesaat kemudian dan memberi sinyal `ethereum#initialized`.
+ */
+export function waitForWallet(timeoutMs = 1500): Promise<boolean> {
+  if (typeof window === "undefined") return Promise.resolve(false);
+  if (window.ethereum) return Promise.resolve(true);
+  return new Promise((resolve) => {
+    const done = () => {
+      window.removeEventListener("ethereum#initialized", done);
+      clearTimeout(t);
+      resolve(!!window.ethereum);
+    };
+    const t = setTimeout(done, timeoutMs);
+    window.addEventListener("ethereum#initialized", done, { once: true });
+  });
+}
+
+/**
+ * Tautan resmi MetaMask untuk membuka halaman ini di browser dalam aplikasi MetaMask (HP). Di sana wallet tersedia
+ * seperti ekstensi, jadi login & tanda tangan memakai alur yang sama persis dengan desktop.
+ */
+export function metamaskDeepLink(path = typeof window !== "undefined" ? window.location.pathname + window.location.search : "/") {
+  const host = typeof window !== "undefined" ? window.location.host : "";
+  return `https://metamask.app.link/dapp/${host}${path}`;
+}
+
+const NO_WALLET = () =>
+  isMobileDevice()
+    ? "Wallet tidak ditemukan. Buka PiutangChain dari browser di dalam aplikasi MetaMask."
+    : "MetaMask tidak ditemukan. Pasang ekstensi MetaMask dulu.";
+
 const SEPOLIA_HEX = "0x" + CHAIN_ID.toString(16);
 
 export async function ensureNetwork() {
   const eth = window.ethereum;
-  if (!eth) throw new Error("MetaMask tidak ditemukan. Pasang ekstensi MetaMask dulu.");
+  if (!eth) throw new Error(NO_WALLET());
   const current = (await eth.request({ method: "eth_chainId" })) as string;
   if (current?.toLowerCase() === SEPOLIA_HEX) return;
   try {
@@ -60,7 +98,7 @@ export async function getSigner(expected?: string) {
 /** Sign-In with Ethereum (EIP-4361). */
 export async function loginWithWallet() {
   const eth = window.ethereum;
-  if (!eth) throw new Error("MetaMask tidak ditemukan. Pasang ekstensi MetaMask dulu.");
+  if (!eth) throw new Error(NO_WALLET());
   await eth.request({ method: "eth_requestAccounts" });
   const { signer } = await getSigner();
   const address = await signer.getAddress();

@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Avatar, StatusPill, input } from "@/components/ui";
 import { api } from "@/lib/client";
@@ -34,11 +34,15 @@ function ChatInner() {
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const endRef = useRef<HTMLLIElement>(null);
+  const listRef = useRef<HTMLOListElement>(null);
 
-  useEffect(() => {
-    endRef.current?.scrollIntoView({ block: "end" });
-  }, [thread?.messages.length]);
+  // Scroll kotak pesan (bukan halaman) ke pesan terbaru saat dibuka, pindah percakapan, atau ada pesan baru.
+  // Ikut bergantung pada `active` karena kotak pesan baru muncul setelah daftar percakapan selesai dimuat.
+  const activeKey = active?.id;
+  useLayoutEffect(() => {
+    const ol = listRef.current;
+    if (ol) ol.scrollTop = ol.scrollHeight;
+  }, [thread?.messages.length, activeKey]);
   useEffect(() => { refreshList(); }, [thread?.messages.length, refreshList]);
 
   async function send(text: string) {
@@ -64,21 +68,25 @@ function ChatInner() {
       : ["Sudah saya cek, terima kasih", "Saya cek mutasi dulu ya", "Kapan bisa dibayar?"];
 
   return (
-    <div className="flex flex-col gap-4 sm:gap-5">
-      <div className={`flex flex-col gap-1.5 ${chosen ? "max-lg:hidden" : ""}`}>
+    // Tinggi halaman chat dikunci pas satu layar (dikurangi top bar HP/tablet & padding <main>); padding bawah <main>
+    // dinetralkan dengan -mb-12. Yang bisa di-scroll hanya daftar percakapan dan isi chat, bukan halamannya.
+    <div className="-mb-12 flex h-[calc(100dvh-100px)] min-h-[420px] flex-col gap-4 sm:h-[calc(100dvh-108px)] sm:gap-5 lg:h-[calc(100dvh-56px)] lg:min-h-[480px]">
+      <div className={`flex flex-none flex-col gap-1.5 ${chosen ? "max-md:hidden" : ""}`}>
         <span className="text-[13px] text-faint">Satu percakapan untuk setiap surat piutang</span>
         <h1 className="text-[26px] font-semibold tracking-tight sm:text-[32px]">Chat</h1>
       </div>
 
-      <div className="flex flex-wrap items-stretch gap-4">
-        <section aria-label="Daftar percakapan" className={`min-w-0 flex-[1_1_300px] flex-col gap-2.5 rounded-[20px] border border-line bg-card p-2.5 sm:p-3.5 lg:flex lg:max-w-[360px] ${chosen ? "hidden" : "flex"}`}>
+      {/* HP: satu panel (daftar ATAU percakapan). Tablet & desktop: dua kolom tetap, tidak pernah turun ke bawah. */}
+      <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 md:grid-cols-[minmax(240px,280px)_minmax(0,1fr)] xl:grid-cols-[320px_minmax(0,1fr)] 2xl:grid-cols-[360px_minmax(0,1fr)]">
+        <section aria-label="Daftar percakapan" className={`min-h-0 min-w-0 flex-col gap-2.5 rounded-[20px] border border-line bg-card p-2.5 sm:p-3.5 md:flex ${chosen ? "hidden" : "flex"}`}>
           <label htmlFor="cari-chat" className="sr-only">Cari percakapan</label>
           <input id="cari-chat" type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Cari nama atau piutang" className={`${input} text-[13px]`} />
+          <div className="-mx-1 flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto overscroll-contain px-1">
           {!list ? <ChatListSkeleton /> : convos.length === 0 && <p className="p-3 text-sm text-muted">Belum ada percakapan. Chat muncul untuk setiap surat piutang kamu.</p>}
           {convos.map((c) => {
             const on = c.id === activeId;
             return (
-              <button key={c.id} type="button" aria-pressed={on && !!chosen} onClick={() => router.push(`/app/chat?note=${c.id}`)} className={`flex w-full items-start gap-3 rounded-[14px] border p-3 text-left ${on ? "lg:border-brand lg:bg-brand-soft" : ""} border-transparent hover:bg-raised`}>
+              <button key={c.id} type="button" aria-pressed={on && !!chosen} onClick={() => router.push(`/app/chat?note=${c.id}`)} className={`flex w-full flex-none items-start gap-3 rounded-[14px] border p-3 text-left ${on ? "md:border-brand md:bg-brand-soft" : ""} border-transparent hover:bg-raised`}>
                 <Avatar name={c.party} />
                 <span className="flex min-w-0 flex-1 flex-col gap-0.5">
                   <span className="flex justify-between gap-2"><span className="truncate text-sm font-semibold">{c.party}</span><span className="flex-none text-[11px] text-faint">{c.lastMessageAt ? time(c.lastMessageAt) : ""}</span></span>
@@ -89,9 +97,10 @@ function ChatInner() {
               </button>
             );
           })}
+          </div>
         </section>
 
-        <section aria-label="Percakapan" className={`min-w-0 flex-[999_1_480px] flex-col overflow-hidden rounded-[20px] border border-line bg-card max-lg:h-[calc(100dvh-8.5rem)] max-lg:min-h-[420px] lg:flex lg:min-h-[560px] ${chosen ? "flex" : "hidden"}`}>
+        <section aria-label="Percakapan" className={`min-h-0 min-w-0 flex-col overflow-hidden rounded-[20px] border border-line bg-card md:flex ${chosen ? "flex" : "hidden"}`}>
           {!list ? (
             <>
               <ChatHeaderSkeleton />
@@ -101,8 +110,8 @@ function ChatInner() {
             <p className="m-auto p-6 text-sm text-muted">Pilih percakapan di kiri.</p>
           ) : (
             <>
-              <header className="flex items-center gap-2.5 border-b border-line px-3 py-3 sm:gap-3 sm:px-4.5 sm:py-4">
-                <button type="button" onClick={() => router.push("/app/chat")} aria-label="Kembali ke daftar percakapan" className="-ml-1 flex h-10 w-10 flex-none items-center justify-center rounded-xl text-soft hover:bg-raised hover:text-white lg:hidden">
+              <header className="flex flex-none items-center gap-2.5 border-b border-line px-3 py-3 sm:gap-3 sm:px-4.5 sm:py-4">
+                <button type="button" onClick={() => router.push("/app/chat")} aria-label="Kembali ke daftar percakapan" className="-ml-1 flex h-10 w-10 flex-none items-center justify-center rounded-xl text-soft hover:bg-raised hover:text-white md:hidden">
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M15 18l-6-6 6-6" /></svg>
                 </button>
                 <Avatar name={active.party} />
@@ -116,10 +125,10 @@ function ChatInner() {
                   <span className="max-sm:hidden">Lihat detail piutang</span>
                 </Link>
               </header>
-              <div className="mx-3 mt-3 rounded-xl bg-raised px-3 py-2 text-[11px] leading-relaxed text-muted sm:mx-4 sm:mt-3.5 sm:py-2.5 sm:text-xs">
+              <div className="mx-3 mt-3 flex-none rounded-xl bg-raised px-3 py-2 text-[11px] leading-relaxed text-muted sm:mx-4 sm:mt-3.5 sm:py-2.5 sm:text-xs">
                 Chat tersimpan di server PiutangChain, bukan di blockchain, dan <strong className="font-semibold text-white">tidak mengubah isi perjanjian</strong>. Perubahan nominal atau jadwal tetap lewat revisi yang ditandatangani berdua.
               </div>
-              <ol aria-label="Pesan" aria-live="polite" className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto overscroll-contain px-3 py-4 sm:px-4 lg:max-h-[60vh] lg:min-h-[320px]">
+              <ol ref={listRef} aria-label="Pesan" aria-live="polite" className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto overscroll-contain px-3 py-4 sm:px-4">
                 {!thread && <li className="flex flex-1 flex-col"><ChatThreadSkeleton inset={false} /></li>}
                 {(thread?.messages ?? []).map((m) =>
                   m.kind === "event" && revisionKind(m.body) ? (
@@ -142,9 +151,8 @@ function ChatInner() {
                     </li>
                   ),
                 )}
-                <li ref={endRef} aria-hidden />
               </ol>
-              <div className="flex flex-col gap-2.5 border-t border-line px-3 pb-3 pt-3 sm:px-4 sm:pb-4">
+              <div className="flex flex-none flex-col gap-2.5 border-t border-line px-3 pb-3 pt-3 sm:px-4 sm:pb-4">
                 <div className="-mx-3 flex gap-2 overflow-x-auto px-3 no-scrollbar [scrollbar-width:none] sm:mx-0 sm:flex-wrap sm:px-0">
                   {quick.map((t) => (
                     <button key={t} type="button" disabled={sending} onClick={() => send(t)} className="min-h-9 flex-none whitespace-nowrap rounded-full border border-line2 px-3 text-xs text-lav">{t}</button>

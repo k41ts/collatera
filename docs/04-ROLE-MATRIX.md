@@ -63,4 +63,4 @@ Peran ditentukan **per surat piutang**. Satu akun bisa jadi kreditur di satu piu
 | `ADMIN_ROLE` | Wallet admin platform | `closeDispute` (opsi `waiveFee`), `freeze`, `unfreeze`, `pause`, `unpause` |
 | `FREEZER_ROLE` | Wallet integrity checker | Hanya `freeze` |
 
-Tidak ada role relayer: aktivasi, setor escrow, konfirmasi off-chain, dan revisi diotorisasi oleh signature para pihak, jadi relayer mana pun boleh mengirimnya. Aksi pengguna (bayar, `openDispute`, `markPaid`, `refundEscrow`, `cancelNonce`) dicek dari `_msgSender()`, langsung atau lewat `PiutangForwarder`. OVERDUE dihitung contract saat dibaca, tanpa tx. Freeze piutang yang belum aktif hanya terjadi di DB.
+Tidak ada role relayer: aktivasi, setor escrow, konfirmasi off-chain, dan revisi diotorisasi oleh signature para pihak, jadi relayer mana pun boleh mengirimnya. Aksi pengguna (bayar, `openDispute`, `markPaid`, `refundEscrow`, `cancelNonce`) dicek dari `_msgSender()`, langsung atau lewat `CollateraForwarder`. OVERDUE dihitung contract saat dibaca, tanpa tx. Freeze piutang yang belum aktif hanya terjadi di DB.

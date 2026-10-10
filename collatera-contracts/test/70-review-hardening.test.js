@@ -330,7 +330,7 @@ describe("T5: forwarder hanya ke DebtManager dan return data dibatasi", () => {
 
   it("manager diset satu kali oleh deployer; alamat nol / bukan kontrak / pemanggil lain ditolak", async () => {
     const ctx = await loadFixture(f.deployAll);
-    const fwd = await ethers.deployContract("PiutangForwarder");
+    const fwd = await ethers.deployContract("CollateraForwarder");
     expect(await fwd.manager()).to.equal(ethers.ZeroAddress);
     await expect(fwd.connect(ctx.stranger).setManager(ctx.manager.target)).to.be.revertedWithCustomError(fwd, "NotDeployer");
     await expect(fwd.setManager(ethers.ZeroAddress)).to.be.revertedWithCustomError(fwd, "TargetNotContract");
@@ -363,7 +363,7 @@ describe("T5: forwarder hanya ke DebtManager dan return data dibatasi", () => {
 
   async function bombForwarder(ctx, size) {
     const bomb = await ethers.deployContract("MockReturnBomb", [size]);
-    const fwd = await ethers.deployContract("PiutangForwarder");
+    const fwd = await ethers.deployContract("CollateraForwarder");
     await fwd.setManager(bomb.target);
     return { bomb, fwd };
   }
@@ -447,7 +447,7 @@ describe("T6: deploy.js — FREEZER_ROLE jelas dan peringatan admin tunggal", ()
       const res = await deployScript.main({ quiet: true, writeFile: false });
       const manager = await ethers.getContractAt("DebtManager", res.manager);
       expect(await manager.hasRole(f.FREEZER_ROLE, ctx.freezer.address)).to.equal(true);
-      const forwarder = await ethers.getContractAt("PiutangForwarder", res.forwarder);
+      const forwarder = await ethers.getContractAt("CollateraForwarder", res.forwarder);
       expect(await forwarder.manager()).to.equal(res.manager);
     } finally {
       delete process.env.FREEZER_ADDRESS;

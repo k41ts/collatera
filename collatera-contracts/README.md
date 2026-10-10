@@ -1,4 +1,4 @@
-# PiutangChain — Smart Contracts
+# Collatera — Smart Contracts
 
 Hardhat 2 (JavaScript), Solidity 0.8.28, **tanpa OpenZeppelin**: ECDSA, EIP-712, AccessControl, Pausable,
 ReentrancyGuard, ERC-721, ERC-2612, ERC-2771, dan ERC-1271 ditulis sendiri di `contracts/utils` dan `contracts/libraries`.
@@ -49,7 +49,7 @@ Jika binary compiler tidak bisa diunduh (jaringan terbatas): `npm i --no-save so
 | `DebtManager` | Inti: verifikasi 2 signature EIP-712, mint, pencairan, pembayaran, OVERDUE, PAID+burn, dispute, freeze, revisi |
 | `DebtNote` | ERC-721 non-transferable (juga ERC-5192). `tokenId = uint256(noteId)`. `tokenURI` memuat metadata on-chain |
 | `MockIDRX` | Stablecoin IDR tiruan (testnet): ERC-20 + permit + faucet. Default 2 desimal |
-| `PiutangForwarder` | Forwarder ERC-2771 untuk gasless (relayer bayar gas) |
+| `CollateraForwarder` | Forwarder ERC-2771 untuk gasless (relayer bayar gas) |
 
 ## Status
 
@@ -87,7 +87,7 @@ Semua event penting memakai `noteId` ter-index; **semua perubahan status** meman
 
 ## EIP-712
 
-Domain DebtManager: `{ name: "PiutangChain", version: "1", chainId, verifyingContract }`.
+Domain DebtManager: `{ name: "Collatera", version: "1", chainId, verifyingContract }`.
 Struct: `Note`, `DisbursementReceipt`, `PaymentConfirmation`, `Amendment`. Forwarder: `ForwardRequest`.
 Backend/frontend **harus memakai `helpers/eip712.js`** (urutan dan tipe field menentukan hash; test memastikan hash kontrak = hash ethers).
 

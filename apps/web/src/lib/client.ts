@@ -140,7 +140,7 @@ export async function forwardAction(opts: {
   fee?: { value: string; deadline: number; signature: string };
 }) {
   const { provider, signer } = await getSigner(opts.wallet);
-  const forwarder = new Contract(ADDR.PiutangForwarder, ABI.PiutangForwarder, provider);
+  const forwarder = new Contract(ADDR.CollateraForwarder, ABI.CollateraForwarder, provider);
   const nonce = (await forwarder.nonces(opts.wallet)).toString();
   const request = {
     from: opts.wallet,

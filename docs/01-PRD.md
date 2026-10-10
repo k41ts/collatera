@@ -1,12 +1,12 @@
 # 01 — Product Requirements Document (PRD)
 
-**Produk:** PiutangChain
-**Sumber:** PiutangChain — Product Requirements Document (Oct 9, 2026, @Ezra)
+**Produk:** Collatera
+**Sumber:** Collatera — Product Requirements Document (Oct 9, 2026, @Ezra)
 **Status dokumen:** Draft hackathon / MVP
 
 ## 1. Ringkasan
 
-PiutangChain adalah platform web3 untuk membuat, menandatangani, dan menagih **surat piutang (promissory note)** antara **kreditur** dan **debitur**. Bisa dipakai untuk pinjaman ke teman atau keluarga, invoice antar perusahaan, dan utang usaha lainnya.
+Collatera adalah platform web3 untuk membuat, menandatangani, dan menagih **surat piutang (promissory note)** antara **kreditur** dan **debitur**. Bisa dipakai untuk pinjaman ke teman atau keluarga, invoice antar perusahaan, dan utang usaha lainnya.
 
 Surat piutang yang sudah ditandatangani kedua pihak di-mint sebagai **token ERC-721** ke wallet kreditur. Token ini mewakili hak tagih. Dokumen dan data pribadi tetap **off-chain**. Yang masuk ke blockchain hanya hash dokumen, metadata piutang, dan bukti tanda tangan.
 

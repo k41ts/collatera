@@ -171,7 +171,7 @@ describe("DebtNote (ERC-721 non-transferable)", () => {
   });
 });
 
-describe("PiutangForwarder (gasless)", () => {
+describe("CollateraForwarder (gasless)", () => {
   async function req(ctx, overrides = {}) {
     const data = ctx.manager.interface.encodeFunctionData("openDispute", [ethers.id("x"), ethers.id("alasan")]);
     return {

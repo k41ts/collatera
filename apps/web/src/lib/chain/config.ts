@@ -5,7 +5,7 @@ export const CHAIN_ID = deployment.chainId;
 export const DECIMALS = deployment.stablecoinDecimals;
 export const ADDR = deployment.addresses as {
   MockIDRX: string;
-  PiutangForwarder: string;
+  CollateraForwarder: string;
   DebtNote: string;
   DebtManager: string;
 };

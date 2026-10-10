@@ -1,4 +1,4 @@
-// Skema PiutangChain (lihat docs/07-ERD.md). PostgreSQL (Supabase).
+// Skema Collatera (lihat docs/07-ERD.md). PostgreSQL (Supabase).
 // DATABASE_URL = pooler transaksi Supabase (port 6543, ?pgbouncer=true) untuk serverless Vercel;
 // DIRECT_URL = koneksi langsung (port 5432) untuk migrasi. Nominal disimpan sebagai string angka dalam
 // satuan terkecil token (MockIDRX 2 desimal: Rp1 = "100"). File upload disimpan sebagai bytea (maks 4 MB).

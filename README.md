@@ -1,4 +1,4 @@
-# PiutangChain
+# Collatera
 
 Surat piutang (promissory note) on-chain: dibuat, ditandatangani kedua pihak, ditokenisasi, dan ditagih sampai lunas, tanpa pengguna perlu paham crypto atau membayar gas. Satu-satunya biaya: fee aplikasi 1% yang dibayar debitur di setiap pembayaran on-chain (IDRX).
 

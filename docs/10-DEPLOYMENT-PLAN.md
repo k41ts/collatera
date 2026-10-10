@@ -14,9 +14,9 @@ Target: **Ethereum Sepolia testnet** (mainnet out of scope).
 
 1. **Contract**
    ```bash
-   cd piutangchain-contracts && npm run deploy:sepolia
+   cd collatera-contracts && npm run deploy:sepolia
    ```
-   `scripts/deploy.js` men-deploy `MockIDRX` → `PiutangForwarder` → `DebtNote` → `DebtManager(debtNote, idrx, forwarder, admin)`, lalu `DebtNote.setManager(DebtManager)`. Alamat, desimal, dan constructor args tersimpan di `deployments/sepolia.json`.
+   `scripts/deploy.js` men-deploy `MockIDRX` → `CollateraForwarder` → `DebtNote` → `DebtManager(debtNote, idrx, forwarder, admin)`, lalu `DebtNote.setManager(DebtManager)`. Alamat, desimal, dan constructor args tersimpan di `deployments/sepolia.json`.
 2. **Role:** `ADMIN_ADDRESS` mendapat `DEFAULT_ADMIN_ROLE` + `ADMIN_ROLE` (default deployer; pakai multisig untuk produksi). `FREEZER_ADDRESS` (key integrity checker) mendapat `FREEZER_ROLE` otomatis jika admin = deployer; selain itu admin melakukan `grantRole` manual. Tidak ada role untuk relayer.
 3. **Verifikasi** di Sepolia Etherscan: `npx hardhat verify --network sepolia <alamat> <args>` (args dari `deployments/sepolia.json`); salin alamat ke env frontend & backend.
 4. **Database:** `npx prisma migrate deploy`, lalu `npx prisma db seed` untuk akun admin.
@@ -33,7 +33,7 @@ Target: **Ethereum Sepolia testnet** (mainnet out of scope).
 | `CHAIN_ID=11155111` | semua |
 | `DEBT_MANAGER_ADDRESS`, `DEBT_NOTE_ADDRESS`, `MOCK_IDRX_ADDRESS`, `FORWARDER_ADDRESS` | backend, worker (frontend memakai versi `NEXT_PUBLIC_*`) |
 | `NEXT_PUBLIC_CHAIN_ID`, `NEXT_PUBLIC_DEBT_MANAGER_ADDRESS`, `NEXT_PUBLIC_MOCK_IDRX_ADDRESS`, `NEXT_PUBLIC_FORWARDER_ADDRESS` | frontend |
-| `DEPLOYER_PRIVATE_KEY`, `ADMIN_ADDRESS`, `FREEZER_ADDRESS` | `scripts/deploy.js` (lihat `piutangchain-contracts/.env.example`) |
+| `DEPLOYER_PRIVATE_KEY`, `ADMIN_ADDRESS`, `FREEZER_ADDRESS` | `scripts/deploy.js` (lihat `collatera-contracts/.env.example`) |
 | `RELAYER_PRIVATE_KEY` | relayer worker (secret) |
 | `APP_FEE_WALLET`, `APP_FEE_BPS` | backend: wallet penampung fee aplikasi dan tarifnya dalam basis poin (default `100` = 1%, maks `1000`). `APP_FEE_WALLET` kosong = fee nonaktif |
 | `FREEZER_PRIVATE_KEY` | integrity checker, hanya untuk `freeze` (secret) |

@@ -1,6 +1,6 @@
-# PiutangChain Web3
+# Collatera Web3
 
-Full-stack Next.js (App Router) untuk PiutangChain: UI + API + relayer gasless, terhubung ke kontrak di **Ethereum Sepolia** (`piutangchain-contracts/deployments/sepolia.json`).
+Full-stack Next.js (App Router) untuk Collatera: UI + API + relayer gasless, terhubung ke kontrak di **Ethereum Sepolia** (`collatera-contracts/deployments/sepolia.json`).
 
 | Bagian | Isi |
 |---|---|
@@ -19,7 +19,7 @@ npm install
 cp .env.example .env
 ```
 
-Isi `.env`: `DATABASE_URL` (Supabase "Transaction pooler", port 6543, `?pgbouncer=true&connection_limit=5`), `DIRECT_URL` (Supabase "Direct connection" atau "Session pooler", port 5432), `SESSION_SECRET` (string acak ≥32 karakter) dan `RELAYER_PRIVATE_KEY` (wallet ber-Sepolia ETH; harus owner MockIDRX + `ADMIN_ROLE` supaya faucet dan auto-freeze jalan). Di development, kalau `RELAYER_PRIVATE_KEY` kosong, server memakai `DEPLOYER_PRIVATE_KEY` dari `piutangchain-contracts/.env`. Untuk fee aplikasi isi `APP_FEE_WALLET` (wallet penampung) dan `APP_FEE_BPS` (basis poin, default `100` = 1%); kosongkan `APP_FEE_WALLET` untuk menonaktifkan.
+Isi `.env`: `DATABASE_URL` (Supabase "Transaction pooler", port 6543, `?pgbouncer=true&connection_limit=5`), `DIRECT_URL` (Supabase "Direct connection" atau "Session pooler", port 5432), `SESSION_SECRET` (string acak ≥32 karakter) dan `RELAYER_PRIVATE_KEY` (wallet ber-Sepolia ETH; harus owner MockIDRX + `ADMIN_ROLE` supaya faucet dan auto-freeze jalan). Di development, kalau `RELAYER_PRIVATE_KEY` kosong, server memakai `DEPLOYER_PRIVATE_KEY` dari `collatera-contracts/.env`. Untuk fee aplikasi isi `APP_FEE_WALLET` (wallet penampung) dan `APP_FEE_BPS` (basis poin, default `100` = 1%); kosongkan `APP_FEE_WALLET` untuk menonaktifkan.
 
 Terapkan migrasi (pakai `migrate deploy`, bukan `db push`: migrasi 0002 berisi unique index parsial untuk nomor HP yang tidak bisa ditulis di `schema.prisma`):
 
@@ -49,7 +49,7 @@ node scripts/e2e-api.mjs
 npm run sync-contracts
 ```
 
-Menyalin ABI + alamat dari `piutangchain-contracts` ke `src/lib/chain/deployment.json`.
+Menyalin ABI + alamat dari `collatera-contracts` ke `src/lib/chain/deployment.json`.
 
 ## Belum ada
 

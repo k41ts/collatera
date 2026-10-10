@@ -1,8 +1,8 @@
-// Helper EIP-712 untuk PiutangChain. Dipakai test dan bisa dipakai ulang di backend/frontend
+// Helper EIP-712 untuk Collatera. Dipakai test dan bisa dipakai ulang di backend/frontend
 // (ethers v6) supaya payload yang ditandatangani PERSIS sama dengan yang diverifikasi kontrak.
 const { TypedDataEncoder, AbiCoder, keccak256 } = require("ethers");
 
-const DEBT_MANAGER_DOMAIN_NAME = "PiutangChain";
+const DEBT_MANAGER_DOMAIN_NAME = "Collatera";
 const DOMAIN_VERSION = "1";
 
 const NOTE_TYPES = {
@@ -89,7 +89,7 @@ const managerDomain = (chainId, verifyingContract) => ({
   verifyingContract,
 });
 const forwarderDomain = (chainId, verifyingContract) => ({
-  name: "PiutangForwarder",
+  name: "CollateraForwarder",
   version: DOMAIN_VERSION,
   chainId,
   verifyingContract,

@@ -17,10 +17,10 @@ const FORWARD_TYPES = { ForwardRequest: [
 const PERMIT_TYPES = { Permit: [
   { name: "owner", type: "address" }, { name: "spender", type: "address" }, { name: "value", type: "uint256" },
   { name: "nonce", type: "uint256" }, { name: "deadline", type: "uint256" }] };
-const fwdDomain = { name: "PiutangForwarder", version: "1", chainId: dep.chainId, verifyingContract: dep.addresses.PiutangForwarder };
+const fwdDomain = { name: "CollateraForwarder", version: "1", chainId: dep.chainId, verifyingContract: dep.addresses.CollateraForwarder };
 const tokDomain = { name: "Mock IDRX", version: "1", chainId: dep.chainId, verifyingContract: dep.addresses.MockIDRX };
 const manager = new Interface(dep.abi.DebtManager);
-const forwarder = new Contract(dep.addresses.PiutangForwarder, dep.abi.PiutangForwarder, provider);
+const forwarder = new Contract(dep.addresses.CollateraForwarder, dep.abi.CollateraForwarder, provider);
 const idrx = new Contract(dep.addresses.MockIDRX, dep.abi.MockIDRX, provider);
 
 let step = 0;
@@ -44,7 +44,7 @@ class User {
   async login(name) {
     const { nonce } = await this.req("POST", "/api/auth/nonce");
     const host = new URL(BASE).host;
-    const message = [`${host} wants you to sign in with your Ethereum account:`, this.wallet.address, "", "Masuk ke PiutangChain.", "",
+    const message = [`${host} wants you to sign in with your Ethereum account:`, this.wallet.address, "", "Masuk ke Collatera.", "",
       `URI: ${BASE}`, "Version: 1", `Chain ID: ${dep.chainId}`, `Nonce: ${nonce}`, `Issued At: ${new Date().toISOString()}`].join("\n");
     await this.req("POST", "/api/auth/verify", { message, signature: await this.wallet.signMessage(message) });
     await this.req("PATCH", "/api/me", { name });

@@ -14,7 +14,7 @@ import {SignatureChecker} from "./libraries/SignatureChecker.sol";
 import {TransferHelper} from "./libraries/TransferHelper.sol";
 
 /// @title DebtManager
-/// @notice Inti PiutangChain: verifikasi dua signature EIP-712, mint token piutang (ERC-721 non-transferable) ke
+/// @notice Inti Collatera: verifikasi dua signature EIP-712, mint token piutang (ERC-721 non-transferable) ke
 ///         kreditur, pencairan pokok (escrow on-chain atau konfirmasi off-chain), pencatatan pembayaran
 ///         (on-chain / off-chain), OVERDUE, PAID + burn, dispute, freeze, dan revisi bertanda tangan ulang.
 ///
@@ -180,7 +180,7 @@ contract DebtManager is IDebtManager, EIP712, AccessControl, ReentrancyGuard, Pa
         address stablecoin_,
         address forwarder_,
         address admin_
-    ) EIP712("PiutangChain", "1") ERC2771Context(forwarder_) {
+    ) EIP712("Collatera", "1") ERC2771Context(forwarder_) {
         if (debtNote_ == address(0) || stablecoin_ == address(0) || admin_ == address(0)) revert ZeroAddress();
         debtNote = IDebtNote(debtNote_);
         stablecoin = stablecoin_;

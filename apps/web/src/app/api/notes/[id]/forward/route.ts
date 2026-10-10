@@ -1,4 +1,4 @@
-// Aksi pengguna gasless lewat PiutangForwarder (ERC-2771). Server memeriksa bahwa calldata yang
+// Aksi pengguna gasless lewat CollateraForwarder (ERC-2771). Server memeriksa bahwa calldata yang
 // ditandatangani benar-benar untuk aksi & piutang ini sebelum relayer mengirim (BE-13).
 import { Interface, Signature, getAddress, keccak256, toUtf8Bytes, verifyTypedData } from "ethers";
 import { z } from "zod";

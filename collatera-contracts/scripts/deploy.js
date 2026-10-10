@@ -1,4 +1,4 @@
-// Deploy PiutangChain: MockIDRX, PiutangForwarder, DebtNote, DebtManager (+ wiring & role).
+// Deploy Collatera: MockIDRX, CollateraForwarder, DebtNote, DebtManager (+ wiring & role).
 //   npx hardhat run scripts/deploy.js --network sepolia
 // Env opsional: ADMIN_ADDRESS (default deployer; di produksi pakai multisig), FREEZER_ADDRESS (integrity checker),
 //               FAUCET_AMOUNT_IDR (default 10.000.000), STABLECOIN_DECIMALS (default 2)
@@ -49,7 +49,7 @@ async function main({ quiet = false, writeFile = true } = {}) {
   // basi kalau tx berikutnya dikirim sebelum yang sebelumnya masuk blok ("replacement transaction underpriced").
   const idrx = await ethers.deployContract("MockIDRX", [decimals, deployer.address, faucetAmount]);
   await idrx.waitForDeployment();
-  const forwarder = await ethers.deployContract("PiutangForwarder");
+  const forwarder = await ethers.deployContract("CollateraForwarder");
   await forwarder.waitForDeployment();
   const debtNote = await ethers.deployContract("DebtNote");
   await debtNote.waitForDeployment();
@@ -83,13 +83,13 @@ async function main({ quiet = false, writeFile = true } = {}) {
     stablecoinDecimals: decimals,
     contracts: {
       MockIDRX: idrx.target,
-      PiutangForwarder: forwarder.target,
+      CollateraForwarder: forwarder.target,
       DebtNote: debtNote.target,
       DebtManager: manager.target,
     },
     constructorArgs: {
       MockIDRX: [decimals, deployer.address, faucetAmount.toString()],
-      PiutangForwarder: [],
+      CollateraForwarder: [],
       DebtNote: [],
       DebtManager: [debtNote.target, idrx.target, forwarder.target, admin],
     },

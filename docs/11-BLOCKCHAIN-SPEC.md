@@ -1,8 +1,8 @@
 # 11 — Blockchain Specification
 
-Chain: **Ethereum Sepolia** (`chainId 11155111`) · Solidity `0.8.28` · Hardhat 2 · **tanpa OpenZeppelin** (ECDSA, EIP-712, AccessControl, Pausable, ReentrancyGuard, ERC-721, ERC-2612, ERC-2771, ERC-1271 ditulis sendiri di `piutangchain-contracts/contracts/utils` dan `libraries`).
+Chain: **Ethereum Sepolia** (`chainId 11155111`) · Solidity `0.8.28` · Hardhat 2 · **tanpa OpenZeppelin** (ECDSA, EIP-712, AccessControl, Pausable, ReentrancyGuard, ERC-721, ERC-2612, ERC-2771, ERC-1271 ditulis sendiri di `collatera-contracts/contracts/utils` dan `libraries`).
 
-> Kode ada di [`piutangchain-contracts/`](../piutangchain-contracts/). Dokumen ini mengikuti kode; kalau berbeda, **kode yang benar** dan dokumen perlu diperbarui.
+> Kode ada di [`collatera-contracts/`](../collatera-contracts/). Dokumen ini mengikuti kode; kalau berbeda, **kode yang benar** dan dokumen perlu diperbarui.
 > Belum diaudit. Primitif kripto tulisan sendiri adalah risiko terbesar; cocok untuk Sepolia/prototipe saja.
 
 ## Contracts
@@ -12,7 +12,7 @@ Chain: **Ethereum Sepolia** (`chainId 11155111`) · Solidity `0.8.28` · Hardhat
 | `DebtManager` | Inti: verifikasi 2 signature EIP-712, escrow, aktivasi + mint, jadwal cicilan, denda, pembayaran, PAID + burn, dispute, freeze, revisi |
 | `DebtNote` | Token piutang ERC-721 **non-transferable** (juga ERC-5192 `locked`). `tokenId = uint256(noteId)`. Hanya `DebtManager` yang boleh mint/burn. `tokenURI` berisi metadata on-chain (noteId, docHash, pokok, jatuh tempo, kreditur, debitur, status) |
 | `MockIDRX` | Stablecoin IDR tiruan: ERC-20 + permit (EIP-2612). **2 desimal** (default deploy). `faucet()` publik, sekali per 24 jam per alamat; `mint()` khusus owner |
-| `PiutangForwarder` | Forwarder ERC-2771 untuk gasless. Mendukung EOA dan smart account (ERC-1271). Seluruh tx batal jika relayer memberi gas kurang dari `req.gas`. Hanya meneruskan ke `DebtManager` (`manager`, diset **satu kali** oleh deployer lewat `setManager`; `to` lain → `TargetNotAllowed`). Data return/revert target yang disalin dibatasi `MAX_RETURN_BYTES` = 4096 |
+| `CollateraForwarder` | Forwarder ERC-2771 untuk gasless. Mendukung EOA dan smart account (ERC-1271). Seluruh tx batal jika relayer memberi gas kurang dari `req.gas`. Hanya meneruskan ke `DebtManager` (`manager`, diset **satu kali** oleh deployer lewat `setManager`; `to` lain → `TargetNotAllowed`). Data return/revert target yang disalin dibatasi `MAX_RETURN_BYTES` = 4096 |
 
 ## Status
 
@@ -26,7 +26,7 @@ enum Status { NONE, ACTIVE, OVERDUE, PAID, DISPUTED, FROZEN }
 
 ## Struct yang Ditandatangani (EIP-712)
 
-Domain: `{ name: "PiutangChain", version: "1", chainId, verifyingContract: <DebtManager> }`. Backend dan frontend **wajib** memakai `piutangchain-contracts/helpers/eip712.js` (urutan dan tipe field menentukan hash).
+Domain: `{ name: "Collatera", version: "1", chainId, verifyingContract: <DebtManager> }`. Backend dan frontend **wajib** memakai `collatera-contracts/helpers/eip712.js` (urutan dan tipe field menentukan hash).
 
 ```solidity
 struct Note {               // ditandatangani kreditur DAN debitur (pesan identik)
@@ -152,7 +152,7 @@ event NonceCancelled(address indexed signer, uint256 nonce);
 
 ## Gasless
 
-- Semua aksi pengguna (bayar, dispute, markPaid, cancelNonce, refund) bisa dikirim lewat `PiutangForwarder.execute(ForwardRequest, signature)`: pengguna menandatangani `ForwardRequest { from, to, gas, nonce, deadline, data }`, relayer membayar gas, `_msgSender()` = pengguna. Nonce forwarder berurutan per alamat (`forwarder.nonces(from)`).
+- Semua aksi pengguna (bayar, dispute, markPaid, cancelNonce, refund) bisa dikirim lewat `CollateraForwarder.execute(ForwardRequest, signature)`: pengguna menandatangani `ForwardRequest { from, to, gas, nonce, deadline, data }`, relayer membayar gas, `_msgSender()` = pengguna. Nonce forwarder berurutan per alamat (`forwarder.nonces(from)`).
 - Aksi yang otorisasinya sudah dari signature (aktivasi, deposit escrow, konfirmasi off-chain, revisi) dikirim relayer langsung, tanpa forwarder.
 - Stablecoin bergerak lewat **permit** (EOA). Permit dibungkus try/catch: kalau di-front-run, transaksi tetap jalan selama allowance cukup. Smart account membayar dengan `approve` dulu lalu `permit.deadline = 0`.
 - Bayar on-chain lewat forwarder: tanda tangani permit dulu, lalu ForwardRequest yang `data`-nya `payOnchain(noteId, amount, installmentIndex, permit)` (calldata memuat signature permit).

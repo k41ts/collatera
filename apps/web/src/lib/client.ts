@@ -3,6 +3,7 @@
 import { BrowserProvider, Contract, Interface, type Eip1193Provider, type TypedDataField } from "ethers";
 import { ABI, ADDR, CHAIN_ID } from "./chain/config";
 import { FORWARD_TYPES, PERMIT_TYPES, forwarderDomain, splitSig, tokenDomain } from "./chain/eip712";
+import { feeFor } from "./appFee";
 
 declare global {
   interface Window {
@@ -136,6 +137,7 @@ export async function forwardAction(opts: {
   args: unknown[];
   purpose: string;
   reason?: string;
+  fee?: { value: string; deadline: number; signature: string };
 }) {
   const { provider, signer } = await getSigner(opts.wallet);
   const forwarder = new Contract(ADDR.PiutangForwarder, ABI.PiutangForwarder, provider);
@@ -151,27 +153,48 @@ export async function forwardAction(opts: {
   const signature = await signer.signTypedData(forwarderDomain, FORWARD_TYPES, request);
   return api<{ txHash: string }>(`/api/notes/${opts.noteId}/forward`, {
     method: "POST",
-    json: { purpose: opts.purpose, reason: opts.reason, request, signature },
+    json: { purpose: opts.purpose, reason: opts.reason, request, signature, fee: opts.fee },
   });
 }
 
-/** Bayar on-chain: tanda tangani permit IDRX lalu ForwardRequest payOnchain (dua tanda tangan, tanpa gas). */
-export async function payOnchain(opts: { noteId: string; chainNoteId: string; wallet: string; amount: string; installment: number }) {
+/**
+ * Bayar on-chain: tanda tangani permit IDRX lalu ForwardRequest payOnchain (tanpa gas).
+ * Jika pajak aplikasi aktif, debitur juga menandatangani permit kedua (nonce berikutnya) agar relayer bisa menarik
+ * pajak ke wallet pajak setelah pembayaran berhasil.
+ */
+export async function payOnchain(opts: {
+  noteId: string;
+  chainNoteId: string;
+  wallet: string;
+  amount: string;
+  installment: number;
+  appFee?: { bps: number; spender: string } | null;
+}) {
   const { provider, signer } = await getSigner(opts.wallet);
   const idrx = new Contract(ADDR.MockIDRX, ABI.MockIDRX, provider);
   const [nonce, balance] = await Promise.all([idrx.nonces(opts.wallet), idrx.balanceOf(opts.wallet)]);
-  if (balance < BigInt(opts.amount)) throw new Error("Saldo IDRX kamu kurang. Ambil dari faucet di halaman Profil.");
+  const fee = opts.appFee ? feeFor(BigInt(opts.amount), opts.appFee.bps) : BigInt(0);
+  if (balance < BigInt(opts.amount) + fee)
+    throw new Error(fee > BigInt(0) ? "Saldo IDRX kamu kurang untuk pembayaran + pajak aplikasi. Ambil dari faucet di halaman Profil." : "Saldo IDRX kamu kurang. Ambil dari faucet di halaman Profil.");
   const deadline = Math.floor(Date.now() / 1000) + 3600;
   const permitSig = await signer.signTypedData(tokenDomain, PERMIT_TYPES, {
     owner: opts.wallet, spender: ADDR.DebtManager, value: opts.amount, nonce, deadline,
   });
   const permit = { deadline, ...splitSig(permitSig) };
+  let feePermit: { value: string; deadline: number; signature: string } | undefined;
+  if (opts.appFee && fee > BigInt(0)) {
+    const signature = await signer.signTypedData(tokenDomain, PERMIT_TYPES, {
+      owner: opts.wallet, spender: opts.appFee.spender, value: fee.toString(), nonce: BigInt(nonce) + BigInt(1), deadline,
+    });
+    feePermit = { value: fee.toString(), deadline, signature };
+  }
   return forwardAction({
     noteId: opts.noteId,
     wallet: opts.wallet,
     fn: "payOnchain",
     args: [opts.chainNoteId, opts.amount, opts.installment, permit],
     purpose: "pay",
+    fee: feePermit,
   });
 }
 

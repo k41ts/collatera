@@ -3,9 +3,16 @@ import { db } from "@/lib/db";
 import { ApiError, handler, ok } from "@/lib/api";
 import { NoteInput, deriveNoteFields } from "@/lib/noteInput";
 import { audit, displayName, joinIfInvited, loadNote, roleOf, syncFromChain, termsOf } from "@/lib/notes";
-import { reader } from "@/lib/chain/relayer";
+import { chain, reader } from "@/lib/chain/relayer";
+import { appFeeConfig } from "@/lib/appFeeConfig";
 
 type Ctx = { params: Promise<{ id: string }> };
+
+function appFeeOf() {
+  const fee = appFeeConfig();
+  if (!fee) return null;
+  return { bps: fee.bps, spender: chain().address, wallet: fee.wallet };
+}
 
 export const GET = handler<Ctx>(async (_req, user, { params }) => {
   let n = await loadNote((await params).id, user);
@@ -70,6 +77,8 @@ export const GET = handler<Ctx>(async (_req, user, { params }) => {
       debtorSigned: !!sig("debtor"),
     },
     me: { role, isCreator: n.creatorId === user.id, isAdmin, wallet: user.wallet, phoneVerified: !!user.phoneVerifiedAt },
+    // Pajak aplikasi untuk pembayaran on-chain: tarif + alamat relayer yang diberi izin (permit) menarik pajak.
+    appFee: appFeeOf(),
     other: otherUser ? { name: displayName(otherUser), wallet: otherUser.wallet } : null,
     chain: chainView,
   });

@@ -5,7 +5,7 @@ import { fmtRp } from "@/lib/money";
 import { ActionCardSkeleton, Loading, NoteRowsSkeleton, TileSkeleton } from "@/components/Skeleton";
 import { needsMySignature, useApi, type Me, type NoteSummary } from "@/lib/hooks";
 
-const LIVE = ["ACTIVE", "OVERDUE", "DISPUTED", "FROZEN"];
+const LIVE = ["ACTIVE", "OVERDUE", "FROZEN"];
 
 export default function Dashboard() {
   const { data, loading } = useApi<{ notes: NoteSummary[] }>("/api/notes");

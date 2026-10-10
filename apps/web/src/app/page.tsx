@@ -24,8 +24,7 @@ const STEPS = [
 const FEATURES = [
   { tag: "TANDA TANGAN", t: "Aktif hanya setelah dua tanda tangan", b: "Kreditur dan debitur menandatangani isi yang sama persis. Satu dokumen tidak bisa jadi dua piutang." },
   { tag: "PEMBAYARAN", t: "Bayar cicilan pakai stablecoin", b: "Pembayaran IDRX langsung tercatat di blockchain dan mengurangi sisa utang. Setiap pembayaran dikenai fee aplikasi 1%." },
-  { tag: "DENDA", t: "Denda 2% per bulan, dihitung kontrak", b: "Hanya jika disepakati. Dihitung per hari dari cicilan yang terlambat dan berhenti saat sengketa." },
-  { tag: "SENGKETA", t: "Ada masalah? Ajukan sengketa", b: "Admin meninjau riwayat, tapi tidak bisa mengubah isi perjanjian. Perubahan hanya lewat revisi berdua." },
+  { tag: "DENDA", t: "Denda 2% per bulan, dihitung kontrak", b: "Hanya jika disepakati. Dihitung per hari dari cicilan yang terlambat." },
   { tag: "PRIVASI", t: "Data pribadi tidak masuk blockchain", b: "Nama, nomor HP, dan dokumen disimpan di server. Yang dikunci on-chain hanya hash dan nominal." },
 ];
 

@@ -13,7 +13,7 @@ const FILTERS: [string, string, string[]][] = [
   ["overdue", "Terlambat", ["OVERDUE"]],
   ["sign", "Tanda tangan", ["DRAFT", "PENDING_SIGNATURE"]],
   ["disb", "Pencairan", ["AWAITING_DISBURSEMENT"]],
-  ["dispute", "Sengketa & beku", ["DISPUTED", "FROZEN"]],
+  ["frozen", "Dibekukan", ["FROZEN"]],
   ["paid", "Lunas", ["PAID"]],
   ["closed", "Ditolak & batal", ["REJECTED", "CANCELLED"]],
 ];
@@ -179,7 +179,6 @@ function dueText(n: NoteSummary) {
     case "PAID": return "Lunas";
     case "REJECTED": return "Ditolak";
     case "CANCELLED": return "Dibatalkan";
-    case "DISPUTED": return "Sengketa ditinjau admin";
     case "FROZEN": return "Dibekukan";
     default: return n.nextDue ? `Jatuh tempo ${fmtDate(n.nextDue)}` : "-";
   }

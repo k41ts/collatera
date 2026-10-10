@@ -11,7 +11,7 @@ const tabOf = (n: NoteSummary): Tab | null => {
   if (needsMySignature(n)) return "mine";
   if (n.status === "AWAITING_DISBURSEMENT" && n.role === "debtor") return "mine";
   if (n.status === "PENDING_SIGNATURE" || n.status === "AWAITING_DISBURSEMENT") return "waiting";
-  if (["ACTIVE", "OVERDUE", "DISPUTED", "FROZEN", "PAID", "REJECTED", "CANCELLED"].includes(n.status)) return "done";
+  if (["ACTIVE", "OVERDUE", "FROZEN", "PAID", "REJECTED", "CANCELLED"].includes(n.status)) return "done";
   return null;
 };
 

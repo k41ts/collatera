@@ -85,13 +85,6 @@ export default function Landing() {
             <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
               <LinkButton href="/masuk" className="min-h-[54px] px-7 text-[15px] font-bold">Masuk dengan MetaMask →</LinkButton>
               <LinkButton href="#cara-kerja" variant="secondary" className="min-h-[54px] border-ink px-7 text-[15px] font-bold">Lihat cara kerja</LinkButton>
-              <span aria-hidden className="ml-2 hidden items-end gap-1 sm:flex">
-                <svg width="70" height="46" viewBox="0 0 70 46" fill="none">
-                  <path d="M66 8 C 48 2, 26 6, 16 26" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
-                  <path d="M8 18 L15 28 L26 22" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-                <span className="-rotate-6 pb-5 font-hand text-[26px] font-bold leading-none">gas kami tanggung!</span>
-              </span>
             </div>
           </div>
           <div className="relative h-[380px] min-w-0 flex-[1_1_520px] overflow-hidden rounded-[24px] bg-ink sm:h-[460px] sm:rounded-[32px] lg:h-[520px]">

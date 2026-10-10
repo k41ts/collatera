@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 import { createContext, useCallback, useContext, useMemo, useRef, useState, type ReactNode } from "react";
 
 /**
@@ -8,10 +9,11 @@ import { createContext, useCallback, useContext, useMemo, useRef, useState, type
  * simpan draft lalu diarahkan ke halaman detail).
  */
 
-type Tone = "success" | "error" | "info";
+type Tone = "success" | "error" | "info" | "chat";
 type Options = { description?: ReactNode; link?: { href: string; label: string; external?: boolean }; duration?: number };
 type Item = Options & { id: number; tone: Tone; title: ReactNode; phase: "in" | "out" | "collapse" };
-type Api = { success: (title: ReactNode, o?: Options) => void; error: (title: ReactNode, o?: Options) => void; info: (title: ReactNode, o?: Options) => void };
+type Fn = (title: ReactNode, o?: Options) => void;
+type Api = { success: Fn; error: Fn; info: Fn; chat: Fn };
 
 const Ctx = createContext<Api | null>(null);
 const MAX = 4;
@@ -38,6 +40,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     () => ({
       success: (t, o) => push("success", t, o),
       error: (t, o) => push("error", t, o),
+      chat: (t, o) => push("chat", t, o),
       info: (t, o) => push("info", t, o),
     }),
     [push],
@@ -63,6 +66,7 @@ const TONE: Record<Tone, { bar: string; icon: string; ring: string; path: ReactN
   success: { bar: "bg-mint", icon: "bg-mint text-mint-ink", ring: "border-mint/30", path: <path d="M5 12.5l4.5 4.5L19 7.5" /> },
   error: { bar: "bg-rasp", icon: "bg-rasp text-white", ring: "border-rasp/40", path: <path d="M12 7v6M12 17h.01" /> },
   info: { bar: "bg-lav", icon: "bg-lav text-lav-ink", ring: "border-lav/30", path: <path d="M12 11v6M12 7h.01" /> },
+  chat: { bar: "bg-brand", icon: "bg-brand text-white", ring: "border-brand/50", path: <path d="M5 6h14v9H10l-5 4z" /> },
 };
 
 function ToastItem({ t, onClose, onExited, onCollapsed }: { t: Item; onClose: () => void; onExited: () => void; onCollapsed: () => void }) {
@@ -71,7 +75,7 @@ function ToastItem({ t, onClose, onExited, onCollapsed }: { t: Item; onClose: ()
   return (
     // Pembungkus grid: setelah toast meluncur keluar, tingginya menyusut halus sehingga toast di bawahnya naik pelan.
     <div
-      className={`grid transition-[grid-template-rows] duration-200 ease-out ${t.phase === "collapse" ? "grid-rows-[0fr]" : "grid-rows-[1fr]"}`}
+      className={`grid grid-cols-[minmax(0,1fr)] transition-[grid-template-rows] duration-200 ease-out ${t.phase === "collapse" ? "grid-rows-[0fr]" : "grid-rows-[1fr]"}`}
       onTransitionEnd={(e) => e.target === e.currentTarget && t.phase === "collapse" && onCollapsed()}
     >
       <div className={`min-h-0 ${t.phase === "collapse" ? "overflow-hidden" : ""}`}>
@@ -89,9 +93,16 @@ function ToastItem({ t, onClose, onExited, onCollapsed }: { t: Item; onClose: ()
               <span className="text-sm font-semibold leading-snug [overflow-wrap:anywhere]">{t.title}</span>
               {t.description && <span className="text-[13px] leading-relaxed text-soft [overflow-wrap:anywhere]">{t.description}</span>}
               {t.link && (
-                <a href={t.link.href} {...(t.link.external ? { target: "_blank", rel: "noreferrer" } : {})} className="mt-1 self-start text-[13px] font-medium text-lav hover:text-white">
-                  {t.link.label}
-                </a>
+                t.link.external ? (
+                  <a href={t.link.href} target="_blank" rel="noreferrer" className="mt-1 self-start text-[13px] font-medium text-lav hover:text-white">
+                    {t.link.label}
+                  </a>
+                ) : (
+                  // Tautan di dalam aplikasi: pindah halaman tanpa reload, lalu toast ini ditutup.
+                  <Link href={t.link.href} onClick={onClose} className="mt-1 self-start text-[13px] font-medium text-lav no-underline hover:text-white">
+                    {t.link.label}
+                  </Link>
+                )
               )}
             </div>
             <button

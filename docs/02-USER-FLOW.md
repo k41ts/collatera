@@ -12,7 +12,6 @@ flowchart TD
         K3 --> K4[Undang debitur<br/>Link atau alamat wallet]
         K5[Revisi draft<br/>Versi baru, kirim ulang] --> K4
         K6[Tanda tangan + setor dana<br/>Stablecoin masuk escrow]
-        K7[Konfirmasi pembayaran<br/>Hanya transfer off-chain]
     end
 
     subgraph D[Debitur]
@@ -22,7 +21,7 @@ flowchart TD
         D4 -- minta revisi --> K5
         D4 -- tolak --> R[REJECTED]
         D4 -- setuju --> D5[Tanda tangan<br/>EIP-712, tanpa gas]
-        D6[Terima pengingat<br/>H-3 dan H-0] --> D7[Bayar cicilan<br/>Stablecoin atau bukti transfer]
+        D6[Terima pengingat<br/>H-3 dan H-0] --> D7[Bayar cicilan<br/>Stablecoin IDRX + fee aplikasi 1%]
     end
 
     K4 --> D3
@@ -35,9 +34,7 @@ flowchart TD
     D8 --> S3[[Sistem: mint token ke kreditur<br/>ACTIVE]]
     S1 --> D6
     S3 --> D6
-    D7 -- bukti transfer --> K7
-    K7 --> C{Sisa nol?}
-    D7 -- on-chain --> C
+    D7 --> C{Sisa nol?}
     C -- belum --> D6
     C -- ya --> S2[[Sistem: PAID, token di-burn<br/>Bukti lunas + txHash ke kedua pihak]]
 ```

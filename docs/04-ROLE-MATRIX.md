@@ -29,7 +29,6 @@ Peran ditentukan **per surat piutang**. Satu akun bisa jadi kreditur di satu piu
 | Mint token | ❌ | ❌ | ❌ | ⚙️ | ❌ |
 | Konfirmasi terima dana (off-chain) | ❌ | ✅ | ❌ | ❌ | ❌ |
 | Bayar cicilan | ❌ | ✅ | ❌ | ❌ | ❌ |
-| Upload bukti transfer | ❌ | ✅ | ❌ | ❌ | ❌ |
 | Konfirmasi / tolak bayar off-chain | ✅ | ❌ | ❌ | ❌ | ❌ |
 | Set OVERDUE / kembali ACTIVE | ❌ | ❌ | ❌ | ⚙️ dihitung contract saat dibaca (`statusOf`) | ❌ |
 | Hitung late fee | ❌ | ❌ | ❌ | ⚙️ (contract) | ❌ |

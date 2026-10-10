@@ -35,6 +35,7 @@ Target: **Ethereum Sepolia testnet** (mainnet out of scope).
 | `NEXT_PUBLIC_CHAIN_ID`, `NEXT_PUBLIC_DEBT_MANAGER_ADDRESS`, `NEXT_PUBLIC_MOCK_IDRX_ADDRESS`, `NEXT_PUBLIC_FORWARDER_ADDRESS` | frontend |
 | `DEPLOYER_PRIVATE_KEY`, `ADMIN_ADDRESS`, `FREEZER_ADDRESS` | `scripts/deploy.js` (lihat `piutangchain-contracts/.env.example`) |
 | `RELAYER_PRIVATE_KEY` | relayer worker (secret) |
+| `APP_FEE_WALLET`, `APP_FEE_BPS` | backend: wallet penampung fee aplikasi dan tarifnya dalam basis poin (default `100` = 1%, maks `1000`). `APP_FEE_WALLET` kosong = fee nonaktif |
 | `FREEZER_PRIVATE_KEY` | integrity checker, hanya untuk `freeze` (secret) |
 | `IDRX_OWNER_PRIVATE_KEY` | backend faucet: `MockIDRX.mint` (secret, testnet saja) |
 | `DATABASE_URL`, `REDIS_URL` | backend, worker |

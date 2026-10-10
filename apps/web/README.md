@@ -5,7 +5,7 @@ Full-stack Next.js (App Router) untuk PiutangChain: UI + API + relayer gasless, 
 | Bagian | Isi |
 |---|---|
 | UI | Landing, Masuk (MetaMask/SIWE), Dashboard, Piutang saya (cari/filter/urut), Buat & ubah draft, Detail piutang, Tanda tangan, Chat, Profil |
-| API | `src/app/api/**`: auth SIWE, profil + OTP, faucet IDRX, draft, dokumen, tanda tangan EIP-712, escrow & aktivasi, pembayaran on-chain (forwarder) & off-chain, sengketa, integrity check, chat |
+| API | `src/app/api/**`: auth SIWE, profil + OTP, faucet IDRX, draft, dokumen, tanda tangan EIP-712, escrow & aktivasi, pembayaran on-chain (forwarder) + fee aplikasi, sengketa, integrity check, chat |
 | Relayer | `src/lib/chain/relayer.ts`: satu wallet membayar gas semua transaksi, antrean in-process, estimasi gas +30% |
 | DB | Prisma + PostgreSQL (Supabase), dev maupun produksi. File upload disimpan di DB (bytea) |
 
@@ -19,7 +19,7 @@ npm install
 cp .env.example .env
 ```
 
-Isi `.env`: `DATABASE_URL` (Supabase "Transaction pooler", port 6543, `?pgbouncer=true&connection_limit=5`), `DIRECT_URL` (Supabase "Direct connection" atau "Session pooler", port 5432), `SESSION_SECRET` (string acak ≥32 karakter) dan `RELAYER_PRIVATE_KEY` (wallet ber-Sepolia ETH; harus owner MockIDRX + `ADMIN_ROLE` supaya faucet dan auto-freeze jalan). Di development, kalau `RELAYER_PRIVATE_KEY` kosong, server memakai `DEPLOYER_PRIVATE_KEY` dari `piutangchain-contracts/.env`.
+Isi `.env`: `DATABASE_URL` (Supabase "Transaction pooler", port 6543, `?pgbouncer=true&connection_limit=5`), `DIRECT_URL` (Supabase "Direct connection" atau "Session pooler", port 5432), `SESSION_SECRET` (string acak ≥32 karakter) dan `RELAYER_PRIVATE_KEY` (wallet ber-Sepolia ETH; harus owner MockIDRX + `ADMIN_ROLE` supaya faucet dan auto-freeze jalan). Di development, kalau `RELAYER_PRIVATE_KEY` kosong, server memakai `DEPLOYER_PRIVATE_KEY` dari `piutangchain-contracts/.env`. Untuk fee aplikasi isi `APP_FEE_WALLET` (wallet penampung) dan `APP_FEE_BPS` (basis poin, default `100` = 1%); kosongkan `APP_FEE_WALLET` untuk menonaktifkan.
 
 Terapkan migrasi (pakai `migrate deploy`, bukan `db push`: migrasi 0002 berisi unique index parsial untuk nomor HP yang tidak bisa ditulis di `schema.prisma`):
 
@@ -37,7 +37,7 @@ Buka http://localhost:3000, masuk dengan MetaMask di jaringan Sepolia, verifikas
 
 ## Tes end-to-end
 
-Dengan dev server jalan, script ini memakai dua wallet acak sebagai kreditur dan debitur dan menjalankan seluruh alur di Sepolia (login, faucet, escrow, aktivasi, bayar gasless, konfirmasi off-chain, chat, cek integritas, sengketa, tamper → beku, pencairan off-chain, tandai lunas):
+Dengan dev server jalan, script ini memakai dua wallet acak sebagai kreditur dan debitur dan menjalankan seluruh alur di Sepolia (login, faucet, escrow, aktivasi, bayar gasless, chat, cek integritas, sengketa, tamper → beku, pencairan off-chain, tandai lunas):
 
 ```bash
 node scripts/e2e-api.mjs

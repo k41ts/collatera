@@ -26,7 +26,7 @@ flowchart LR
 | **Frontend** | UI draft, review, tanda tangan EIP-712, upload, dashboard piutang |
 | **Backend API** | Auth SIWE, CRUD draft, verifikasi signature, otorisasi per piutang, audit log |
 | **Storage** | Menyimpan dokumen terenkripsi; hanya hash yang keluar |
-| **Relayer Worker** | Mengirim tx memakai ethers `Wallet` + `NonceManager`, retry: `depositEscrow`, `activateOnchain`/`activateOffchain`, `recordOffchainPayment`, `amend`, dan `PiutangForwarder.execute` untuk aksi pengguna (bayar, dispute, markPaid, refund). Satu-satunya pengirim tx dari wallet relayer |
+| **Relayer Worker** | Mengirim tx memakai ethers `Wallet` + `NonceManager`, retry: `depositEscrow`, `activateOnchain`/`activateOffchain`, `recordOffchainPayment` (legacy, hanya bukti transfer lama yang masih PENDING), `amend`, dan `PiutangForwarder.execute` untuk aksi pengguna (bayar, dispute, markPaid, refund). Satu-satunya pengirim tx dari wallet relayer |
 | **Event Indexer** | Membaca event `DebtManager` lewat ethers `contract.queryFilter` (`NoteActivated`, `PaymentRecorded`, `LateFeeAccrued`, `NoteSettled`, `StatusChanged`, `DisputeOpened/Closed`, `NoteFrozen/Unfrozen`, `EscrowDeposited/Refunded`) → update DB via Prisma secara idempotent |
 | **Cron Worker** | Baca `statusOf()`/`remaining()` untuk sinkron OVERDUE dan denda ke DB (OVERDUE dihitung contract, tanpa event dan tanpa tx), kirim pengingat H-3/H-0, integrity check berkala |
 | **Integrity Checker** | Hitung ulang `docHash` dari DB → `verifyHash()`, bandingkan field nominal dengan `getNote()` → VERIFIED / TAMPERED. Saat TAMPERED memanggil `freeze` dengan key `FREEZER_ROLE` |

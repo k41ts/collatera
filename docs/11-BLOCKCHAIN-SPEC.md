@@ -66,7 +66,7 @@ struct Schedule { uint64[] dueDates; uint256[] amounts; } // TIDAK ditandatangan
 | Debitur tanda tangan → mint, escrow cair, ACTIVE | `activateOnchain(note, schedule, sigC, sigD)` | siapa saja (relayer) |
 | Pencairan off-chain: debitur konfirmasi terima dana → mint, ACTIVE | `activateOffchain(note, schedule, sigC, sigD, receipt, sigReceipt)` | siapa saja (relayer) |
 | Bayar on-chain | `payOnchain(noteId, amount, installmentIndex, permit)` | debitur (langsung atau lewat forwarder) |
-| Bayar off-chain, dikonfirmasi kreditur | `recordOffchainPayment(confirmation, sigCreditor)` | siapa saja (relayer) |
+| Bayar off-chain, dikonfirmasi kreditur (tidak dipakai aplikasi) | `recordOffchainPayment(confirmation, sigCreditor)` | siapa saja (relayer) |
 | Kreditur mengikhlaskan sisa | `markPaid(noteId)` | kreditur |
 | Revisi setelah aktif | `amend(amendment, schedule, sigC, sigD)` | siapa saja (relayer) |
 | Ajukan / tutup sengketa | `openDispute(noteId, reasonHash)` / `closeDispute(noteId, resolutionHash, waiveFee)` | kreditur atau debitur / `ADMIN_ROLE` |
@@ -156,6 +156,7 @@ event NonceCancelled(address indexed signer, uint256 nonce);
 - Aksi yang otorisasinya sudah dari signature (aktivasi, deposit escrow, konfirmasi off-chain, revisi) dikirim relayer langsung, tanpa forwarder.
 - Stablecoin bergerak lewat **permit** (EOA). Permit dibungkus try/catch: kalau di-front-run, transaksi tetap jalan selama allowance cukup. Smart account membayar dengan `approve` dulu lalu `permit.deadline = 0`.
 - Bayar on-chain lewat forwarder: tanda tangani permit dulu, lalu ForwardRequest yang `data`-nya `payOnchain(noteId, amount, installmentIndex, permit)` (calldata memuat signature permit).
+- **Fee aplikasi** tidak ada di kontrak: debitur menandatangani permit IDRX kedua (nonce berikutnya, spender = relayer) senilai fee; setelah `payOnchain` sukses relayer memanggil `permit` lalu `transferFrom(debitur, APP_FEE_WALLET, fee)`. Kalau penarikan fee gagal, pembayaran ke kreditur tetap sah dan kegagalannya dicatat di audit log ([BR-22a](03-BUSINESS-RULES.md)).
 
 ## Role
 

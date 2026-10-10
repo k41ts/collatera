@@ -35,7 +35,7 @@ export const GET = handler<Ctx>(async (_req, user, { params }) => {
   return ok({
     note: {
       id: n.id,
-      code: "PC-" + n.chainNoteId.slice(2, 6).toUpperCase(),
+      code: "CL-" + n.chainNoteId.slice(2, 6).toUpperCase(),
       chainNoteId: n.chainNoteId,
       inviteToken: n.creatorId === user.id ? n.inviteToken : undefined,
       version: n.version,
@@ -77,7 +77,7 @@ export const GET = handler<Ctx>(async (_req, user, { params }) => {
       debtorSigned: !!sig("debtor"),
     },
     me: { role, isCreator: n.creatorId === user.id, isAdmin, wallet: user.wallet, phoneVerified: !!user.phoneVerifiedAt },
-    // Pajak aplikasi untuk pembayaran on-chain: tarif + alamat relayer yang diberi izin (permit) menarik pajak.
+    // Fee aplikasi untuk pembayaran on-chain: tarif + alamat relayer yang diberi izin (permit) menarik fee.
     appFee: appFeeOf(),
     other: otherUser ? { name: displayName(otherUser), wallet: otherUser.wallet } : null,
     chain: chainView,

@@ -116,14 +116,11 @@ async function main() {
   catch (e) { assert(/piutang lain/.test(e.message), "pesan tolak forward: " + e.message); }
   ok("server menolak ForwardRequest untuk piutang lain");
 
-  // bayar off-chain: upload bukti, kreditur konfirmasi dengan tanda tangan
+  // pembayaran transfer bank sudah dihapus: endpoint upload bukti tidak ada lagi
   const pf = new FormData(); pf.append("amount", "50000"); pf.append("installment", "2"); pf.append("proof", pdf(), "bukti.pdf");
-  const { id: pid } = await D.req("POST", `/api/notes/${id}/payments`, null, pf);
-  const t = await K.req("GET", `/api/payments/${pid}`);
-  const conf = await K.req("POST", `/api/payments/${pid}`, { action: "confirm", signature: await K.signTyped(t), message: t.message });
-  d = await note(K, id);
-  assert(BigInt(d.chain.remaining) === BigInt(rp(50000)), `sisa utang 50.000 (dapat ${d.chain.remaining})`);
-  ok("bukti transfer dikonfirmasi kreditur, sisa Rp50.000", conf.txHash);
+  try { await D.req("POST", `/api/notes/${id}/payments`, null, pf); assert(false, "upload bukti transfer harus ditolak"); }
+  catch (e) { assert(!/harus ditolak/.test(e.message), e.message); }
+  ok("upload bukti transfer ditolak (hanya bayar IDRX)");
 
   await D.req("POST", `/api/notes/${id}/messages`, { body: "Halo, cicilan 2 sudah saya transfer sebagian." });
   const msgs = await K.req("GET", `/api/notes/${id}/messages`);

@@ -20,7 +20,8 @@
 | Typing contract | TypeChain (bawaan hardhat-toolbox) | Panggilan contract type-safe di ethers |
 | Stablecoin testnet | `MockIDRX`, **2 desimal** | Rp1 = 100 satuan terkecil |
 | Chain | Ethereum Sepolia | Sesuai PRD |
-| Gasless | Relayer sendiri (ERC-2771 forwarder) + EIP-2612 permit | Pengguna tidak pernah bayar gas |
+| Gasless | Relayer sendiri (ERC-2771 forwarder) + EIP-2612 permit | Pengguna tidak pernah bayar gas (yang dibayar debitur hanya fee aplikasi, lihat baris berikut) |
+| Fee aplikasi | Permit EIP-2612 kedua dari debitur (nonce berikutnya) → relayer `permit` + `transferFrom` ke `APP_FEE_WALLET` setelah `payOnchain` sukses | Default 1% (`APP_FEE_BPS=100`) dari tiap pembayaran IDRX ([BR-22a](03-BUSINESS-RULES.md)) |
 | Notifikasi | Resend (email) + tabel notifikasi in-app | Sederhana |
 | OTP | Twilio Verify / provider lokal | Verifikasi HP |
 
@@ -32,7 +33,7 @@ Struct yang ditandatangani mengikuti kode (`piutangchain-contracts/contracts/Deb
 |--------|----------------|-------|
 | `Note` | kreditur **dan** debitur (pesan identik) | Saat setuju isi perjanjian |
 | `DisbursementReceipt` | debitur | Pencairan off-chain: konfirmasi terima dana |
-| `PaymentConfirmation` | kreditur | Konfirmasi pembayaran off-chain |
+| `PaymentConfirmation` | kreditur | Konfirmasi pembayaran off-chain (ada di kontrak, tidak dipakai aplikasi: pembayaran transfer bank dihapus) |
 | `Amendment` | kreditur dan debitur | Revisi setelah aktif |
 | `ForwardRequest` (domain `PiutangForwarder`) | pengguna | Aksi gasless lewat forwarder |
 | `Permit` (domain `Mock IDRX`) | pemilik token | Setor escrow / bayar on-chain |

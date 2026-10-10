@@ -10,8 +10,8 @@ export default function NewNotePage() {
         <span>Buat surat piutang</span>
       </nav>
       <div className="flex flex-col gap-2">
-        <h1 className="text-[26px] font-semibold leading-tight tracking-tight [overflow-wrap:anywhere] sm:text-[34px]">Buat surat piutang</h1>
-        <p className="text-[15px] text-muted">Draft belum mengikat. Piutang baru aktif setelah <strong className="font-semibold text-white">kamu dan pihak lawan sama-sama tanda tangan</strong>.</p>
+        <h1 className="text-[26px] font-extrabold leading-tight tracking-[-0.035em] [overflow-wrap:anywhere] sm:text-[34px]">Buat surat piutang</h1>
+        <p className="text-[15px] text-muted">Draft belum mengikat. Piutang baru aktif setelah <strong className="font-semibold text-ink">kamu dan pihak lawan sama-sama tanda tangan</strong>.</p>
       </div>
       <NoteForm />
     </div>

@@ -47,13 +47,13 @@ export default function ProfilePage() {
   const toggles: [keyof Me["user"], string, string][] = [
     ["notifyH3", "Pengingat H-3", "Tiga hari sebelum cicilan jatuh tempo"],
     ["notifyH0", "Pengingat hari H", "Pada tanggal jatuh tempo"],
-    ["notifyPayment", "Pembayaran masuk", "Saat cicilan dibayar atau bukti transfer dikirim"],
+    ["notifyPayment", "Pembayaran masuk", "Saat cicilan dibayar"],
     ["notifyChat", "Pesan chat baru", "Dari pihak di surat piutangmu"],
   ];
 
   return (
     <div className="flex flex-col gap-5">
-      <h1 className="text-[26px] font-semibold tracking-tight sm:text-[32px]">Profil</h1>
+      <h1 className="text-[26px] font-extrabold tracking-[-0.035em] sm:text-[32px]">Profil</h1>
 
       <section aria-label="Ringkasan akun" className="flex flex-wrap items-center gap-4 rounded-[22px] bg-brand p-5 sm:gap-5 sm:p-6">
         <Avatar name={u.name || u.wallet.slice(2, 4)} seed={u.wallet} size="lg" />
@@ -76,7 +76,7 @@ export default function ProfilePage() {
       <div className="flex flex-wrap items-start gap-5">
         <div className="flex min-w-0 flex-[999_1_480px] flex-col gap-5">
           <Card className="flex flex-col gap-4">
-            <h2 className="text-lg font-semibold">Data diri</h2>
+            <h2 className="text-lg font-bold">Data diri</h2>
             <form className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,220px),1fr))] gap-4" onSubmit={(e) => { e.preventDefault(); run("save", () => api("/api/me", { method: "PATCH", json: { name, email } }), "Profil disimpan."); }}>
               <Field label="Nama lengkap" htmlFor="nama" hint="Ditampilkan ke pihak lawan di surat piutang">
                 <input id="nama" value={name} onChange={(e) => setName(e.target.value)} className={input} />
@@ -89,7 +89,7 @@ export default function ProfilePage() {
           </Card>
 
           <Card className="flex flex-col gap-4">
-            <h2 className="text-lg font-semibold">Nomor HP</h2>
+            <h2 className="text-lg font-bold">Nomor HP</h2>
             <p className="text-sm text-muted">Wajib diverifikasi sebelum membuat atau menandatangani surat piutang. Nomor tidak pernah masuk blockchain.</p>
             <div className="flex flex-wrap items-end gap-3">
               <div className="min-w-0 flex-[1_1_220px]">
@@ -115,7 +115,7 @@ export default function ProfilePage() {
           </Card>
 
           <Card className="flex flex-col gap-3.5">
-            <h2 className="text-lg font-semibold">Wallet</h2>
+            <h2 className="text-lg font-bold">Wallet</h2>
             <div className="flex flex-wrap items-center gap-3 rounded-[14px] bg-midnight p-3.5 sm:p-4">
               <div className="flex min-w-0 flex-[1_1_260px] flex-col gap-1">
                 <span className="text-xs text-faint">Alamat wallet login</span>
@@ -126,7 +126,7 @@ export default function ProfilePage() {
             <dl className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,180px),1fr))] gap-3 text-[13px]">
               <div><dt className="text-xs text-faint">Saldo IDRX uji</dt><dd className="mt-0.5 font-medium tabular-nums">{fmtRp(data.balance)}</dd></div>
               <div><dt className="text-xs text-faint">Token</dt><dd className="mt-0.5 font-mono text-xs [overflow-wrap:anywhere]">{ADDR.MockIDRX}</dd></div>
-              <div><dt className="text-xs text-faint">Biaya jaringan</dt><dd className="mt-0.5 font-medium">Dibayar relayer PiutangChain</dd></div>
+              <div><dt className="text-xs text-faint">Biaya jaringan</dt><dd className="mt-0.5 font-medium">Dibayar relayer Collatera</dd></div>
             </dl>
             <div className="flex flex-wrap gap-2.5">
               <Button className="w-full sm:w-auto" disabled={!!busy || faucetWait > 0} onClick={() => run("faucet", () => api<{ txHash: string }>("/api/faucet", { method: "POST" }), "Rp10.000.000 IDRX uji masuk ke wallet kamu.", (r) => (r as { txHash: string }).txHash)}>
@@ -138,7 +138,7 @@ export default function ProfilePage() {
         </div>
 
         <Card className="flex min-w-0 flex-[1_1_320px] flex-col gap-1">
-          <h2 className="mb-2 text-lg font-semibold">Notifikasi</h2>
+          <h2 className="mb-2 text-lg font-bold">Notifikasi</h2>
           {toggles.map(([key, label, hint]) => {
             const on = !!u[key];
             return (

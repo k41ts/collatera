@@ -64,7 +64,7 @@ export function MenuButton({
       aria-expanded={open}
       aria-controls={controls}
       aria-label={open ? "Tutup menu" : badge ? `Buka menu, ${badge} perlu perhatian` : "Buka menu"}
-      className={`relative h-11 w-11 flex-none rounded-xl border border-line2 text-white hover:border-faint ${className}`}
+      className={`relative h-11 w-11 flex-none rounded-xl border border-line2 text-ink hover:border-faint ${className}`}
     >
       <span aria-hidden className={`${bar} ${open ? "top-1/2 -translate-y-1/2 rotate-45" : "top-[15px]"}`} />
       <span aria-hidden className={`${bar} top-1/2 -translate-y-1/2 ${open ? "opacity-0" : ""}`} />

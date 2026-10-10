@@ -1,6 +1,6 @@
 # PiutangChain
 
-Surat piutang (promissory note) on-chain: dibuat, ditandatangani kedua pihak, ditokenisasi, dan ditagih sampai lunas, tanpa pengguna perlu paham crypto atau membayar gas.
+Surat piutang (promissory note) on-chain: dibuat, ditandatangani kedua pihak, ditokenisasi, dan ditagih sampai lunas, tanpa pengguna perlu paham crypto atau membayar gas. Satu-satunya biaya: fee aplikasi 1% yang dibayar debitur di setiap pembayaran on-chain (IDRX).
 
 ## Fitur
 
@@ -8,7 +8,8 @@ Surat piutang (promissory note) on-chain: dibuat, ditandatangani kedua pihak, di
 - Draft, undangan, revisi, dan tanda tangan EIP-712 gasless
 - Token ERC-721 non-transferable ke wallet kreditur sebagai hak tagih
 - Pencairan pokok lewat escrow stablecoin atau transfer off-chain
-- Cicilan, pembayaran on-chain (MockIDRX) dan off-chain dengan konfirmasi kreditur
+- Cicilan dan pembayaran on-chain (MockIDRX)
+- Fee aplikasi 1% (bisa diatur lewat `APP_FEE_BPS`) untuk setiap pembayaran debitur
 - OVERDUE otomatis per cicilan, late fee 2%/bulan (jika disepakati), pengingat H-3 & H-0
 - Integrity checker: hash DB vs on-chain → TAMPERED → FROZEN
 - Dispute ke admin dan audit log

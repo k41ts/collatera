@@ -48,7 +48,7 @@ export const GET = handler(async (_req, user) => {
         : null;
       return {
         id: n.id,
-        code: "PC-" + n.chainNoteId.slice(2, 6).toUpperCase(),
+        code: "CL-" + n.chainNoteId.slice(2, 6).toUpperCase(),
         title: n.title,
         debtType: n.debtType,
         status: n.status,

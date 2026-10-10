@@ -28,9 +28,9 @@ Surat piutang yang sudah ditandatangani kedua pihak di-mint sebagai **token ERC-
 
 ## 4. Scope
 
-**In scope:** SIWE, embedded wallet (email/Google), OTP HP, draft & negosiasi, tanda tangan EIP-712 gasless, upload dokumen, hashing Keccak-256, mint ERC-721, pencairan escrow/off-chain, cicilan, pembayaran stablecoin IDR (mock di testnet), pembayaran off-chain + konfirmasi, OVERDUE otomatis, late fee 2%/bulan, notifikasi email + in-app, pelunasan + burn, integrity checker, auto-freeze, dispute, relayer/paymaster, Sepolia, audit log.
+**In scope:** SIWE, embedded wallet (email/Google), OTP HP, draft & negosiasi, tanda tangan EIP-712 gasless, upload dokumen, hashing Keccak-256, mint ERC-721, pencairan escrow/off-chain, cicilan, pembayaran stablecoin IDR (mock di testnet), OVERDUE otomatis, late fee 2%/bulan, fee aplikasi 1% per pembayaran on-chain debitur, notifikasi email + in-app, pelunasan + burn, integrity checker, auto-freeze, dispute, relayer/paymaster, Sepolia, audit log.
 
-**Out of scope:** pasar sekunder token, pendanaan investor/liquidity pool, credit scoring, e-KYC Dukcapil, debt collector, dokumen on-chain, on/off-ramp fiat, e-Meterai/TTE tersertifikasi, mainnet.
+**Out of scope:** pembayaran cicilan lewat transfer bank (bukti transfer + konfirmasi kreditur), pasar sekunder token, pendanaan investor/liquidity pool, credit scoring, e-KYC Dukcapil, debt collector, dokumen on-chain, on/off-ramp fiat, e-Meterai/TTE tersertifikasi, mainnet.
 
 ## 5. Success Criteria
 
@@ -38,13 +38,13 @@ Surat piutang yang sudah ditandatangani kedua pihak di-mint sebagai **token ERC-
 - [ ] Token ter-mint ke kreditur dan hash-nya sama dengan database.
 - [ ] Satu hash dokumen tidak bisa menjadi dua token.
 - [ ] Pembayaran on-chain langsung mengurangi sisa utang.
-- [ ] Pembayaran off-chain tercatat hanya setelah kreditur konfirmasi.
 - [ ] Cicilan lewat jatuh tempo & belum lunas → OVERDUE otomatis (per cicilan, sama di DB dan on-chain).
 - [ ] Late fee 2% per bulan dihitung otomatis jika disepakati.
 - [ ] Lunas penuh → PAID dan token di-burn.
 - [ ] Hash bisa diverifikasi ulang kapan saja; mismatch → TAMPERED → FROZEN.
 - [ ] Piutang FROZEN menolak pembayaran, perubahan, dan burn.
 - [ ] Pengguna embedded wallet menyelesaikan seluruh alur tanpa membeli gas.
+- [ ] Pembayaran on-chain debitur otomatis dikenai fee aplikasi 1% ke wallet fee.
 
 ## 6. Pertanyaan Terbuka
 

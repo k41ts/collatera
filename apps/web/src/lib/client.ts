@@ -59,7 +59,7 @@ export function metamaskDeepLink(path = typeof window !== "undefined" ? window.l
 
 const NO_WALLET = () =>
   isMobileDevice()
-    ? "Wallet tidak ditemukan. Buka PiutangChain dari browser di dalam aplikasi MetaMask."
+    ? "Wallet tidak ditemukan. Buka Collatera dari browser di dalam aplikasi MetaMask."
     : "MetaMask tidak ditemukan. Pasang ekstensi MetaMask dulu.";
 
 const SEPOLIA_HEX = "0x" + CHAIN_ID.toString(16);
@@ -108,7 +108,7 @@ export async function loginWithWallet() {
     `${window.location.host} wants you to sign in with your Ethereum account:`,
     address,
     "",
-    "Masuk ke PiutangChain. Tanda tangan ini gratis dan tidak membuat transaksi.",
+    "Masuk ke Collatera. Tanda tangan ini gratis dan tidak membuat transaksi.",
     "",
     `URI: ${window.location.origin}`,
     "Version: 1",
@@ -159,8 +159,8 @@ export async function forwardAction(opts: {
 
 /**
  * Bayar on-chain: tanda tangani permit IDRX lalu ForwardRequest payOnchain (tanpa gas).
- * Jika pajak aplikasi aktif, debitur juga menandatangani permit kedua (nonce berikutnya) agar relayer bisa menarik
- * pajak ke wallet pajak setelah pembayaran berhasil.
+ * Jika fee aplikasi aktif, debitur juga menandatangani permit kedua (nonce berikutnya) agar relayer bisa menarik
+ * fee ke wallet fee setelah pembayaran berhasil.
  */
 export async function payOnchain(opts: {
   noteId: string;
@@ -175,7 +175,7 @@ export async function payOnchain(opts: {
   const [nonce, balance] = await Promise.all([idrx.nonces(opts.wallet), idrx.balanceOf(opts.wallet)]);
   const fee = opts.appFee ? feeFor(BigInt(opts.amount), opts.appFee.bps) : BigInt(0);
   if (balance < BigInt(opts.amount) + fee)
-    throw new Error(fee > BigInt(0) ? "Saldo IDRX kamu kurang untuk pembayaran + pajak aplikasi. Ambil dari faucet di halaman Profil." : "Saldo IDRX kamu kurang. Ambil dari faucet di halaman Profil.");
+    throw new Error(fee > BigInt(0) ? "Saldo IDRX kamu kurang untuk pembayaran + fee aplikasi. Ambil dari faucet di halaman Profil." : "Saldo IDRX kamu kurang. Ambil dari faucet di halaman Profil.");
   const deadline = Math.floor(Date.now() / 1000) + 3600;
   const permitSig = await signer.signTypedData(tokenDomain, PERMIT_TYPES, {
     owner: opts.wallet, spender: ADDR.DebtManager, value: opts.amount, nonce, deadline,

@@ -8,7 +8,6 @@ export const STATUS: Record<string, { label: string; cls: string }> = {
   AWAITING_DISBURSEMENT: { label: "Pencairan", cls: "border-[1.5px] border-dashed border-ink text-ink" },
   ACTIVE: { label: "Aktif", cls: "bg-bubble text-ink" },
   OVERDUE: { label: "Terlambat", cls: "bg-ink text-white" },
-  DISPUTED: { label: "Sengketa", cls: "bg-[#3a3a3a] text-white" },
   FROZEN: { label: "Dibekukan", cls: "border-[1.5px] border-[#3a3a3a] bg-[#3a3a3a]/10 text-ink" },
   PAID: { label: "Lunas", cls: "bg-raised text-muted" },
   REJECTED: { label: "Ditolak", cls: "bg-raised text-muted line-through" },

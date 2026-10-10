@@ -37,7 +37,7 @@ type Detail = {
 };
 
 const TYPES: Record<string, string> = { personal: "Pinjaman pribadi", business: "Bisnis", invoice: "Invoice", other: "Lainnya" };
-const LIVE = ["ACTIVE", "OVERDUE", "DISPUTED", "FROZEN"];
+const LIVE = ["ACTIVE", "OVERDUE", "FROZEN"];
 
 export default function NoteDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -165,25 +165,6 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
               tone: "danger",
               action: () => run("waive", () => forwardAction({ noteId: id, wallet: me.wallet, fn: "markPaid", args: [n.chainNoteId], purpose: "markPaid" }), "Piutang ditandai lunas."),
             })}>Ikhlaskan sisa</Button>
-          )}
-          {["ACTIVE", "OVERDUE"].includes(n.status) && role && (
-            <Button variant="danger" disabled={!!busy} aria-haspopup="dialog" onClick={() => confirm({
-              title: "Ajukan sengketa",
-              description: "Admin akan meninjau sengketa ini. Hash alasanmu dicatat di blockchain, jadi tulis dengan jelas dan jujur.",
-              field: { label: "Alasan sengketa", placeholder: "Contoh: pembayaran cicilan 2 sudah saya transfer tanggal 5 tapi belum dikonfirmasi.", minLength: 10, hint: "Minimal 10 huruf." },
-              confirmText: "Ajukan sengketa",
-              tone: "danger",
-              action: (reason) => run("dispute", () => forwardAction({ noteId: id, wallet: me.wallet, fn: "openDispute", args: [n.chainNoteId, keccak256(toUtf8Bytes(reason))], purpose: "dispute", reason }), "Sengketa diajukan. Admin akan meninjau."),
-            })}>Ajukan sengketa</Button>
-          )}
-          {me.isAdmin && n.status === "DISPUTED" && (
-            <Button variant="secondary" disabled={!!busy} aria-haspopup="dialog" onClick={() => confirm({
-              title: "Tutup sengketa",
-              description: "Ringkasan keputusan dikirim ke kedua pihak dan hash-nya dicatat di blockchain.",
-              field: { label: "Ringkasan keputusan admin", placeholder: "Contoh: bukti transfer valid, cicilan 2 dianggap lunas." },
-              confirmText: "Tutup sengketa",
-              action: (r) => run("close", () => forwardAction({ noteId: id, wallet: me.wallet, fn: "closeDispute", args: [n.chainNoteId, keccak256(toUtf8Bytes(r))], purpose: "closeDispute" }), "Sengketa ditutup."),
-            })}>Tutup sengketa (admin)</Button>
           )}
           {me.isAdmin && n.status === "FROZEN" && (
             <Button variant="secondary" disabled={!!busy} aria-haspopup="dialog" onClick={() => confirm({
@@ -410,7 +391,7 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
           {(isLive || n.status === "PAID") && (
             <Card id="pembayaran" className="flex flex-col gap-4">
               <h2 className="text-lg font-bold">Pembayaran</h2>
-              {role === "debtor" && ["ACTIVE", "OVERDUE", "DISPUTED"].includes(n.status) && remaining > BigInt(0) && due && due.kind !== "none" && (
+              {role === "debtor" && ["ACTIVE", "OVERDUE"].includes(n.status) && remaining > BigInt(0) && due && due.kind !== "none" && (
                 <PayBox
                   disabled={!!busy}
                   loading={busy === "pay"}
@@ -565,8 +546,8 @@ const EVENT: Record<string, string> = {
   SEND_FOR_SIGNATURE: "Dikirim untuk tanda tangan", SIGN: "Ditandatangani", DEPOSIT_ESCROW: "Dana disetor ke escrow",
   ACTIVATE_ONCHAIN: "Aktif, escrow cair", ACTIVATE_OFFCHAIN: "Aktif, dana dikonfirmasi debitur", REJECT: "Ditolak", CANCEL: "Dibatalkan",
   REQUEST_REVISION: "Revisi diminta", PAY: "Pembayaran on-chain", UPLOAD_PAYMENT_PROOF: "Bukti transfer dikirim",
-  CONFIRM_PAYMENT: "Pembayaran dikonfirmasi", REJECT_PAYMENT: "Bukti transfer ditolak", DISPUTE: "Sengketa diajukan",
-  MARKPAID: "Sisa diikhlaskan", REFUND: "Escrow ditarik", CLOSEDISPUTE: "Sengketa ditutup", UNFREEZE: "Pembekuan dibuka",
+  CONFIRM_PAYMENT: "Pembayaran dikonfirmasi", REJECT_PAYMENT: "Bukti transfer ditolak",
+  MARKPAID: "Sisa diikhlaskan", REFUND: "Escrow ditarik", UNFREEZE: "Pembekuan dibuka",
   INTEGRITY_CHECK: "Cek integritas", APP_FEE: "Fee aplikasi dibayar", APP_FEE_FAILED: "Fee aplikasi gagal ditarik",
 };
 

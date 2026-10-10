@@ -70,6 +70,8 @@ html {
 body {
   background: var(--color-midnight);
   color: var(--color-ink);
+  /* Jaring pengaman: kata yang lebih panjang dari barisnya (alamat wallet, hash, URL) dipatahkan, bukan meluber. */
+  overflow-wrap: break-word;
 }
 
 :focus-visible {

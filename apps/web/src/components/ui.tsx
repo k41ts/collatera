@@ -78,7 +78,7 @@ export function Field({ label, htmlFor, hint, children }: { label: string; htmlF
 export function Notice({ tone = "info", children }: { tone?: "info" | "ok" | "error" | "warn"; children: ReactNode }) {
   const cls = { info: "bg-raised text-muted", ok: "border border-line2 bg-card text-ink", error: "border-[1.5px] border-ink bg-card text-ink", warn: "border-[1.5px] border-dashed border-ink bg-card text-ink" }[tone];
   return (
-    <div role={tone === "error" ? "alert" : "status"} className={`rounded-xl px-3.5 py-3 text-sm leading-relaxed ${cls}`}>
+    <div role={tone === "error" ? "alert" : "status"} className={`rounded-xl px-3.5 py-3 text-sm leading-relaxed [overflow-wrap:anywhere] ${cls}`}>
       {children}
     </div>
   );

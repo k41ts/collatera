@@ -102,7 +102,7 @@ export const POST = handler<Ctx>(async (req, user, { params }) => {
     if (!body.permit) throw new ApiError(422, "PERMIT_REQUIRED", "Izin setor escrow (permit) belum ditandatangani.");
     const bal = await reader().idrx.balanceOf(user.wallet);
     if (bal < BigInt(terms.principal))
-      throw new ApiError(422, "INSUFFICIENT_BALANCE", `Saldo IDRX kamu ${fmtRp(bal)}, kurang dari pokok ${fmtRp(terms.principal)}. Ambil dari faucet di Profil.`);
+      throw new ApiError(422, "INSUFFICIENT_BALANCE", `Saldo kamu ${fmtRp(bal)}, kurang dari pokok ${fmtRp(terms.principal)}. Ambil dari faucet di Profil.`);
     const rc = await relay("Setor escrow", (c) => c.manager.depositEscrow.populateTransaction(terms, body.signature, body.permit));
     await db.note.update({ where: { id: n.id }, data: { escrowTx: rc.hash, escrowTermsJson: n.termsJson } });
     await systemMessage(n.id, `${name} menyetor ${fmtRp(terms.principal)} ke escrow.`, undefined, user.id);

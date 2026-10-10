@@ -16,11 +16,12 @@ export const NoteInput = z
     firstDue: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Tanggal jatuh tempo tidak valid"),
     // Diabaikan: bunga keterlambatan 2%/bulan selalu berlaku (lihat lateFeeBps di bawah).
     lateFee: z.boolean().optional(),
-    disbursement: z.enum(["onchain", "offchain"]),
+    // Diabaikan: pencairan selalu lewat escrow IDRX (lihat deriveNoteFields).
+    disbursement: z.enum(["onchain", "offchain"]).optional(),
     collateralNote: z.string().trim().max(500).default(""),
     counterpartyWallet: z.string().trim().refine(isAddress, "Alamat wallet pihak lawan tidak valid"),
   })
-  .refine((v) => Number(v.principal) >= 1000, { message: "Nominal pokok minimal Rp1.000", path: ["principal"] })
+  .refine((v) => Number(v.principal) >= 1000, { message: "Nominal pokok minimal Rp1.000 IDRX", path: ["principal"] })
   .refine((v) => v.interestType !== "percent" || Number(v.interestValue) <= 100, { message: "Bunga maksimal 100%", path: ["interestValue"] });
 
 export type NoteInputT = z.infer<typeof NoteInput>;
@@ -42,7 +43,7 @@ export function deriveNoteFields(v: NoteInputT) {
       totalOwed: total.toString(),
       // Wajib untuk semua surat: bunga berjalan selama ada tunggakan, sampai dibayar atau diikhlaskan kreditur.
       lateFeeBps: 200,
-      disbursement: v.disbursement,
+      disbursement: "onchain",
       collateralNote: v.collateralNote,
       counterpartyWallet: getAddress(v.counterpartyWallet),
     },

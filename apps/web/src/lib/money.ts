@@ -13,14 +13,14 @@ export function unitsToRupiah(units: string | bigint): bigint {
   return BigInt(units) / UNIT;
 }
 
-/** Format satuan terkecil → "Rp1.250.000" (pecahan sen dibuang untuk tampilan). */
+/** Format satuan terkecil → "Rp1.250.000 IDRX" (rupiah stablecoin IDRX; pecahan sen dibuang untuk tampilan). */
 export function fmtRp(units: string | bigint | null | undefined): string {
-  if (units === null || units === undefined || units === "") return "Rp0";
+  if (units === null || units === undefined || units === "") return "Rp0 IDRX";
   const v = BigInt(units);
   const whole = v / UNIT;
-  return "Rp" + whole.toLocaleString("id-ID");
+  return "Rp" + whole.toLocaleString("id-ID") + " IDRX";
 }
 
 export function fmtRpWhole(rupiah: string | number | bigint): string {
-  return "Rp" + BigInt(String(rupiah).replace(/[^\d]/g, "") || "0").toLocaleString("id-ID");
+  return "Rp" + BigInt(String(rupiah).replace(/[^\d]/g, "") || "0").toLocaleString("id-ID") + " IDRX";
 }

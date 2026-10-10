@@ -108,8 +108,8 @@ export default function Dashboard() {
                   {notes.slice(0, 6).map((n) => (
                     <tr key={n.id} className="border-t border-line">
                       <td className="px-3 py-3.5">
-                        <Link href={`/app/piutang/${n.id}`} className="font-medium text-ink no-underline hover:text-lav">{n.title}</Link>
-                        <div className="mt-0.5 text-xs text-faint">{n.code} · {n.party}</div>
+                        <Link href={`/app/piutang/${n.id}`} className="font-medium text-ink no-underline [overflow-wrap:anywhere] hover:text-lav">{n.title}</Link>
+                        <div className="mt-0.5 text-xs text-faint [overflow-wrap:anywhere]">{n.code} · {n.party}</div>
                       </td>
                       <td className="px-3 py-3.5 text-soft">{n.role === "creditor" ? "Kreditur" : n.role === "debtor" ? "Debitur" : "-"}</td>
                       <td className="px-3 py-3.5 text-right tabular-nums">{fmtRp(left(n) > BigInt(0) ? left(n) : BigInt(0))}</td>

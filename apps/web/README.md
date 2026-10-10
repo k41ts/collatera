@@ -1,4 +1,4 @@
-# PiutangChain Web
+# PiutangChain Web3
 
 Full-stack Next.js (App Router) untuk PiutangChain: UI + API + relayer gasless, terhubung ke kontrak di **Ethereum Sepolia** (`piutangchain-contracts/deployments/sepolia.json`).
 

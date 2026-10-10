@@ -58,7 +58,7 @@ export const POST = handler<Ctx>(async (req, user, { params }) => {
 
   if (body.action === "reject") {
     await db.payment.update({ where: { id: p.id }, data: { status: "REJECTED", rejectReason: body.reason } });
-    await systemMessage(n.id, `${name} menolak bukti transfer ${fmtRp(p.amount)}: "${body.reason}"`);
+    await systemMessage(n.id, `${name} menolak bukti transfer ${fmtRp(p.amount)}: "${body.reason}"`, undefined, user.id);
     await audit(n.id, user.id, "REJECT_PAYMENT", body.reason);
     return ok();
   }
@@ -72,7 +72,7 @@ export const POST = handler<Ctx>(async (req, user, { params }) => {
 
   const rc = await relay("Konfirmasi pembayaran", (c) => c.manager.recordOffchainPayment.populateTransaction(m, body.signature));
   await db.payment.update({ where: { id: p.id }, data: { status: "CONFIRMED", txHash: rc.hash } });
-  await systemMessage(n.id, `${name} mengonfirmasi transfer ${fmtRp(p.amount)}. Sisa utang diperbarui.`);
+  await systemMessage(n.id, `${name} mengonfirmasi transfer ${fmtRp(p.amount)}. Sisa utang diperbarui.`, undefined, user.id);
   await audit(n.id, user.id, "CONFIRM_PAYMENT", fmtRp(p.amount), rc.hash);
   return ok({ txHash: rc.hash });
 });

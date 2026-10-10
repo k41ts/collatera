@@ -87,19 +87,19 @@ export const POST = handler<Ctx>(async (req, user, { params }) => {
     await db.payment.create({
       data: { noteId: n.id, method: "onchain", amount, installment: Number(call.args[2]), status: "CONFIRMED", txHash: rc.hash },
     });
-    await systemMessage(n.id, `${name} membayar ${fmtRp(amount)} dengan stablecoin.`);
+    await systemMessage(n.id, `${name} membayar ${fmtRp(amount)} dengan stablecoin.`, undefined, user.id);
   } else if (body.purpose === "dispute") {
     await db.note.update({ where: { id: n.id }, data: { status: "DISPUTED" } });
-    await systemMessage(n.id, `${name} mengajukan sengketa: "${body.reason}". Admin akan meninjau.`);
+    await systemMessage(n.id, `${name} mengajukan sengketa: "${body.reason}". Admin akan meninjau.`, undefined, user.id);
   } else if (body.purpose === "markPaid") {
     await db.note.update({ where: { id: n.id }, data: { status: "PAID" } });
-    await systemMessage(n.id, `${name} mengikhlaskan sisa utang. Piutang ditandai lunas.`);
+    await systemMessage(n.id, `${name} mengikhlaskan sisa utang. Piutang ditandai lunas.`, undefined, user.id);
   } else if (body.purpose === "refund") {
     await db.note.update({ where: { id: n.id }, data: { escrowTermsJson: null } });
-    await systemMessage(n.id, `${name} menarik dana escrow. Tanda tangannya untuk versi itu ikut batal.`);
+    await systemMessage(n.id, `${name} menarik dana escrow. Tanda tangannya untuk versi itu ikut batal.`, undefined, user.id);
   } else {
     const closeText = `Admin menutup sengketa: "${body.reason}".` + (call.args[2] ? " Denda selama sengketa dihapus." : " Denda selama sengketa tetap terutang.");
-    await systemMessage(n.id, body.purpose === "closeDispute" ? closeText : "Admin membuka pembekuan piutang.");
+    await systemMessage(n.id, body.purpose === "closeDispute" ? closeText : "Admin membuka pembekuan piutang.", undefined, user.id);
   }
   await audit(n.id, user.id, body.purpose.toUpperCase(), body.reason ?? "", rc.hash);
   return ok({ txHash: rc.hash });

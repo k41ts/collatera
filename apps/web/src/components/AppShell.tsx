@@ -5,7 +5,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Avatar, Logo } from "./ui";
 import { MenuButton, useDisclosure } from "./MobileMenu";
 import { api } from "@/lib/client";
-import { needsMySignature, useApi, type NoteSummary } from "@/lib/hooks";
+import { hasRevisionAlert, needsMySignature, useApi, type NoteSummary } from "@/lib/hooks";
 
 const I = {
   dash: <path d="M3 3h7v9H3zM14 3h7v5h-7zM14 12h7v9h-7zM3 16h7v5H3z" />,
@@ -28,6 +28,7 @@ export default function AppShell({ wallet, name, children }: { wallet: string; n
   const notes = data?.notes ?? [];
   const toSign = notes.filter(needsMySignature).length;
   const unread = notes.reduce((s, n) => s + n.unread, 0);
+  const revisions = notes.filter(hasRevisionAlert).length;
   const display = name || `${wallet.slice(0, 6)}…${wallet.slice(-4)}`;
   const menu = useDisclosure();
   const drawerRef = useRef<HTMLElement>(null);
@@ -63,7 +64,7 @@ export default function AppShell({ wallet, name, children }: { wallet: string; n
 
   const items: { href: string; label: string; icon: ReactNode; badge?: number; badgeCls?: string; exact?: boolean }[] = [
     { href: "/app", label: "Dashboard", icon: I.dash, exact: true },
-    { href: "/app/piutang", label: "Piutang saya", icon: I.notes },
+    { href: "/app/piutang", label: "Piutang saya", icon: I.notes, badge: revisions, badgeCls: "bg-butter text-butter-ink" },
     { href: "/app/tanda-tangan", label: "Tanda tangan", icon: I.sign, badge: toSign, badgeCls: "bg-rasp text-white" },
     { href: "/app/chat", label: "Chat", icon: I.chat, badge: unread, badgeCls: "bg-brand-soft text-lav" },
     { href: "/app/piutang/baru", label: "Buat surat piutang", icon: I.plus, exact: true },
@@ -94,7 +95,7 @@ export default function AppShell({ wallet, name, children }: { wallet: string; n
           >
             <Icon size={20}>{I.plus}</Icon>
           </Link>
-          <MenuButton open={menu.open} onClick={menu.toggle} controls="menu-aplikasi" badge={toSign + unread} ref={menu.buttonRef} />
+          <MenuButton open={menu.open} onClick={menu.toggle} controls="menu-aplikasi" badge={toSign + unread + revisions} ref={menu.buttonRef} />
         </div>
       </header>
 

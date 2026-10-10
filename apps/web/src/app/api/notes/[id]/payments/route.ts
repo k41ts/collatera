@@ -20,7 +20,7 @@ export const POST = handler<Ctx>(async (req, user, { params }) => {
   const p = await db.payment.create({
     data: { noteId: n.id, method: "offchain", amount: rupiahToUnits(rupiah), installment, proofData: f.data, proofMime: f.mime, proofHash: f.hash, proofName: f.name },
   });
-  await systemMessage(n.id, `${displayName(user)} mengirim bukti transfer ${fmtRp(p.amount)}. Menunggu konfirmasi kreditur.`, `/app/piutang/${n.id}#pembayaran`);
+  await systemMessage(n.id, `${displayName(user)} mengirim bukti transfer ${fmtRp(p.amount)}. Menunggu konfirmasi kreditur.`, `/app/piutang/${n.id}#pembayaran`, user.id);
   await audit(n.id, user.id, "UPLOAD_PAYMENT_PROOF", fmtRp(p.amount));
   return ok({ id: p.id }, 201);
 });

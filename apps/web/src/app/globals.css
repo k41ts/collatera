@@ -88,3 +88,32 @@ input::placeholder, textarea::placeholder {
     animation: none !important;
   }
 }
+
+/* Skeleton loading: blok abu-abu dengan kilau yang bergerak dari kiri ke kanan. */
+@keyframes skeleton-shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  background-color: var(--color-line);
+}
+.skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.07), transparent);
+  animation: skeleton-shimmer 1.4s ease-in-out infinite;
+}
+/* Di atas latar ungu (kartu ringkasan) pakai warna putih transparan. */
+.skeleton-on-brand {
+  background-color: rgb(255 255 255 / 0.18);
+}
+@media (prefers-reduced-motion: reduce) {
+  .skeleton::after {
+    animation: none;
+  }
+}

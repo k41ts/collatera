@@ -2,11 +2,12 @@
 import Link from "next/link";
 import { use, useState } from "react";
 import { keccak256, toUtf8Bytes } from "ethers";
-import { Avatar, Button, Card, LinkButton, Notice, Spinner, StatusPill, fmtDate, input } from "@/components/ui";
+import { Avatar, Button, Card, LinkButton, Notice, Spinner, StatusPill, fmtDate } from "@/components/ui";
 import { api, forwardAction, payOnchain, short, signTyped } from "@/lib/client";
 import { useApi } from "@/lib/hooks";
-import { fmtRp, rupiahToUnits, unitsToRupiah } from "@/lib/money";
+import { fmtRp } from "@/lib/money";
 import { feeFor, feeLabel } from "@/lib/appFee";
+import { amountDue, type AmountDue } from "@/lib/amountDue";
 import { txUrl } from "@/lib/chain/config";
 import { splitSig } from "@/lib/chain/eip712";
 import RevisionModal from "./RevisionModal";
@@ -114,7 +115,10 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
     const status = n.status === "PAID" || paidPart === BigInt(i.amount) ? "Lunas" : !isLive ? "-" : due < now ? "Terlambat" : paidPart > BigInt(0) ? "Sebagian" : "Belum jatuh tempo";
     return { ...i, paidPart, status };
   });
-  const nextUnpaid = rows.find((r) => r.status !== "Lunas");
+  // Tagihan yang boleh dibayar sekarang (nominal dikunci; server memeriksa ulang angka yang sama).
+  const due = chain
+    ? amountDue({ installments: n.installments.map((i) => BigInt(i.amount)), scheduledPaid, overdue: BigInt(chain.overdue), lateFee: BigInt(chain.lateFee), lateFeeBps: n.lateFeeBps })
+    : null;
   const remaining = chain ? BigInt(chain.remaining) : BigInt(n.totalOwed);
   const paidTotal = BigInt(chain?.paid ?? "0");
   const pct = n.status === "PAID" ? 100 : Number((scheduledPaid * BigInt(100)) / BigInt(n.totalOwed));
@@ -135,13 +139,13 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
           <div className="flex flex-wrap gap-2">
             <StatusPill status={n.status} />
             {n.integrity !== "UNCHECKED" && (
-              <span className={`rounded-md px-2.5 py-1 text-[11px] font-semibold tracking-wide ${n.integrity === "VERIFIED" ? "bg-[#13303a] text-cyan" : "bg-rasp text-white"}`}>{n.integrity}{n.integrityAt ? ` · ${fmtDate(n.integrityAt, true)}` : ""}</span>
+              <span className={`rounded-md px-2.5 py-1 text-[11px] font-semibold tracking-wide ${n.integrity === "VERIFIED" ? "bg-raised text-cyan" : "bg-rasp text-white"}`}>{n.integrity}{n.integrityAt ? ` · ${fmtDate(n.integrityAt, true)}` : ""}</span>
             )}
             <span className="rounded-md bg-raised px-2.5 py-1 text-[11px] font-medium text-soft">{TYPES[n.debtType]} · versi {n.version}</span>
           </div>
-          <h1 className="text-[26px] font-semibold leading-tight tracking-tight [overflow-wrap:anywhere] sm:text-[34px]">{n.title}</h1>
+          <h1 className="text-[26px] font-extrabold leading-tight tracking-[-0.035em] [overflow-wrap:anywhere] sm:text-[34px]">{n.title}</h1>
           <span className="text-sm leading-relaxed text-muted">
-            Kamu <strong className="font-semibold text-white">{role === "creditor" ? "kreditur" : role === "debtor" ? "debitur" : "pengamat"}</strong>
+            Kamu <strong className="font-semibold text-ink">{role === "creditor" ? "kreditur" : role === "debtor" ? "debitur" : "pengamat"}</strong>
             {data.other ? ` · ${data.other.name} ${role === "creditor" ? "debitur" : "kreditur"}` : n.counterpartyWallet ? ` · menunggu ${short(n.counterpartyWallet)} bergabung` : ""}
             {n.activatedAt ? ` · aktif sejak ${fmtDate(n.activatedAt)}` : ` · dibuat ${fmtDate(n.createdAt)}`}
           </span>
@@ -156,7 +160,7 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
           {["ACTIVE", "OVERDUE"].includes(n.status) && role === "creditor" && (
             <Button variant="secondary" disabled={!!busy} aria-haspopup="dialog" onClick={() => confirm({
               title: "Ikhlaskan sisa utang?",
-              description: <>Sisa <strong className="text-white">{fmtRp(remaining)}</strong> tidak akan ditagih lagi. Piutang langsung ditandai lunas di blockchain dan <strong className="text-white">tidak bisa dibatalkan</strong>.</>,
+              description: <>Sisa <strong className="text-ink">{fmtRp(remaining)}</strong> tidak akan ditagih lagi. Piutang langsung ditandai lunas di blockchain dan <strong className="text-ink">tidak bisa dibatalkan</strong>.</>,
               confirmText: "Ya, ikhlaskan",
               tone: "danger",
               action: () => run("waive", () => forwardAction({ noteId: id, wallet: me.wallet, fn: "markPaid", args: [n.chainNoteId], purpose: "markPaid" }), "Piutang ditandai lunas."),
@@ -214,7 +218,7 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
           )}
           {me.isCreator ? (
             <>
-              <h2 className="text-lg font-semibold">Draft versi {n.version} belum dikirim</h2>
+              <h2 className="text-lg font-bold">Draft versi {n.version} belum dikirim</h2>
               <p className="text-sm text-muted">Periksa isi, jadwal, dan dokumen. Setelah dikirim, {n.counterpartyWallet ? short(n.counterpartyWallet) : "pihak lawan"} bisa menandatangani, minta revisi, atau menolak.</p>
               {!me.phoneVerified && <Notice tone="warn">Verifikasi nomor HP dulu di <Link href="/app/profil" className="underline">Profil</Link>.</Notice>}
               <div className="flex flex-col gap-2.5 sm:flex-row sm:flex-wrap">
@@ -240,7 +244,7 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
 
       {n.status === "PENDING_SIGNATURE" && (
         <Card className="flex flex-col gap-4 border-peach/50">
-          <h2 className="text-lg font-semibold">Menunggu tanda tangan · versi {n.version}</h2>
+          <h2 className="text-lg font-bold">Menunggu tanda tangan · versi {n.version}</h2>
           {lastRevision && (
             <Notice tone="ok">
               {me.isCreator
@@ -256,7 +260,7 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
             <>
               <p className="text-sm text-muted">
                 Kamu akan menandatangani pesan berisi seluruh isi perjanjian (gratis, tanpa gas).
-                {role === "creditor" && n.disbursement === "onchain" && <> Sebagai kreditur kamu juga menandatangani <strong className="text-white">izin setor {fmtRp(n.principal)} ke escrow</strong>; dana baru cair ke debitur setelah dia ikut tanda tangan, dan bisa kamu tarik kapan saja sebelum itu.</>}
+                {role === "creditor" && n.disbursement === "onchain" && <> Sebagai kreditur kamu juga menandatangani <strong className="text-ink">izin setor {fmtRp(n.principal)} ke escrow</strong>; dana baru cair ke debitur setelah dia ikut tanda tangan, dan bisa kamu tarik kapan saja sebelum itu.</>}
               </p>
               {!me.phoneVerified && <Notice tone="warn">Verifikasi nomor HP dulu di <Link href="/app/profil" className="underline">Profil</Link>.</Notice>}
               <div className="flex flex-col gap-2.5 sm:flex-row sm:flex-wrap">
@@ -268,7 +272,7 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
                     <Button variant="secondary" disabled={!!busy} aria-haspopup="dialog" onClick={() => setReviseOpen(true)}>Minta revisi</Button>
                     <Button variant="danger" disabled={!!busy} aria-haspopup="dialog" onClick={() => confirm({
                       title: "Tolak surat ini?",
-                      description: <>Penolakan bersifat <strong className="text-white">final</strong>: surat ditutup dan tidak bisa direvisi. Kalau hanya ada yang perlu diubah, pakai <strong className="text-white">Minta revisi</strong>.</>,
+                      description: <>Penolakan bersifat <strong className="text-ink">final</strong>: surat ditutup dan tidak bisa direvisi. Kalau hanya ada yang perlu diubah, pakai <strong className="text-ink">Minta revisi</strong>.</>,
                       field: { label: "Alasan penolakan", placeholder: "Contoh: saya tidak pernah meminjam uang ini.", minLength: 5, hint: "Wajib, minimal 5 huruf. Dikirim ke pembuat surat." },
                       confirmText: "Tolak surat",
                       tone: "danger",
@@ -302,7 +306,7 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
 
       {n.status === "AWAITING_DISBURSEMENT" && (
         <Card className="flex flex-col gap-3 border-butter/50">
-          <h2 className="text-lg font-semibold">Menunggu pencairan {fmtRp(n.principal)}</h2>
+          <h2 className="text-lg font-bold">Menunggu pencairan {fmtRp(n.principal)}</h2>
           {role === "debtor" ? (
             <>
               <p className="text-sm text-muted">Kedua pihak sudah tanda tangan. Setelah kreditur mentransfer pokok, konfirmasi di sini. Bukti digital baru terbit setelah kamu konfirmasi.</p>
@@ -313,7 +317,7 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
               <p className="text-sm text-muted">Transfer {fmtRp(n.principal)} ke debitur lewat bank atau tunai, lalu minta debitur mengonfirmasi di aplikasi.</p>
               {role === "creditor" && <div><Button variant="danger" disabled={!!busy} aria-haspopup="dialog" onClick={() => confirm({
                 title: "Batalkan sebelum dana dicairkan?",
-                description: <>Surat ditutup permanen. Lakukan ini hanya kalau kamu <strong className="text-white">belum mentransfer</strong> {fmtRp(n.principal)} ke debitur.</>,
+                description: <>Surat ditutup permanen. Lakukan ini hanya kalau kamu <strong className="text-ink">belum mentransfer</strong> {fmtRp(n.principal)} ke debitur.</>,
                 confirmText: "Ya, batalkan",
                 cancelText: "Jangan",
                 tone: "danger",
@@ -326,7 +330,7 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
 
       {(n.status === "REJECTED" || n.status === "CANCELLED") && (
         <Card className="flex flex-col gap-2">
-          <h2 className="text-lg font-semibold">{n.status === "REJECTED" ? "Surat ditolak" : "Surat dibatalkan"}</h2>
+          <h2 className="text-lg font-bold">{n.status === "REJECTED" ? "Surat ditolak" : "Surat dibatalkan"}</h2>
           {n.rejectReason && <p className="text-sm text-muted">Alasan: “{n.rejectReason}”</p>}
         </Card>
       )}
@@ -345,7 +349,7 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
           <section aria-label="Ringkasan" className="flex flex-col gap-5 rounded-[22px] bg-brand p-5 sm:p-6">
             <div className="flex flex-wrap items-end justify-between gap-4">
               <div className="flex flex-col gap-1.5">
-                <span className="text-[13px] text-brand-tint">{chain ? "Sisa utang (termasuk denda berjalan)" : "Total yang harus dibayar"}</span>
+                <span className="text-[13px] text-brand-tint">{chain ? "Sisa utang (termasuk bunga keterlambatan)" : "Total yang harus dibayar"}</span>
                 <span className="text-[32px] font-semibold leading-tight tracking-tight tabular-nums [overflow-wrap:anywhere] sm:text-[44px]">{fmtRp(n.status === "PAID" ? "0" : chain ? remaining : n.totalOwed)}</span>
               </div>
               {chain && <span className="text-[13px] text-brand-tint tabular-nums">Terbayar {fmtRp(paidTotal)} dari {fmtRp(n.totalOwed)}</span>}
@@ -356,16 +360,16 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
             <dl className="grid grid-cols-2 gap-4 text-[13px] sm:grid-cols-[repeat(auto-fit,minmax(150px,1fr))]">
               <Stat k="Pokok" v={fmtRp(n.principal)} />
               <Stat k="Bunga" v={n.interestType === "none" ? "Tanpa bunga" : n.interestType === "percent" ? `${n.interestValue}%` : `Rp${Number(n.interestValue).toLocaleString("id-ID")}`} />
-              <Stat k="Denda terlambat" v={n.lateFeeBps ? "2% per bulan" : "Tanpa denda"} />
+              <Stat k="Bunga keterlambatan" v={n.lateFeeBps ? "2% per bulan" : "Tanpa bunga"} />
               <Stat k="Pencairan" v={n.disbursement === "onchain" ? "Escrow stablecoin" : "Transfer sendiri"} />
-              {chain && BigInt(chain.lateFee) > BigInt(0) && <Stat k="Denda belum dibayar" v={fmtRp(chain.lateFee)} />}
+              {chain && BigInt(chain.lateFee) > BigInt(0) && <Stat k="Bunga belum dibayar" v={fmtRp(chain.lateFee)} />}
               {chain && BigInt(chain.overdue) > BigInt(0) && <Stat k="Tunggakan" v={fmtRp(chain.overdue)} />}
             </dl>
             {n.collateralNote && <p className="text-[13px] text-brand-tint">Jaminan: {n.collateralNote}</p>}
           </section>
 
           <Card className="flex flex-col gap-3.5">
-            <h2 className="text-lg font-semibold">Jadwal cicilan</h2>
+            <h2 className="text-lg font-bold">Jadwal cicilan</h2>
             {/* Layar kecil: kartu per cicilan */}
             <ol className="flex flex-col sm:hidden">
               {rows.map((r) => (
@@ -405,18 +409,18 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
 
           {(isLive || n.status === "PAID") && (
             <Card id="pembayaran" className="flex flex-col gap-4">
-              <h2 className="text-lg font-semibold">Pembayaran</h2>
-              {role === "debtor" && ["ACTIVE", "OVERDUE", "DISPUTED"].includes(n.status) && remaining > BigInt(0) && (
+              <h2 className="text-lg font-bold">Pembayaran</h2>
+              {role === "debtor" && ["ACTIVE", "OVERDUE", "DISPUTED"].includes(n.status) && remaining > BigInt(0) && due && due.kind !== "none" && (
                 <PayBox
                   disabled={!!busy}
-                  loading={busy === "pay" || busy === "proof"}
-                  allowOffchain={n.status !== "DISPUTED"}
-                  suggested={chain && BigInt(chain.overdue) > BigInt(0) ? BigInt(chain.overdue) + BigInt(chain.lateFee) : nextUnpaid ? BigInt(nextUnpaid.amount) - nextUnpaid.paidPart : remaining}
+                  loading={busy === "pay"}
+                  due={due}
+                  overdue={BigInt(chain?.overdue ?? "0")}
+                  lateFee={BigInt(chain?.lateFee ?? "0")}
                   remaining={remaining}
-                  installment={nextUnpaid?.seq ?? 1}
+                  total={n.installments.length}
                   appFeeBps={data.appFee?.bps ?? 0}
-                  onOnchain={(amount, inst) => run("pay", () => payOnchain({ noteId: id, chainNoteId: n.chainNoteId, wallet: me.wallet, amount, installment: inst, appFee: data.appFee }), data.appFee ? `Pembayaran tercatat di blockchain. Pajak aplikasi ${feeLabel(data.appFee.bps)} sudah dipotong.` : "Pembayaran tercatat di blockchain.")}
-                  onOffchain={(fd) => run("proof", () => api(`/api/notes/${id}/payments`, { method: "POST", body: fd }), "Bukti transfer terkirim. Menunggu konfirmasi kreditur.")}
+                  onPay={(amount, inst) => run("pay", () => payOnchain({ noteId: id, chainNoteId: n.chainNoteId, wallet: me.wallet, amount, installment: inst, appFee: data.appFee }), data.appFee ? `Pembayaran tercatat di blockchain. Fee aplikasi ${feeLabel(data.appFee.bps)} sudah dipotong.` : "Pembayaran tercatat di blockchain.")}
                 />
               )}
               {pending.map((p) => (
@@ -471,7 +475,7 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
 
         <aside className="flex min-w-0 flex-[1_1_320px] flex-col gap-5">
           <Card className="flex flex-col gap-3.5">
-            <h2 className="font-semibold">Pihak</h2>
+            <h2 className="font-bold">Pihak</h2>
             {[["Kreditur", n.creditor], ["Debitur", n.debtor]].map(([label, p]) => {
               const party = p as Detail["note"]["creditor"];
               const w = party?.wallet ?? ((label === "Kreditur") === (n.creatorRole === "creditor") ? null : n.counterpartyWallet);
@@ -488,7 +492,7 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
           </Card>
 
           <Card className="flex flex-col gap-3">
-            <h2 className="font-semibold">Bukti digital</h2>
+            <h2 className="font-bold">Bukti digital</h2>
             <p className="text-[13px] leading-relaxed text-muted">Hak tagih tercatat sebagai token non-transferable di wallet kreditur dan di-burn saat lunas.</p>
             <dl className="flex flex-col gap-2.5 text-[13px]">
               <div><dt className="text-faint">ID on-chain</dt><dd className="font-mono [overflow-wrap:anywhere]">{short(n.chainNoteId)}</dd></div>
@@ -499,11 +503,11 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
           </Card>
 
           <Card className="flex flex-col gap-2.5">
-            <h2 className="font-semibold">Dokumen</h2>
+            <h2 className="font-bold">Dokumen</h2>
             {n.documents.length === 0 && <p className="text-sm text-muted">Tidak ada dokumen.</p>}
             {n.documents.map((d) => (
               <div key={d.id} className="flex items-center justify-between gap-2 text-sm">
-                <a href={`/api/files/doc/${d.id}`} target="_blank" rel="noreferrer" className="min-w-0 truncate text-white underline decoration-line2">{d.name}</a>
+                <a href={`/api/files/doc/${d.id}`} target="_blank" rel="noreferrer" className="min-w-0 truncate text-ink underline decoration-line2">{d.name}</a>
                 <span className="flex flex-none items-center gap-2 text-xs text-faint">
                   {Math.ceil(d.size / 1024)} KB
                   {n.status === "DRAFT" && me.isCreator && (
@@ -533,7 +537,7 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
           </Card>
 
           <Card className="flex flex-col gap-3">
-            <h2 className="font-semibold">Riwayat</h2>
+            <h2 className="font-bold">Riwayat</h2>
             <ol className="flex flex-col gap-3 text-[13px]">
               {n.events.map((e, i) => (
                 <li key={i} className="flex gap-2.5">
@@ -562,7 +566,7 @@ const EVENT: Record<string, string> = {
   REQUEST_REVISION: "Revisi diminta", PAY: "Pembayaran on-chain", UPLOAD_PAYMENT_PROOF: "Bukti transfer dikirim",
   CONFIRM_PAYMENT: "Pembayaran dikonfirmasi", REJECT_PAYMENT: "Bukti transfer ditolak", DISPUTE: "Sengketa diajukan",
   MARKPAID: "Sisa diikhlaskan", REFUND: "Escrow ditarik", CLOSEDISPUTE: "Sengketa ditutup", UNFREEZE: "Pembekuan dibuka",
-  INTEGRITY_CHECK: "Cek integritas", APP_FEE: "Pajak aplikasi dibayar", APP_FEE_FAILED: "Pajak aplikasi gagal ditarik",
+  INTEGRITY_CHECK: "Cek integritas", APP_FEE: "Fee aplikasi dibayar", APP_FEE_FAILED: "Fee aplikasi gagal ditarik",
 };
 
 function InstallmentPill({ status }: { status: string }) {
@@ -582,7 +586,7 @@ function Stat({ k, v }: { k: string; v: string }) {
 function SignState({ label, who, done, extra }: { label: string; who: string; done: boolean; extra?: string }) {
   return (
     <div className="flex items-center gap-3 rounded-xl bg-midnight p-3.5">
-      <span aria-hidden className={`h-3 w-3 flex-none rounded-full ${done ? "bg-mint" : "border-2 border-[#4a4d5c]"}`} />
+      <span aria-hidden className={`h-3 w-3 flex-none rounded-full ${done ? "bg-mint" : "border-2 border-line2"}`} />
       <div className="flex min-w-0 flex-col">
         <span className="font-medium">{label}: {who}</span>
         <span className="text-xs text-faint">{done ? "Sudah tanda tangan" : "Belum tanda tangan"}{extra ? ` · ${extra}` : ""}</span>
@@ -591,180 +595,75 @@ function SignState({ label, who, done, extra }: { label: string; who: string; do
   );
 }
 
-const PAY_METHODS = {
-  onchain: { title: "Bayar pakai IDRX", sub: "Langsung tercatat di blockchain", icon: <path d="M12 3l8 4.5v9L12 21l-8-4.5v-9zM12 12l8-4.5M12 12v9M12 12L4 7.5" /> },
-  offchain: { title: "Transfer bank", sub: "Upload bukti, dikonfirmasi kreditur", icon: <path d="M3 10l9-6 9 6M5 10v8M19 10v8M9.5 10v8M14.5 10v8M3 20h18" /> },
-} as const;
-
 function PayBox(props: {
   disabled: boolean;
-  /** Pembayaran/kiriman bukti dari kotak ini sedang diproses. */
+  /** Pembayaran dari kotak ini sedang diproses. */
   loading: boolean;
   appFeeBps: number;
-  allowOffchain: boolean;
-  suggested: bigint;
+  due: AmountDue;
+  overdue: bigint;
+  lateFee: bigint;
   remaining: bigint;
-  installment: number;
-  onOnchain: (amountUnits: string, installment: number) => void;
-  onOffchain: (fd: FormData) => void;
+  /** Jumlah cicilan di jadwal. */
+  total: number;
+  onPay: (amountUnits: string, installment: number) => void;
 }) {
-  const [method, setMethod] = useState<"onchain" | "offchain">("onchain");
-  const [amount, setAmount] = useState(unitsToRupiah(props.suggested > BigInt(0) ? props.suggested : props.remaining).toString());
-  const [file, setFile] = useState<File | null>(null);
-  const units = (() => { try { return BigInt(rupiahToUnits(amount)); } catch { return BigInt(0); } })();
-  // Pajak aplikasi hanya untuk pembayaran IDRX (on-chain), dihitung dari jumlah yang benar-benar terbayar.
-  const onchain = method === "onchain";
-  const payUnits = units > props.remaining ? props.remaining : units;
-  const fee = onchain ? feeFor(payUnits, props.appFeeBps) : BigInt(0);
-  const over = units > props.remaining;
-  const methods = (["onchain", "offchain"] as const).filter((m) => m === "onchain" || props.allowOffchain);
-  // Isi cepat: sisa cicilan berjalan dan pelunasan (tanpa duplikat kalau nilainya sama).
-  const quick = [
-    { label: `Cicilan ke-${props.installment}`, v: props.suggested },
-    { label: "Lunasi semua", v: props.remaining },
-  ].filter((q, i, xs) => q.v > BigInt(0) && (i === 0 || q.v !== xs[0].v));
-  const blocked = props.disabled || units <= BigInt(0) || (!onchain && (!file || over));
-
-  function submit() {
-    if (onchain) return props.onOnchain(units.toString(), props.installment);
-    const fd = new FormData();
-    fd.append("amount", amount);
-    fd.append("installment", String(props.installment));
-    fd.append("proof", file!);
-    props.onOffchain(fd);
-  }
+  const { due } = props;
+  const late = due.kind === "overdue";
+  // Kontrak tidak menarik lebih dari sisa utang; fee aplikasi dihitung dari yang benar-benar terbayar.
+  const payUnits = due.amount > props.remaining && !late ? props.remaining : due.amount;
+  const fee = feeFor(payUnits, props.appFeeBps);
+  const hasNext = due.seq < props.total;
 
   return (
     <div className="flex flex-col overflow-hidden rounded-2xl border border-line bg-midnight">
-      <div className="flex flex-col gap-5 p-4 sm:p-5">
-        {methods.length > 1 && (
-          <div role="radiogroup" aria-label="Cara bayar" className="grid grid-cols-2 gap-2 sm:gap-3">
-            {methods.map((m) => {
-              const on = method === m;
-              return (
-                <button
-                  key={m}
-                  type="button"
-                  role="radio"
-                  aria-checked={on}
-                  onClick={() => setMethod(m)}
-                  className={`flex min-w-0 flex-col items-start gap-2 rounded-xl border p-3 text-left transition-colors sm:flex-row sm:items-center sm:gap-3 sm:p-3.5 ${on ? "border-brand bg-brand/15" : "border-line2 hover:border-faint"}`}
-                >
-                  <span aria-hidden className={`flex h-9 w-9 flex-none items-center justify-center rounded-lg ${on ? "bg-brand text-white" : "bg-raised text-soft"}`}>
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">{PAY_METHODS[m].icon}</svg>
-                  </span>
-                  <span className="flex min-w-0 flex-col gap-0.5">
-                    <span className={`text-sm font-medium leading-snug ${on ? "text-white" : "text-soft"}`}>{PAY_METHODS[m].title}</span>
-                    <span className="text-xs leading-snug text-faint">{PAY_METHODS[m].sub}</span>
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        )}
-
-        <div className="flex flex-col gap-2">
-          <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-            <label htmlFor="bayar" className="text-[13px] text-soft">Nominal pembayaran</label>
-            <span className="text-xs text-faint tabular-nums">Sisa utang {fmtRp(props.remaining)}</span>
-          </div>
-          <div className="relative">
-            <span aria-hidden className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-base font-medium text-faint">Rp</span>
-            <input
-              id="bayar"
-              inputMode="numeric"
-              autoComplete="off"
-              value={Number(amount || 0).toLocaleString("id-ID")}
-              onChange={(e) => setAmount(e.target.value.replace(/\D/g, ""))}
-              aria-describedby="bayar-hint"
-              aria-invalid={!onchain && over}
-              className={`${input} min-h-[54px] pl-12 text-lg font-semibold tabular-nums ${!onchain && over ? "border-pink" : ""}`}
-            />
-          </div>
-          {quick.length > 0 && (
-            <div className="flex flex-wrap gap-2">
-              {quick.map((q) => {
-                const on = units === q.v;
-                return (
-                  <button
-                    key={q.label}
-                    type="button"
-                    aria-pressed={on}
-                    onClick={() => setAmount(unitsToRupiah(q.v).toString())}
-                    className={`min-h-9 rounded-full border px-3 text-xs transition-colors ${on ? "border-brand bg-brand/15 text-white" : "border-line2 text-soft hover:border-faint hover:text-white"}`}
-                  >
-                    {q.label} · <span className="tabular-nums">{fmtRp(q.v)}</span>
-                  </button>
-                );
-              })}
-            </div>
-          )}
-          <p id="bayar-hint" className={`text-xs leading-relaxed ${!onchain && over ? "text-pink" : over ? "text-butter" : "text-faint"}`}>
-            {over
-              ? onchain
-                ? `Melebihi sisa utang. Yang ditarik hanya ${fmtRp(props.remaining)}, kelebihannya tidak dipotong.`
-                : `Nominal melebihi sisa utang ${fmtRp(props.remaining)}.`
-              : onchain
-                ? "Kelebihan bayar on-chain otomatis tidak ditarik."
-                : "Isi sesuai nominal yang kamu transfer."}
-          </p>
+      <div className="flex flex-col gap-3 p-4 sm:p-5">
+        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
+          <span className="text-[13px] text-soft">{late ? "Tagihan tertunggak" : `Tagihan cicilan ke-${due.seq} dari ${props.total}`}</span>
+          <span className={`rounded-md px-2 py-0.5 text-[11px] font-semibold ${late ? "bg-rasp text-white" : "bg-line text-soft"}`}>{late ? "Lewat jatuh tempo" : "Bisa dibayar lebih awal"}</span>
         </div>
-
-        {!onchain && (
-          <div className="flex flex-col gap-2">
-            <span className="text-[13px] text-soft">Bukti transfer</span>
-            <label
-              htmlFor="bukti"
-              className={`flex cursor-pointer items-center gap-3 rounded-xl border border-dashed p-3.5 transition-colors focus-within:border-brand hover:border-faint ${file ? "border-mint/50 bg-mint/5" : "border-line2"}`}
-            >
-              <span aria-hidden className={`flex h-10 w-10 flex-none items-center justify-center rounded-lg ${file ? "bg-mint text-mint-ink" : "bg-raised text-soft"}`}>
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                  {file ? <path d="M5 12.5l4.5 4.5L19 7.5" /> : <path d="M12 16V4M7 9l5-5 5 5M4 16v3a1 1 0 001 1h14a1 1 0 001-1v-3" />}
-                </svg>
-              </span>
-              <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-                <span className="truncate text-sm font-medium">{file ? file.name : "Pilih file bukti transfer"}</span>
-                <span className="text-xs text-faint">{file ? `${Math.max(1, Math.round(file.size / 1024))} KB · ketuk untuk ganti` : "PDF, JPG, atau PNG · maks 10 MB"}</span>
-              </span>
-              <input id="bukti" type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={(e) => setFile(e.target.files?.[0] ?? null)} className="sr-only" />
-            </label>
-          </div>
-        )}
+        <div className="flex min-w-0 items-baseline gap-2">
+          <span className="truncate text-[28px] font-semibold leading-tight tabular-nums">{fmtRp(payUnits)}</span>
+          <span className="flex-none text-xs text-faint">IDRX</span>
+        </div>
+        {late ? (
+          <dl className="flex flex-col gap-1.5 rounded-xl border border-line px-3.5 py-3 text-[13px] tabular-nums">
+            <div className="flex justify-between gap-4"><dt className="text-muted">Cicilan tertunggak</dt><dd>{fmtRp(props.overdue)}</dd></div>
+            <div className="flex justify-between gap-4"><dt className="text-muted">Bunga keterlambatan berjalan</dt><dd>{fmtRp(props.lateFee)}</dd></div>
+            {due.buffer > BigInt(0) && (
+              <div className="flex justify-between gap-4"><dt className="text-muted">Penyangga bunga 10 menit</dt><dd>{fmtRp(due.buffer)}</dd></div>
+            )}
+          </dl>
+        ) : null}
+        <p className="text-xs leading-relaxed text-faint">
+          {late
+            ? "Bunga keterlambatan terus bertambah setiap hari sampai tunggakan dibayar atau diikhlaskan kreditur. Penyangga dipakai karena bunga dihitung per detik; yang tidak terpakai otomatis masuk ke cicilan berikutnya."
+            : `Nominal mengikuti jadwal dan tidak bisa diubah. Tanggal jatuh tempo hanya patokan: kamu boleh bayar sekarang${hasNext ? `, lalu cicilan ke-${due.seq + 1} langsung bisa dibayar kalau mampu` : ""}. Lewat jatuh tempo dikenai bunga keterlambatan.`}
+        </p>
       </div>
 
       <div className="flex flex-col gap-4 border-t border-line bg-card p-4 sm:p-5">
         <dl className="flex flex-col gap-2 text-sm tabular-nums">
-          {onchain ? (
-            <>
-              <div className="flex justify-between gap-4"><dt className="text-muted">Pembayaran ke kreditur</dt><dd>{fmtRp(payUnits)}</dd></div>
-              {fee > BigInt(0) && (
-                <div className="flex justify-between gap-4"><dt className="text-muted">Pajak aplikasi {feeLabel(props.appFeeBps)}</dt><dd>{fmtRp(fee)}</dd></div>
-              )}
-              <div className="mt-1 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-0.5 border-t border-dashed border-line2 pt-3">
-                <dt className="font-medium">Total dipotong dari saldo IDRX</dt>
-                <dd className="text-lg font-semibold">{fmtRp(payUnits + fee)}</dd>
-              </div>
-            </>
-          ) : (
-            <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-0.5">
-              <dt className="font-medium">Nominal yang dilaporkan</dt>
-              <dd className="text-lg font-semibold">{fmtRp(units)}</dd>
-            </div>
+          <div className="flex justify-between gap-4"><dt className="text-muted">Pembayaran ke kreditur</dt><dd>{fmtRp(payUnits)}</dd></div>
+          {fee > BigInt(0) && (
+            <div className="flex justify-between gap-4"><dt className="text-muted">Fee aplikasi {feeLabel(props.appFeeBps)}</dt><dd>{fmtRp(fee)}</dd></div>
           )}
+          <div className="mt-1 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-0.5 border-t border-dashed border-line2 pt-3">
+            <dt className="font-medium">Total dipotong dari saldo IDRX</dt>
+            <dd className="text-lg font-semibold">{fmtRp(payUnits + fee)}</dd>
+          </div>
         </dl>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <p className="flex gap-2 text-xs leading-relaxed text-faint sm:max-w-[60%]">
             <svg aria-hidden width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="mt-0.5 flex-none"><circle cx="12" cy="12" r="9" /><path d="M12 11v5M12 8h.01" /></svg>
             <span>
-              {onchain
-                ? fee > BigInt(0)
-                  ? `Kamu menandatangani 3 pesan: izin IDRX, izin pajak aplikasi ${feeLabel(props.appFeeBps)}, dan perintah bayar. Tanpa biaya gas.`
-                  : "Kamu menandatangani 2 pesan: izin IDRX dan perintah bayar. Tanpa biaya gas."
-                : "Pembayaran tercatat setelah kreditur mengonfirmasi bukti. Transfer bank tidak dikenai pajak aplikasi."}
+              {fee > BigInt(0)
+                ? `Kamu menandatangani 3 pesan: izin IDRX, izin fee aplikasi ${feeLabel(props.appFeeBps)}, dan perintah bayar. Tanpa biaya gas.`
+                : "Kamu menandatangani 2 pesan: izin IDRX dan perintah bayar. Tanpa biaya gas."}
             </span>
           </p>
-          <Button disabled={blocked} aria-busy={props.loading} onClick={submit} className="w-full flex-none sm:w-auto sm:min-w-[180px] disabled:aria-busy:opacity-80">
-            {props.loading ? <><Spinner /> {onchain ? "Memproses pembayaran…" : "Mengirim bukti…"}</> : onchain ? "Bayar sekarang" : "Kirim bukti"}
+          <Button disabled={props.disabled} aria-busy={props.loading} onClick={() => props.onPay(due.amount.toString(), due.seq)} className="w-full flex-none sm:w-auto sm:min-w-[180px] disabled:aria-busy:opacity-80">
+            {props.loading ? <><Spinner /> Memproses pembayaran…</> : late ? "Bayar tunggakan" : `Bayar cicilan ke-${due.seq}`}
           </Button>
         </div>
       </div>

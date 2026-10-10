@@ -2,12 +2,12 @@
   "network": "sepolia",
   "chainId": 11155111,
   "stablecoinDecimals": 2,
-  "deployedAt": "2026-10-09T11:19:01.170Z",
+  "deployedAt": "2026-10-10T14:12:00.112Z",
   "addresses": {
-    "MockIDRX": "0xfc88f4fb1953E9F747c3c20850FA3F09E0d42f61",
-    "PiutangForwarder": "0x1B7Abf58694e200d215d05126EE9A886d93b166f",
-    "DebtNote": "0x4301B5016CeE7103728402b001EE483CD560A290",
-    "DebtManager": "0xB74D5e837539f78D0dAFbd33247034B549560141"
+    "MockIDRX": "0xD4E56a15B66B5a51f84d3Ae84ea64a0168ce05a9",
+    "CollateraForwarder": "0x249147cc728f6b6c4518159cE63f2A94BaB2c6E7",
+    "DebtNote": "0xa707C66A9eD14957dFd9e10F52E99B15dE4418f4",
+    "DebtManager": "0x121d3Bbb150A53660f44241893B018F61cF84aBb"
   },
   "abi": {
     "DebtManager": [
@@ -3353,7 +3353,7 @@
         "type": "function"
       }
     ],
-    "PiutangForwarder": [
+    "CollateraForwarder": [
       {
         "inputs": [],
         "stateMutability": "nonpayable",
@@ -3541,7 +3541,7 @@
                 "type": "bytes"
               }
             ],
-            "internalType": "struct PiutangForwarder.ForwardRequest",
+            "internalType": "struct CollateraForwarder.ForwardRequest",
             "name": "req",
             "type": "tuple"
           },
@@ -3642,7 +3642,7 @@
                 "type": "bytes"
               }
             ],
-            "internalType": "struct PiutangForwarder.ForwardRequest",
+            "internalType": "struct CollateraForwarder.ForwardRequest",
             "name": "req",
             "type": "tuple"
           },

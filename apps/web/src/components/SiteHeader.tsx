@@ -22,14 +22,14 @@ export default function SiteHeader() {
   return (
     <header className="sticky top-0 z-40 -mx-4 bg-midnight/90 px-4 backdrop-blur supports-[backdrop-filter]:bg-midnight/75 sm:-mx-6 sm:px-6 md:static md:mx-0 md:bg-transparent md:px-0 md:backdrop-blur-none">
       <div className="flex h-16 items-center justify-between gap-5 md:h-auto md:flex-wrap md:pt-7">
-        <Link href="/" className="flex items-center gap-3 text-white no-underline">
+        <Link href="/" className="flex items-center gap-3 text-ink no-underline">
           <Logo size={32} />
-          <span className="text-xl font-semibold tracking-tight md:text-[22px]">piutangchain</span>
+          <span className="text-xl font-bold tracking-[-0.03em] md:text-2xl">Collatera</span>
         </Link>
 
         <nav aria-label="Navigasi utama" className="hidden gap-6 text-sm md:flex lg:gap-7">
           {LINKS.map(([h, l]) => (
-            <a key={h} href={h} className="text-soft no-underline hover:text-white">{l}</a>
+            <a key={h} href={h} className="text-soft no-underline hover:text-ink">{l}</a>
           ))}
         </nav>
         <div className="hidden gap-3 md:flex">
@@ -57,7 +57,7 @@ export default function SiteHeader() {
       >
         <nav aria-label="Navigasi utama (seluler)" className="flex flex-col">
           {LINKS.map(([h, l]) => (
-            <a key={h} href={h} onClick={menu.close} className="flex min-h-12 items-center border-b border-line text-base text-soft no-underline hover:text-white">
+            <a key={h} href={h} onClick={menu.close} className="flex min-h-12 items-center border-b border-line text-base text-soft no-underline hover:text-ink">
               {l}
             </a>
           ))}

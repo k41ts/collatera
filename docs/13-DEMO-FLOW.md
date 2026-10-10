@@ -21,8 +21,8 @@ Durasi target: **5–7 menit**. Dua browser: kiri **Kreditur (Andi)**, kanan **D
 | 5 | 2:20 | Budi minta revisi tanggal → Andi revisi → versi 2 | Signature lama batal |
 | 6 | 3:00 | Budi tanda tangan, lalu Andi tanda tangan + setor escrow | **Tanpa gas** |
 | 7 | 3:40 | Token ter-mint, dana masuk ke Budi, status ACTIVE; buka Etherscan | Bukti on-chain |
-| 8 | 4:20 | Budi bayar cicilan 1 dengan stablecoin → sisa berkurang otomatis | On-chain langsung tercatat |
-| 9 | 4:50 | Budi upload bukti transfer cicilan 2 → Andi konfirmasi → **PAID**, token di-burn | Off-chain juga didukung |
+| 8 | 4:20 | Budi bayar cicilan 1 dengan stablecoin → sisa berkurang otomatis | On-chain langsung tercatat; fee aplikasi 1% ikut terpotong ke wallet fee |
+| 9 | 4:50 | Budi bayar cicilan 2 dengan stablecoin → **PAID**, token di-burn | Lunas otomatis, bukti lunas ke kedua pihak |
 | 10 | 5:30 | **Tamper demo:** ubah nominal piutang cadangan di DB → klik "Cek Integritas" → **TAMPERED → FROZEN** | Data tidak bisa diubah diam-diam |
 | 11 | 6:15 | Penutup: roadmap (cessie, e-KYC, mainnet) | — |
 

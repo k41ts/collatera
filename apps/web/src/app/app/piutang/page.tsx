@@ -18,9 +18,9 @@ const FILTERS: [string, string, string[]][] = [
   ["closed", "Ditolak & batal", ["REJECTED", "CANCELLED"]],
 ];
 const REVISION: Record<NonNullable<NoteSummary["revision"]>, { label: string; cls: string; text: (n: NoteSummary) => string }> = {
-  requested: { label: "REVISI DIMINTA", cls: "border-butter/50 bg-[#3a3017]/70 text-butter", text: (n) => `${n.party} minta revisi: “${n.revisionNote}”` },
+  requested: { label: "REVISI DIMINTA", cls: "border-butter/50 bg-raised/70 text-butter", text: (n) => `${n.party} minta revisi: “${n.revisionNote}”` },
   in_progress: { label: "SEDANG DIREVISI", cls: "border-line2 bg-raised text-soft", text: (n) => `Kamu minta revisi: “${n.revisionNote}”. Menunggu ${n.party} mengirim versi ${n.version}.` },
-  done: { label: "SUDAH DIREVISI", cls: "border-mint/40 bg-[#1e3324]/70 text-mint", text: (n) => `${n.party} sudah mengirim versi ${n.version} hasil revisi. Cek lalu tanda tangani.` },
+  done: { label: "SUDAH DIREVISI", cls: "border-mint/40 bg-raised/70 text-mint", text: (n) => `${n.party} sudah mengirim versi ${n.version} hasil revisi. Cek lalu tanda tangani.` },
 };
 
 export default function NotesPage() {
@@ -60,7 +60,7 @@ export default function NotesPage() {
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div className="flex flex-col gap-1.5">
           <span className="text-[13px] text-faint">Semua surat piutang kamu, sebagai kreditur maupun debitur</span>
-          <h1 className="text-[26px] font-semibold tracking-tight sm:text-[32px]">Piutang saya</h1>
+          <h1 className="text-[26px] font-extrabold tracking-[-0.035em] sm:text-[32px]">Piutang saya</h1>
         </div>
         <LinkButton href="/app/piutang/baru" className="max-sm:hidden">+ Buat surat piutang</LinkButton>
       </div>
@@ -70,18 +70,18 @@ export default function NotesPage() {
           <div className="relative min-w-0 flex-[1_1_320px]">
             <label htmlFor="cari" className="sr-only">Cari piutang</label>
             <svg className="absolute left-3.5 top-1/2 -translate-y-1/2" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#8A8C9A" strokeWidth="2" strokeLinecap="round" aria-hidden><circle cx="11" cy="11" r="7" /><path d="M20 20l-3.5-3.5" /></svg>
-            <input id="cari" type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Cari judul, nama pihak, atau nomor (PC-…)" className={`${input} pl-10 text-sm`} />
+            <input id="cari" type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Cari judul, nama pihak, atau nomor (CL-…)" className={`${input} pl-10 text-sm`} />
           </div>
           <div role="group" aria-label="Peranmu" className="flex flex-[1_1_auto] gap-1 rounded-xl bg-midnight p-1 sm:flex-none">
             {(["all", "creditor", "debtor"] as const).map((r) => (
-              <button key={r} type="button" aria-pressed={role === r} onClick={() => setRole(r)} className={`min-h-[38px] flex-1 rounded-[9px] px-3.5 text-[13px] sm:flex-none ${role === r ? "bg-brand-soft font-medium text-white" : "text-muted"}`}>
+              <button key={r} type="button" aria-pressed={role === r} onClick={() => setRole(r)} className={`min-h-[38px] flex-1 rounded-[9px] px-3.5 text-[13px] sm:flex-none ${role === r ? "bg-brand font-medium text-white" : "text-muted"}`}>
                 {{ all: "Semua", creditor: "Kreditur", debtor: "Debitur" }[r]}
               </button>
             ))}
           </div>
           <label htmlFor="urut" className="flex flex-[1_1_auto] items-center gap-2 text-[13px] text-muted sm:flex-none">
             Urutkan
-            <select id="urut" value={sort} onChange={(e) => setSort(e.target.value as typeof sort)} className="min-h-11 min-w-0 flex-1 rounded-xl border border-line2 bg-midnight px-3 text-sm text-white sm:flex-none">
+            <select id="urut" value={sort} onChange={(e) => setSort(e.target.value as typeof sort)} className="min-h-11 min-w-0 flex-1 rounded-xl border border-line2 bg-midnight px-3 text-sm text-ink sm:flex-none">
               <option value="due">Jatuh tempo terdekat</option>
               <option value="left">Sisa terbesar</option>
               <option value="new">Terbaru diubah</option>
@@ -129,7 +129,7 @@ export default function NotesPage() {
             const urgent = ["OVERDUE", "PENDING_SIGNATURE", "AWAITING_DISBURSEMENT"].includes(n.status) || n.revision === "requested";
             const lft = left(n);
             return (
-              <Link key={n.id} href={`/app/piutang/${n.id}`} className="flex min-w-0 flex-col gap-3.5 rounded-[20px] border border-line bg-card p-4 text-white sm:p-5 no-underline transition-colors hover:border-line2">
+              <Link key={n.id} href={`/app/piutang/${n.id}`} className="flex min-w-0 flex-col gap-3.5 rounded-[20px] border border-line bg-card p-4 text-ink sm:p-5 no-underline transition-colors hover:border-line2">
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-xs text-faint">{n.code} · {TYPES[n.debtType]}</span>
                   <StatusPill status={n.status} />
@@ -155,11 +155,11 @@ export default function NotesPage() {
                     <span className="ml-auto min-w-0 text-right text-xl font-semibold leading-tight tabular-nums [overflow-wrap:anywhere]">{fmtRp(lft > BigInt(0) ? lft : BigInt(0))}</span>
                   </div>
                   <div className="h-1.5 overflow-hidden rounded-full bg-line">
-                    <div className={`h-full rounded-full ${n.status === "PAID" ? "bg-lav" : "bg-tusc"}`} style={{ width: `${n.status === "PAID" ? 100 : pct}%` }} />
+                    <div className={`h-full rounded-full ${n.status === "PAID" ? "bg-faint" : "bg-brand"}`} style={{ width: `${n.status === "PAID" ? 100 : pct}%` }} />
                   </div>
                 </div>
                 <div className="flex flex-wrap justify-between gap-x-2 gap-y-1 border-t border-line pt-3 text-xs">
-                  <span className={urgent ? (n.status === "OVERDUE" ? "font-medium text-[#ff7aae]" : "font-medium text-peach") : "text-soft"}>{dueText(n)}</span>
+                  <span className={urgent ? (n.status === "OVERDUE" ? "font-medium text-ink" : "font-medium text-peach") : "text-soft"}>{dueText(n)}</span>
                   <span className="text-faint">{n.paidInstallments} dari {n.installmentCount} cicilan</span>
                 </div>
               </Link>

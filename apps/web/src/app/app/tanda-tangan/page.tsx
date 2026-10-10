@@ -35,7 +35,7 @@ export default function SignListPage() {
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-1.5">
         <span className="text-[13px] text-faint">Surat piutang yang perlu atau sudah kamu tanda tangani</span>
-        <h1 className="text-[26px] font-semibold tracking-tight sm:text-[32px]">Tanda tangan</h1>
+        <h1 className="text-[26px] font-extrabold tracking-[-0.035em] sm:text-[32px]">Tanda tangan</h1>
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -71,7 +71,7 @@ export default function SignListPage() {
             const mine = tab === "mine";
             const receipt = n.status === "AWAITING_DISBURSEMENT";
             return (
-              <Link key={n.id} href={`/app/piutang/${n.id}`} className={`flex min-w-0 flex-col gap-3.5 rounded-[20px] border bg-card p-4 text-white no-underline sm:p-5 ${mine ? "border-rasp/70" : "border-line"} hover:border-line2`}>
+              <Link key={n.id} href={`/app/piutang/${n.id}`} className={`flex min-w-0 flex-col gap-3.5 rounded-[20px] border bg-card p-4 text-ink no-underline sm:p-5 ${mine ? "border-rasp/70" : "border-line"} hover:border-line2`}>
                 <div className="flex items-start gap-2.5 sm:items-center">
                   <Avatar name={n.party} />
                   <span className="flex min-w-0 flex-1 flex-col">
@@ -82,7 +82,7 @@ export default function SignListPage() {
                 </div>
                 <div className="flex flex-col gap-1">
                   <span className="text-lg font-semibold leading-snug [overflow-wrap:anywhere]">{n.title}</span>
-                  <span className="text-[13px] text-muted">Peranmu: <strong className="font-semibold text-white">{n.role === "creditor" ? "Kreditur (pemberi utang)" : "Debitur (penerima utang)"}</strong></span>
+                  <span className="text-[13px] text-muted">Peranmu: <strong className="font-semibold text-ink">{n.role === "creditor" ? "Kreditur (pemberi utang)" : "Debitur (penerima utang)"}</strong></span>
                 </div>
                 <dl className="grid grid-cols-2 gap-x-3 gap-y-3 rounded-[14px] bg-midnight p-3 text-[13px] sm:p-3.5">
                   <div><dt className="text-xs text-faint">Total</dt><dd className="mt-0.5 text-base font-semibold tabular-nums">{fmtRp(n.totalOwed)}</dd></div>

@@ -4,11 +4,11 @@ pragma solidity 0.8.28;
 import {EIP712} from "./utils/EIP712.sol";
 import {SignatureChecker} from "./libraries/SignatureChecker.sol";
 
-/// @title PiutangForwarder
+/// @title CollateraForwarder
 /// @notice Forwarder ERC-2771 untuk transaksi tanpa gas: pengguna menandatangani ForwardRequest (EIP-712),
 ///         relayer mengirimnya dan membayar gas. Mendukung EOA dan smart account (ERC-1271).
 ///         Dibaca oleh kontrak target lewat ERC2771Context (alamat pengirim asli ditempel di akhir calldata).
-contract PiutangForwarder is EIP712 {
+contract CollateraForwarder is EIP712 {
     struct ForwardRequest {
         address from;
         address to;
@@ -43,7 +43,7 @@ contract PiutangForwarder is EIP712 {
     address public manager;
     address public immutable deployer;
 
-    constructor() EIP712("PiutangForwarder", "1") {
+    constructor() EIP712("CollateraForwarder", "1") {
         deployer = msg.sender;
     }
 

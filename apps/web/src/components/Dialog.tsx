@@ -61,7 +61,7 @@ export function Dialog({
       onClick={(e) => {
         if (e.target === e.currentTarget && !busy) onClose();
       }}
-      className="m-auto box-border w-[min(520px,calc(100vw-2rem))] max-w-none overflow-visible bg-transparent p-0 text-white backdrop:bg-black/70 backdrop:backdrop-blur-[2px] max-sm:mb-0 max-sm:w-full max-sm:max-h-[92dvh]"
+      className="m-auto box-border w-[min(520px,calc(100vw-2rem))] max-w-none overflow-visible bg-transparent p-0 text-ink backdrop:bg-black/70 backdrop:backdrop-blur-[2px] max-sm:mb-0 max-sm:w-full max-sm:max-h-[92dvh]"
     >
       {open && (
         <form
@@ -74,7 +74,7 @@ export function Dialog({
           <span aria-hidden className="mx-auto -mt-2 h-1 w-10 flex-none rounded-full bg-line2 sm:hidden" />
           <div className="flex items-start justify-between gap-3">
             <div className="flex min-w-0 flex-col gap-1.5">
-              <h2 id={titleId} className="text-xl font-semibold tracking-tight">{title}</h2>
+              <h2 id={titleId} className="text-xl font-bold tracking-tight">{title}</h2>
               {description && <div id={descId} className="text-sm leading-relaxed text-muted [overflow-wrap:anywhere]">{description}</div>}
             </div>
             <button
@@ -82,7 +82,7 @@ export function Dialog({
               onClick={onClose}
               disabled={busy}
               aria-label="Tutup"
-              className="-mr-2 -mt-1 flex h-11 w-11 flex-none items-center justify-center rounded-xl text-soft hover:bg-raised hover:text-white disabled:opacity-50"
+              className="-mr-2 -mt-1 flex h-11 w-11 flex-none items-center justify-center rounded-xl text-soft hover:bg-raised hover:text-ink disabled:opacity-50"
             >
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
                 <path d="M6 6l12 12M18 6L6 18" />

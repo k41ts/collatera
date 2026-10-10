@@ -96,7 +96,7 @@ describe("STRESS 4 · serangan signature, replay, dan meta-transaction", functio
       const domains = {
         "chainId mainnet": E.managerDomain(1n, manager.target),
         "kontrak DebtManager lain": E.managerDomain(chainId, other.target),
-        "nama domain salah": { ...ctx.domain, name: "PiutangChainX" },
+        "nama domain salah": { ...ctx.domain, name: "CollateraX" },
         "versi domain salah": { ...ctx.domain, version: "2" },
         "domain forwarder": E.forwarderDomain(chainId, manager.target),
       };
@@ -362,7 +362,7 @@ describe("STRESS 4 · serangan signature, replay, dan meta-transaction", functio
       const [creditor, , debtor] = ctx.parties;
       const now = await time.latest();
       const e = await openNote(ctx, { creditor, debtor, schedule: { dueDates: [now + 30 * DAY], amounts: [IDR(500_000)] } });
-      const fake = await ethers.deployContract("PiutangForwarder");
+      const fake = await ethers.deployContract("CollateraForwarder");
       await fake.setManager(manager.target); // T5: forwarder hanya ke manager; tiruan ini menunjuk manager yang sama
       const data = manager.interface.encodeFunctionData("openDispute", [e.note.noteId, REASON]);
 

@@ -1,5 +1,5 @@
-// Konfigurasi pajak aplikasi dari env (SERVER SAJA).
-//   APP_FEE_WALLET : alamat wallet penampung pajak. Kosong = pajak nonaktif.
+// Konfigurasi fee aplikasi dari env (SERVER SAJA).
+//   APP_FEE_WALLET : alamat wallet penampung fee. Kosong = fee nonaktif.
 //   APP_FEE_BPS    : tarif dalam basis poin, 100 = 1% (default). Maksimal 1000 (10%).
 import { getAddress, isAddress } from "ethers";
 

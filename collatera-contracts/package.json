@@ -1,8 +1,8 @@
 {
-  "name": "piutangchain-contracts",
+  "name": "collatera-contracts",
   "version": "0.1.0",
   "private": true,
-  "description": "Smart contracts PiutangChain (Hardhat, tanpa OpenZeppelin)",
+  "description": "Smart contracts Collatera (Hardhat, tanpa OpenZeppelin)",
   "scripts": {
     "compile": "hardhat compile",
     "test": "hardhat test",

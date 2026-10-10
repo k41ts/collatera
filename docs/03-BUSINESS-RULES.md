@@ -67,12 +67,13 @@ OVERDUE **tidak disimpan** di contract: `statusOf()` menghitungnya saat dibaca d
 ## Pembayaran
 
 - **BR-17** Pembayaran on-chain langsung mengurangi sisa utang tanpa input manual.
-- **BR-18** Pembayaran off-chain tercatat hanya setelah kreditur konfirmasi dengan signature EIP-712 (`PaymentConfirmation`, ber-`nonce`, `deadline`, dan `proofHash` unik); kreditur boleh menolak dengan alasan. Konfirmasi memuat flag `settleFull`: bila `true` dan nominal menutup seluruh sisa cicilan, sisa denda kecil (≤ denda 1 hari dari tunggakan) dihapus dan piutang langsung lunas, supaya konfirmasi pelunasan tidak menyisakan denda akibat jeda eksekusi.
+- **BR-18** *(Dihapus.)* Pembayaran cicilan hanya lewat stablecoin IDRX on-chain; pembayaran via transfer bank (upload bukti + konfirmasi kreditur) tidak lagi didukung. `recordOffchainPayment` di kontrak tetap ada tapi tidak dipakai aplikasi.
 - **BR-19** Pembayaran sebagian diperbolehkan; dialokasikan berurutan: (1) tunggakan cicilan yang sudah jatuh tempo, tertua dulu, (2) late fee, (3) cicilan berikutnya yang belum jatuh tempo.
 - **BR-20** Sisa utang = sisa cicilan (pokok + bunga) + late fee berjalan. Pembayaran tidak boleh melebihi sisa utang.
 - **BR-21** Ada cicilan lewat jatuh tempo yang belum lunas → OVERDUE (dicek per cicilan, on-chain); kembali ACTIVE setelah tunggakan **dan** late fee dibayar.
 - **BR-21a** Late fee **2% per bulan (30 hari)** dari cicilan yang terlambat, pro-rata harian, tidak majemuk, hanya jika disepakati di perjanjian (`lateFeeBps` 0 atau 200). **Tetap bertambah selama DISPUTED** (dispute tidak boleh jadi cara menghentikan denda); hanya **FROZEN** yang menghentikannya. Saat menutup dispute admin boleh menghapus denda yang menumpuk selama periode dispute (`waiveFee`). *(Diubah dari aturan lama "tidak bertambah selama DISPUTED".)*
 - **BR-22** Sisa utang nol → PAID, token di-burn, bukti lunas berisi txHash dikirim ke kedua pihak.
+- **BR-22a** **Fee aplikasi**: setiap pembayaran **on-chain (IDRX)** oleh debitur dikenai fee `APP_FEE_BPS` basis poin dari nominal yang benar-benar terbayar (default **100 = 1%**, maks 1000 = 10%), dibulatkan ke atas, dan ditarik ke `APP_FEE_WALLET`. Fee **ditambahkan di atas** cicilan (kreditur tetap menerima nominal penuh), jadi saldo debitur harus cukup untuk cicilan + fee. Gas tetap ditanggung relayer. `APP_FEE_WALLET` kosong atau `APP_FEE_BPS=0` = fee nonaktif.
 
 ## Dispute & Integrity
 

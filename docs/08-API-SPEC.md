@@ -4,7 +4,7 @@ Base URL: `/api/v1` · Format: JSON · Auth: cookie `session` (JWT httpOnly) has
 Semua endpoint `/notes/:id/*` hanya untuk kreditur/debitur piutang itu (atau admin saat piutang DISPUTED/FROZEN, lihat [04-ROLE-MATRIX](04-ROLE-MATRIX.md)).
 Nominal dikirim sebagai string rupiah utuh (mis. `"5000000"`); backend mengonversi ke satuan terkecil MockIDRX (2 desimal: `× 100`) sebelum disimpan dan dikirim ke contract.
 
-Aksi on-chain yang dilakukan pengguna sendiri (bayar, dispute, markPaid, refund, aksi admin) dikirim sebagai `forwardRequest: { from, to, gas, nonce, deadline, data, signature }` yang ditandatangani pengguna untuk `PiutangForwarder`; backend memeriksa `data` cocok dengan aksi dan piutangnya sebelum relayer memanggil `execute`.
+Aksi on-chain yang dilakukan pengguna sendiri (bayar, dispute, markPaid, refund, aksi admin) dikirim sebagai `forwardRequest: { from, to, gas, nonce, deadline, data, signature }` yang ditandatangani pengguna untuk `CollateraForwarder`; backend memeriksa `data` cocok dengan aksi dan piutangnya sebelum relayer memanggil `execute`.
 
 ## Auth
 
@@ -45,12 +45,11 @@ Aksi on-chain yang dilakukan pengguna sendiri (bayar, dispute, markPaid, refund,
 | Method | Path | Keterangan |
 |--------|------|------------|
 | GET | `/notes/:id/outstanding` | Sisa utang, tunggakan, denda berjalan (dibaca dari `remaining()`, `overdueAmount()`, `lateFeeOf()`) |
-| GET | `/notes/:id/repay/typed-data?amount=` | Typed data permit MockIDRX + domain & `nonce` PiutangForwarder + `deadline` (lihat [11-BLOCKCHAIN-SPEC](11-BLOCKCHAIN-SPEC.md#gasless)) |
-| POST | `/notes/:id/payments/onchain` | `{ amount, installmentIndex, permit: { deadline, v, r, s }, forwardRequest }` → backend cek `data` = `payOnchain(noteId, amount, installmentIndex, permit)` → enqueue `PiutangForwarder.execute`. `amount` = batas maksimal; contract hanya menarik sisa utang |
-| POST | `/notes/:id/payments/offchain` | Multipart `{ amount, proof }` → PENDING |
-| GET | `/payments/:id/typed-data` | Payload EIP-712 `PaymentConfirmation` (noteId, amount, proofHash, installmentIndex, nonce, deadline, settleFull) untuk konfirmasi kreditur. `settleFull=true` dipakai untuk pelunasan penuh: sisa denda kecil (≤ denda 1 hari) dihapus kontrak, supaya konfirmasi senilai sisa utang saat tanda tangan tetap melunasi walau dieksekusi beberapa detik kemudian |
-| POST | `/payments/:id/confirm` | Kreditur `{ signature }` → enqueue `recordOffchainPayment` → CONFIRMED setelah event `PaymentRecorded` |
-| POST | `/payments/:id/reject` | Kreditur `{ reason }` → REJECTED |
+| GET | `/notes/:id/repay/typed-data?amount=` | Typed data permit MockIDRX + domain & `nonce` CollateraForwarder + `deadline` (lihat [11-BLOCKCHAIN-SPEC](11-BLOCKCHAIN-SPEC.md#gasless)) |
+| POST | `/notes/:id/payments/onchain` | `{ amount, installmentIndex, permit: { deadline, v, r, s }, forwardRequest }` → backend cek `data` = `payOnchain(noteId, amount, installmentIndex, permit)` → enqueue `CollateraForwarder.execute`. `amount` = batas maksimal; contract hanya menarik sisa utang. Jika fee aplikasi aktif, body juga memuat `fee: { value, deadline, signature }` (permit IDRX ke relayer, nonce berikutnya, `value` ≥ fee dari `amount`); backend menolak pembayaran tanpa permit fee atau bila saldo < `amount` + fee, lalu menarik fee dari nominal yang benar-benar terbayar dan mencatat audit `APP_FEE` / `APP_FEE_FAILED`. `GET /notes/:id` mengembalikan `appFee: { bps, spender } \| null` |
+| GET | `/payments/:id/typed-data` | Payload EIP-712 `PaymentConfirmation` (noteId, amount, proofHash, installmentIndex, nonce, deadline, settleFull) untuk konfirmasi kreditur. `settleFull=true` dipakai untuk pelunasan penuh: sisa denda kecil (≤ denda 1 hari) dihapus kontrak, supaya konfirmasi senilai sisa utang saat tanda tangan tetap melunasi walau dieksekusi beberapa detik kemudian. *Legacy: hanya untuk bukti transfer lama yang masih PENDING; pembayaran transfer bank baru sudah tidak bisa dibuat.* |
+| POST | `/payments/:id/confirm` | Kreditur `{ signature }` → enqueue `recordOffchainPayment` → CONFIRMED setelah event `PaymentRecorded`. *Legacy: hanya untuk bukti transfer lama yang masih PENDING; pembayaran transfer bank baru sudah tidak bisa dibuat.* |
+| POST | `/payments/:id/reject` | Kreditur `{ reason }` → REJECTED. *Legacy: hanya untuk bukti transfer lama yang masih PENDING; pembayaran transfer bank baru sudah tidak bisa dibuat.* |
 
 ## Integrity, Dispute, Admin
 

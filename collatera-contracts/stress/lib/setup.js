@@ -58,7 +58,7 @@ async function deployStress(nParties = 8) {
   const [admin, relayer, freezer, stranger] = signers;
   const parties = signers.slice(4, 4 + nParties);
   const idrx = await ethers.deployContract("MockIDRX", [DECIMALS, admin.address, IDR(10_000_000)]);
-  const forwarder = await ethers.deployContract("PiutangForwarder");
+  const forwarder = await ethers.deployContract("CollateraForwarder");
   const debtNote = await ethers.deployContract("DebtNote");
   const manager = await ethers.deployContract("DebtManager", [debtNote.target, idrx.target, forwarder.target, admin.address]);
   await forwarder.setManager(manager.target);

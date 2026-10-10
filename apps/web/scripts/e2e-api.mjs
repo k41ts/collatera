@@ -17,10 +17,10 @@ const FORWARD_TYPES = { ForwardRequest: [
 const PERMIT_TYPES = { Permit: [
   { name: "owner", type: "address" }, { name: "spender", type: "address" }, { name: "value", type: "uint256" },
   { name: "nonce", type: "uint256" }, { name: "deadline", type: "uint256" }] };
-const fwdDomain = { name: "PiutangForwarder", version: "1", chainId: dep.chainId, verifyingContract: dep.addresses.PiutangForwarder };
+const fwdDomain = { name: "CollateraForwarder", version: "1", chainId: dep.chainId, verifyingContract: dep.addresses.CollateraForwarder };
 const tokDomain = { name: "Mock IDRX", version: "1", chainId: dep.chainId, verifyingContract: dep.addresses.MockIDRX };
 const manager = new Interface(dep.abi.DebtManager);
-const forwarder = new Contract(dep.addresses.PiutangForwarder, dep.abi.PiutangForwarder, provider);
+const forwarder = new Contract(dep.addresses.CollateraForwarder, dep.abi.CollateraForwarder, provider);
 const idrx = new Contract(dep.addresses.MockIDRX, dep.abi.MockIDRX, provider);
 
 let step = 0;
@@ -44,7 +44,7 @@ class User {
   async login(name) {
     const { nonce } = await this.req("POST", "/api/auth/nonce");
     const host = new URL(BASE).host;
-    const message = [`${host} wants you to sign in with your Ethereum account:`, this.wallet.address, "", "Masuk ke PiutangChain.", "",
+    const message = [`${host} wants you to sign in with your Ethereum account:`, this.wallet.address, "", "Masuk ke Collatera.", "",
       `URI: ${BASE}`, "Version: 1", `Chain ID: ${dep.chainId}`, `Nonce: ${nonce}`, `Issued At: ${new Date().toISOString()}`].join("\n");
     await this.req("POST", "/api/auth/verify", { message, signature: await this.wallet.signMessage(message) });
     await this.req("PATCH", "/api/me", { name });
@@ -116,14 +116,11 @@ async function main() {
   catch (e) { assert(/piutang lain/.test(e.message), "pesan tolak forward: " + e.message); }
   ok("server menolak ForwardRequest untuk piutang lain");
 
-  // bayar off-chain: upload bukti, kreditur konfirmasi dengan tanda tangan
+  // pembayaran transfer bank sudah dihapus: endpoint upload bukti tidak ada lagi
   const pf = new FormData(); pf.append("amount", "50000"); pf.append("installment", "2"); pf.append("proof", pdf(), "bukti.pdf");
-  const { id: pid } = await D.req("POST", `/api/notes/${id}/payments`, null, pf);
-  const t = await K.req("GET", `/api/payments/${pid}`);
-  const conf = await K.req("POST", `/api/payments/${pid}`, { action: "confirm", signature: await K.signTyped(t), message: t.message });
-  d = await note(K, id);
-  assert(BigInt(d.chain.remaining) === BigInt(rp(50000)), `sisa utang 50.000 (dapat ${d.chain.remaining})`);
-  ok("bukti transfer dikonfirmasi kreditur, sisa Rp50.000", conf.txHash);
+  try { await D.req("POST", `/api/notes/${id}/payments`, null, pf); assert(false, "upload bukti transfer harus ditolak"); }
+  catch (e) { assert(!/harus ditolak/.test(e.message), e.message); }
+  ok("upload bukti transfer ditolak (hanya bayar IDRX)");
 
   await D.req("POST", `/api/notes/${id}/messages`, { body: "Halo, cicilan 2 sudah saya transfer sebagian." });
   const msgs = await K.req("GET", `/api/notes/${id}/messages`);

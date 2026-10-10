@@ -1,4 +1,4 @@
-// Tipe EIP-712. HARUS identik dengan piutangchain-contracts/helpers/eip712.js (urutan & tipe field menentukan hash).
+// Tipe EIP-712. HARUS identik dengan collatera-contracts/helpers/eip712.js (urutan & tipe field menentukan hash).
 import { ADDR, CHAIN_ID } from "./config";
 
 export const NOTE_TYPES = {
@@ -63,8 +63,8 @@ export const PERMIT_TYPES = {
   ],
 };
 
-export const managerDomain = { name: "PiutangChain", version: "1", chainId: CHAIN_ID, verifyingContract: ADDR.DebtManager };
-export const forwarderDomain = { name: "PiutangForwarder", version: "1", chainId: CHAIN_ID, verifyingContract: ADDR.PiutangForwarder };
+export const managerDomain = { name: "Collatera", version: "1", chainId: CHAIN_ID, verifyingContract: ADDR.DebtManager };
+export const forwarderDomain = { name: "CollateraForwarder", version: "1", chainId: CHAIN_ID, verifyingContract: ADDR.CollateraForwarder };
 export const tokenDomain = { name: "Mock IDRX", version: "1", chainId: CHAIN_ID, verifyingContract: ADDR.MockIDRX };
 
 /** Struct Note dalam bentuk JSON (angka besar sebagai string). */

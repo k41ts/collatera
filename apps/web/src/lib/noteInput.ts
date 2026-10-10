@@ -14,7 +14,8 @@ export const NoteInput = z
     interestValue: z.string().regex(/^\d+(\.\d{1,2})?$/, "Nilai bunga tidak valid").default("0"),
     installmentCount: z.number().int().min(1).max(24),
     firstDue: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Tanggal jatuh tempo tidak valid"),
-    lateFee: z.boolean(),
+    // Diabaikan: bunga keterlambatan 2%/bulan selalu berlaku (lihat lateFeeBps di bawah).
+    lateFee: z.boolean().optional(),
     disbursement: z.enum(["onchain", "offchain"]),
     collateralNote: z.string().trim().max(500).default(""),
     counterpartyWallet: z.string().trim().refine(isAddress, "Alamat wallet pihak lawan tidak valid"),
@@ -39,7 +40,8 @@ export function deriveNoteFields(v: NoteInputT) {
       interestType: v.interestType,
       interestValue,
       totalOwed: total.toString(),
-      lateFeeBps: v.lateFee ? 200 : 0,
+      // Wajib untuk semua surat: bunga berjalan selama ada tunggakan, sampai dibayar atau diikhlaskan kreditur.
+      lateFeeBps: 200,
       disbursement: v.disbursement,
       collateralNote: v.collateralNote,
       counterpartyWallet: getAddress(v.counterpartyWallet),

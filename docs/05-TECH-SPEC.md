@@ -15,29 +15,30 @@
 | Database | PostgreSQL (Supabase) + Prisma ORM (schema, migrate, seed) | Relasional, type-safe, cocok untuk audit |
 | Storage | Supabase Storage / S3, enkripsi AES-256 | Dokumen off-chain |
 | Queue | BullMQ + Redis | Antrean relayer, retry, cron |
-| Smart contract | Solidity 0.8.28, Hardhat 2 + `@nomicfoundation/hardhat-toolbox` (ethers v6, Mocha/Chai), **tanpa OpenZeppelin** | Kode di `piutangchain-contracts/`; test, script, dan deploy pakai ethers yang sama dengan app |
+| Smart contract | Solidity 0.8.28, Hardhat 2 + `@nomicfoundation/hardhat-toolbox` (ethers v6, Mocha/Chai), **tanpa OpenZeppelin** | Kode di `collatera-contracts/`; test, script, dan deploy pakai ethers yang sama dengan app |
 | Deploy contract | `scripts/deploy.js` (`npm run deploy:sepolia`) → `deployments/<network>.json` | Alamat dan constructor args tersimpan untuk backend/frontend |
 | Typing contract | TypeChain (bawaan hardhat-toolbox) | Panggilan contract type-safe di ethers |
 | Stablecoin testnet | `MockIDRX`, **2 desimal** | Rp1 = 100 satuan terkecil |
 | Chain | Ethereum Sepolia | Sesuai PRD |
-| Gasless | Relayer sendiri (ERC-2771 forwarder) + EIP-2612 permit | Pengguna tidak pernah bayar gas |
+| Gasless | Relayer sendiri (ERC-2771 forwarder) + EIP-2612 permit | Pengguna tidak pernah bayar gas (yang dibayar debitur hanya fee aplikasi, lihat baris berikut) |
+| Fee aplikasi | Permit EIP-2612 kedua dari debitur (nonce berikutnya) → relayer `permit` + `transferFrom` ke `APP_FEE_WALLET` setelah `payOnchain` sukses | Default 1% (`APP_FEE_BPS=100`) dari tiap pembayaran IDRX ([BR-22a](03-BUSINESS-RULES.md)) |
 | Notifikasi | Resend (email) + tabel notifikasi in-app | Sederhana |
 | OTP | Twilio Verify / provider lokal | Verifikasi HP |
 
 ## Canonical Payload (EIP-712)
 
-Struct yang ditandatangani mengikuti kode (`piutangchain-contracts/contracts/DebtTypes.sol`); detail field dan aturannya di [11-BLOCKCHAIN-SPEC](11-BLOCKCHAIN-SPEC.md#struct-yang-ditandatangani-eip-712). Ringkasnya:
+Struct yang ditandatangani mengikuti kode (`collatera-contracts/contracts/DebtTypes.sol`); detail field dan aturannya di [11-BLOCKCHAIN-SPEC](11-BLOCKCHAIN-SPEC.md#struct-yang-ditandatangani-eip-712). Ringkasnya:
 
 | Struct | Ditandatangani | Kapan |
 |--------|----------------|-------|
 | `Note` | kreditur **dan** debitur (pesan identik) | Saat setuju isi perjanjian |
 | `DisbursementReceipt` | debitur | Pencairan off-chain: konfirmasi terima dana |
-| `PaymentConfirmation` | kreditur | Konfirmasi pembayaran off-chain |
+| `PaymentConfirmation` | kreditur | Konfirmasi pembayaran off-chain (ada di kontrak, tidak dipakai aplikasi: pembayaran transfer bank dihapus) |
 | `Amendment` | kreditur dan debitur | Revisi setelah aktif |
-| `ForwardRequest` (domain `PiutangForwarder`) | pengguna | Aksi gasless lewat forwarder |
+| `ForwardRequest` (domain `CollateraForwarder`) | pengguna | Aksi gasless lewat forwarder |
 | `Permit` (domain `Mock IDRX`) | pemilik token | Setor escrow / bayar on-chain |
 
-Domain `Note` dkk.: `{ name: "PiutangChain", version: "1", chainId: 11155111, verifyingContract: <DebtManager> }`. Backend dan frontend **wajib** memakai `piutangchain-contracts/helpers/eip712.js`.
+Domain `Note` dkk.: `{ name: "Collatera", version: "1", chainId: 11155111, verifyingContract: <DebtManager> }`. Backend dan frontend **wajib** memakai `collatera-contracts/helpers/eip712.js`.
 
 **Nonce unordered:** `creditorNonce`, `debtorNonce`, dan `nonce` di struct lain adalah angka acak 256-bit yang dibuat backend dan ditandai terpakai per signer (`nonceUsed[signer][nonce]`). Banyak piutang dan konfirmasi dari wallet yang sama bisa berjalan paralel. Nonce `DisbursementReceipt` harus berbeda dari `debtorNonce`.
 

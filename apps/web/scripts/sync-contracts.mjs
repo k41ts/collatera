@@ -1,4 +1,4 @@
-// Salin ABI + alamat kontrak dari piutangchain-contracts ke web app.
+// Salin ABI + alamat kontrak dari collatera-contracts ke web app.
 //   npm run sync-contracts            (default: deployments/sepolia.json)
 //   NETWORK=localhost npm run sync-contracts
 // Jalankan ulang setiap kali kontrak di-compile ulang atau di-deploy ulang.
@@ -7,7 +7,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const contractsDir = path.resolve(here, "../../../piutangchain-contracts");
+const contractsDir = path.resolve(here, "../../../collatera-contracts");
 const network = process.env.NETWORK || "sepolia";
 
 const deployment = JSON.parse(fs.readFileSync(path.join(contractsDir, "deployments", `${network}.json`), "utf8"));
@@ -24,7 +24,7 @@ const out = {
     DebtManager: abiOf("DebtManager"),
     DebtNote: abiOf("DebtNote"),
     MockIDRX: abiOf("MockIDRX"),
-    PiutangForwarder: abiOf("PiutangForwarder"),
+    CollateraForwarder: abiOf("CollateraForwarder"),
   },
 };
 

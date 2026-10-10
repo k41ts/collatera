@@ -4,7 +4,7 @@
 //
 // Hanya butuh DEPLOYER_PRIVATE_KEY yang punya ETH: deployer berperan sebagai relayer (bayar semua gas) dan owner
 // MockIDRX (mint saldo uji). Kreditur dan debitur adalah wallet acak sekali pakai yang HANYA menandatangani,
-// jadi sekaligus membuktikan alur gasless: escrow lewat permit, aktivasi, bayar cicilan lewat PiutangForwarder,
+// jadi sekaligus membuktikan alur gasless: escrow lewat permit, aktivasi, bayar cicilan lewat CollateraForwarder,
 // sampai PAID + burn.
 const fs = require("fs");
 const path = require("path");
@@ -23,7 +23,7 @@ async function main() {
   const IDR = (n) => BigInt(n) * 10n ** BigInt(dep.stablecoinDecimals);
 
   const idrx = await ethers.getContractAt("MockIDRX", dep.contracts.MockIDRX);
-  const forwarder = await ethers.getContractAt("PiutangForwarder", dep.contracts.PiutangForwarder);
+  const forwarder = await ethers.getContractAt("CollateraForwarder", dep.contracts.CollateraForwarder);
   const debtNote = await ethers.getContractAt("DebtNote", dep.contracts.DebtNote);
   const manager = await ethers.getContractAt("DebtManager", dep.contracts.DebtManager);
 

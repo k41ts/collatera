@@ -1,6 +1,6 @@
-# PiutangChain
+# Collatera
 
-Surat piutang (promissory note) on-chain: dibuat, ditandatangani kedua pihak, ditokenisasi, dan ditagih sampai lunas, tanpa pengguna perlu paham crypto atau membayar gas.
+Surat piutang (promissory note) on-chain: dibuat, ditandatangani kedua pihak, ditokenisasi, dan ditagih sampai lunas, tanpa pengguna perlu paham crypto atau membayar gas. Satu-satunya biaya: fee aplikasi 1% yang dibayar debitur di setiap pembayaran on-chain (IDRX).
 
 ## Fitur
 
@@ -8,7 +8,8 @@ Surat piutang (promissory note) on-chain: dibuat, ditandatangani kedua pihak, di
 - Draft, undangan, revisi, dan tanda tangan EIP-712 gasless
 - Token ERC-721 non-transferable ke wallet kreditur sebagai hak tagih
 - Pencairan pokok lewat escrow stablecoin atau transfer off-chain
-- Cicilan, pembayaran on-chain (MockIDRX) dan off-chain dengan konfirmasi kreditur
+- Cicilan dan pembayaran on-chain (MockIDRX)
+- Fee aplikasi 1% (bisa diatur lewat `APP_FEE_BPS`) untuk setiap pembayaran debitur
 - OVERDUE otomatis per cicilan, late fee 2%/bulan (jika disepakati), pengingat H-3 & H-0
 - Integrity checker: hash DB vs on-chain → TAMPERED → FROZEN
 - Dispute ke admin dan audit log
@@ -16,7 +17,7 @@ Surat piutang (promissory note) on-chain: dibuat, ditandatangani kedua pihak, di
 ## Struktur Repo
 
 ```
-piutangchain-contracts/   Hardhat 2: DebtManager, DebtNote, MockIDRX, PiutangForwarder (sudah ada)
+collatera-contracts/   Hardhat 2: DebtManager, DebtNote, MockIDRX, CollateraForwarder (sudah ada)
 docs/                     01-PRD … 14-README
 apps/web/                 Next.js full-stack: UI + API + relayer gasless (Prisma/SQLite dev, Postgres prod)
 ```
@@ -26,7 +27,7 @@ apps/web/                 Next.js full-stack: UI + API + relayer gasless (Prisma
 Prasyarat: Node 20+ dan npm. Smart contract:
 
 ```bash
-cd piutangchain-contracts && npm install
+cd collatera-contracts && npm install
 ```
 
 ```bash
@@ -37,14 +38,14 @@ npm run node
 npm run deploy:local
 ```
 
-Deploy ke Sepolia: salin `piutangchain-contracts/.env.example` ke `.env`, isi RPC dan key, lalu `npm run deploy:sepolia` (lihat [10-DEPLOYMENT-PLAN](10-DEPLOYMENT-PLAN.md)). Alamat yang sudah ter-deploy ada di `piutangchain-contracts/deployments/sepolia.json`.
+Deploy ke Sepolia: salin `collatera-contracts/.env.example` ke `.env`, isi RPC dan key, lalu `npm run deploy:sepolia` (lihat [10-DEPLOYMENT-PLAN](10-DEPLOYMENT-PLAN.md)). Alamat yang sudah ter-deploy ada di `collatera-contracts/deployments/sepolia.json`.
 
 Website: lihat [apps/web/README.md](../apps/web/README.md) (`npm install`, isi `.env`, `npx prisma db push`, `npm run dev`).
 
 ## Test
 
 ```bash
-cd piutangchain-contracts && npm test
+cd collatera-contracts && npm test
 ```
 
 ```bash

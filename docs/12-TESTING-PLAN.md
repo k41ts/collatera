@@ -4,7 +4,7 @@
 
 | Level | Tool | Target |
 |-------|------|--------|
-| Smart contract unit | Hardhat 2 + Mocha + Chai + ethers (`npm test`, `npm run coverage` di `piutangchain-contracts/`) | Semua lulus, coverage ≥ 90% |
+| Smart contract unit | Hardhat 2 + Mocha + Chai + ethers (`npm test`, `npm run coverage` di `collatera-contracts/`) | Semua lulus, coverage ≥ 90% |
 | Static analysis | Slither | Tanpa high/medium |
 | Backend unit & integration | Vitest + Supertest, Postgres test container | Service & endpoint utama |
 | E2E | Playwright + Hardhat Network lokal | Flow utama end-to-end |
@@ -12,11 +12,11 @@
 
 ## Smart Contract
 
-Test ada di `piutangchain-contracts/test/` (138 test, semua lulus per 9 Okt 2026; hitungan nyata dari `SOLCJS=1 npx hardhat test`). Suite stress terpisah di `piutangchain-contracts/stress/` (`npm run test:stress`, 68 test). Helper bersama di `fixture.js`.
+Test ada di `collatera-contracts/test/` (138 test, semua lulus per 9 Okt 2026; hitungan nyata dari `SOLCJS=1 npx hardhat test`). Suite stress terpisah di `collatera-contracts/stress/` (`npm run test:stress`, 68 test). Helper bersama di `fixture.js`.
 
 | File | Yang dicakup |
 |------|--------------|
-| `00-primitives.test.js` | Hash EIP-712 contract = hash ethers (`helpers/eip712.js`); MockIDRX (ERC-20, permit, tolak signature malleable, faucet cooldown); DebtNote non-transferable (`Soulbound`) dan `tokenURI`; PiutangForwarder (pemanggil asli, replay, revert diteruskan, anti-spoof) |
+| `00-primitives.test.js` | Hash EIP-712 contract = hash ethers (`helpers/eip712.js`); MockIDRX (ERC-20, permit, tolak signature malleable, faucet cooldown); DebtNote non-transferable (`Soulbound`) dan `tokenURI`; CollateraForwarder (pemanggil asli, replay, revert diteruskan, anti-spoof) |
 | `10-lifecycle.test.js` | Alur penuh: escrow → aktivasi on-chain → bayar → PAID + burn; pencairan off-chain dengan receipt; pembayaran campuran; `markPaid`; OVERDUE dan denda; gasless lewat forwarder |
 | `20-security.test.js` | Satu docHash = satu token, replay nonce, signature salah/kedaluwarsa/domain lain, validasi field, escrow (refund, deposit ganda), batas pembayaran, smart account (ERC-1271), pause dan role |
 | `30-dispute-freeze-amend.test.js` | Dispute (buka/tutup, lunas saat dispute), freeze/unfreeze (termasuk dari DISPUTED), integrity check end-to-end, revisi `amend`, aksi pengguna lewat forwarder |

@@ -31,7 +31,7 @@ function LoginInner() {
     setBusy(true);
     try {
       await loginWithWallet();
-      toast.success("Berhasil masuk", { description: "Selamat datang di PiutangChain." });
+      toast.success("Berhasil masuk", { description: "Selamat datang di Collatera." });
       router.push(next && next.startsWith("/") ? next : "/app");
       router.refresh();
     } catch (e) {
@@ -46,14 +46,14 @@ function LoginInner() {
   return (
     <div className="flex min-h-screen items-center justify-center px-4 py-12">
       <div className="flex w-full max-w-[440px] flex-col gap-6 rounded-[24px] border border-line bg-card p-6 sm:p-8">
-        <Link href="/" className="flex items-center gap-2.5 text-white no-underline">
+        <Link href="/" className="flex items-center gap-2.5 text-ink no-underline">
           <Logo />
-          <span className="text-lg font-semibold">piutangchain</span>
+          <span className="text-[22px] font-bold tracking-[-0.03em]">Collatera</span>
         </Link>
         <div className="flex flex-col gap-2">
-          <h1 className="text-2xl font-semibold tracking-tight">Masuk</h1>
+          <h1 className="text-2xl font-extrabold tracking-[-0.035em]">Masuk</h1>
           <p className="text-sm leading-relaxed text-muted">
-            Masuk dengan wallet di jaringan <strong className="font-semibold text-white">Sepolia</strong>. Kamu akan diminta menandatangani pesan login. Tanda tangan ini <strong className="font-semibold text-white">gratis</strong> dan tidak membuat transaksi.
+            Masuk dengan wallet di jaringan <strong className="font-semibold text-ink">Sepolia</strong>. Kamu akan diminta menandatangani pesan login. Tanda tangan ini <strong className="font-semibold text-ink">gratis</strong> dan tidak membuat transaksi.
           </p>
         </div>
         {env === "checking" && (
@@ -77,9 +77,9 @@ function LoginInner() {
             </a>
             <ol className="flex flex-col gap-2 rounded-2xl bg-midnight p-4 text-[13px] leading-relaxed text-soft">
               {[
-                "Tombol di atas membuka PiutangChain di browser dalam aplikasi MetaMask.",
-                <>Tekan <strong className="font-semibold text-white">Masuk dengan MetaMask</strong>, lalu setujui permintaan tanda tangan di aplikasi.</>,
-                "Selanjutnya pakai PiutangChain dari browser MetaMask itu agar bisa tanda tangan dan bayar.",
+                "Tombol di atas membuka Collatera di browser dalam aplikasi MetaMask.",
+                <>Tekan <strong className="font-semibold text-ink">Masuk dengan MetaMask</strong>, lalu setujui permintaan tanda tangan di aplikasi.</>,
+                "Selanjutnya pakai Collatera dari browser MetaMask itu agar bisa tanda tangan dan bayar.",
               ].map((t, i) => (
                 <li key={i} className="flex gap-2.5">
                   <span aria-hidden className="flex h-5 w-5 flex-none items-center justify-center rounded-full bg-brand-soft text-[11px] font-semibold text-lav">{i + 1}</span>

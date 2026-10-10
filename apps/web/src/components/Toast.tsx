@@ -84,7 +84,7 @@ function ToastItem({ t, onClose, onExited, onCollapsed }: { t: Item; onClose: ()
             role={t.tone === "error" ? "alert" : "status"}
             aria-live={t.tone === "error" ? "assertive" : "polite"}
             onAnimationEnd={(e) => e.target === e.currentTarget && t.phase === "out" && onExited()}
-            className={`toast group pointer-events-auto relative flex items-start gap-3 overflow-hidden rounded-2xl border bg-card/95 p-3.5 pr-11 text-white shadow-[0_12px_40px_rgba(0,0,0,0.55)] backdrop-blur supports-[backdrop-filter]:bg-card/85 ${s.ring} ${t.phase === "in" ? "toast-in" : "toast-out"}`}
+            className={`toast group pointer-events-auto relative flex items-start gap-3 overflow-hidden rounded-2xl border bg-card/95 p-3.5 pr-11 text-ink shadow-[0_12px_40px_rgba(0,0,0,0.55)] backdrop-blur supports-[backdrop-filter]:bg-card/85 ${s.ring} ${t.phase === "in" ? "toast-in" : "toast-out"}`}
           >
             <span aria-hidden className={`mt-0.5 flex h-7 w-7 flex-none items-center justify-center rounded-full ${s.icon}`}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">{s.path}</svg>
@@ -94,12 +94,12 @@ function ToastItem({ t, onClose, onExited, onCollapsed }: { t: Item; onClose: ()
               {t.description && <span className="text-[13px] leading-relaxed text-soft [overflow-wrap:anywhere]">{t.description}</span>}
               {t.link && (
                 t.link.external ? (
-                  <a href={t.link.href} target="_blank" rel="noreferrer" className="mt-1 self-start text-[13px] font-medium text-lav hover:text-white">
+                  <a href={t.link.href} target="_blank" rel="noreferrer" className="mt-1 self-start text-[13px] font-medium text-lav hover:text-ink">
                     {t.link.label}
                   </a>
                 ) : (
                   // Tautan di dalam aplikasi: pindah halaman tanpa reload, lalu toast ini ditutup.
-                  <Link href={t.link.href} onClick={onClose} className="mt-1 self-start text-[13px] font-medium text-lav no-underline hover:text-white">
+                  <Link href={t.link.href} onClick={onClose} className="mt-1 self-start text-[13px] font-medium text-lav no-underline hover:text-ink">
                     {t.link.label}
                   </Link>
                 )
@@ -109,7 +109,7 @@ function ToastItem({ t, onClose, onExited, onCollapsed }: { t: Item; onClose: ()
               type="button"
               onClick={onClose}
               aria-label="Tutup notifikasi"
-              className="absolute right-1.5 top-1.5 flex h-9 w-9 items-center justify-center rounded-xl text-faint hover:bg-raised hover:text-white"
+              className="absolute right-1.5 top-1.5 flex h-9 w-9 items-center justify-center rounded-xl text-faint hover:bg-raised hover:text-ink"
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden><path d="M6 6l12 12M18 6L6 18" /></svg>
             </button>

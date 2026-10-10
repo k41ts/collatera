@@ -165,10 +165,10 @@ export default function NoteForm({ initial, noteId }: { initial?: NoteFormValues
               ))}
             </div>
           </div>
-          <label className="col-span-full flex cursor-pointer items-start gap-3 text-sm">
-            <input type="checkbox" checked={v.lateFee} onChange={(e) => set("lateFee", e.target.checked)} className="mt-0.5 h-5 w-5 accent-brand" />
-            <span>Berlakukan denda terlambat <strong className="font-semibold">2% per bulan</strong> dari cicilan yang terlambat<br /><span className="text-[13px] text-faint">Dihitung kontrak per detik, tidak berbunga, berhenti saat sengketa atau beku.</span></span>
-          </label>
+          <div className="col-span-full flex items-start gap-3 rounded-xl border border-line2 px-3.5 py-3 text-sm">
+            <svg aria-hidden width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="mt-0.5 flex-none text-soft"><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></svg>
+            <span>Bunga keterlambatan <strong className="font-semibold">2% per bulan</strong> dari cicilan yang lewat jatuh tempo, berlaku otomatis<br /><span className="text-[13px] text-faint">Dihitung kontrak per detik dan terus berjalan sampai tunggakan dibayar atau kreditur mengikhlaskan sisa utang. Berhenti hanya saat piutang dibekukan.</span></span>
+          </div>
           <div className="col-span-full">
             <Field label="Catatan jaminan (opsional)" htmlFor="jaminan">
               <textarea id="jaminan" rows={2} value={v.collateralNote} onChange={(e) => set("collateralNote", e.target.value)} className={`${input} py-3`} />
@@ -247,7 +247,7 @@ export default function NoteForm({ initial, noteId }: { initial?: NoteFormValues
               </li>
             ))}
           </ol>
-          <span className="text-xs text-brand-tint">{v.lateFee ? "Denda 2% per bulan dari cicilan yang terlambat." : "Tanpa denda keterlambatan."}</span>
+          <span className="text-xs text-brand-tint">Bunga keterlambatan 2% per bulan dari cicilan yang terlambat.</span>
         </section>
         <Button type="submit" variant="rasp" disabled={busy} className="min-h-[52px] flex-none font-semibold max-xl:hidden">
           {busy && <Spinner />} {noteId ? "Simpan perubahan" : "Simpan draft"}

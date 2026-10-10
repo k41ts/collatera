@@ -9,6 +9,7 @@ import { ABI, ADDR } from "@/lib/chain/config";
 import { chain, reader, relay } from "@/lib/chain/relayer";
 import { PERMIT_TYPES, tokenDomain } from "@/lib/chain/eip712";
 import { feeFor } from "@/lib/appFee";
+import { amountDue } from "@/lib/amountDue";
 import { appFeeConfig } from "@/lib/appFeeConfig";
 import { fmtRp } from "@/lib/money";
 
@@ -78,8 +79,30 @@ export const POST = handler<Ctx>(async (req, user, { params }) => {
       break;
   }
 
-  const { forwarder, idrx } = reader();
+  const { forwarder, idrx, manager } = reader();
   if (!(await forwarder.verify(r, body.signature))) throw bad("Tanda tangan permintaan tidak valid atau kedaluwarsa.");
+
+  // Nominal pembayaran tidak bebas: harus tepat tagihan saat ini (cicilan berikutnya, atau tunggakan + bunga).
+  if (body.purpose === "pay") {
+    const [v, overdue, lateFee] = await Promise.all([
+      manager.getNote(n.chainNoteId),
+      manager.overdueAmount(n.chainNoteId) as Promise<bigint>,
+      manager.lateFeeOf(n.chainNoteId) as Promise<bigint>,
+    ]);
+    const due = amountDue({
+      installments: [...n.installments].sort((a, b) => a.seq - b.seq).map((i) => BigInt(i.amount)),
+      scheduledPaid: BigInt(v.scheduledPaid.toString()),
+      overdue,
+      lateFee,
+      lateFeeBps: Number(v.lateFeeBps),
+    });
+    const amount = BigInt(call.args[1].toString());
+    if (due.kind === "none") throw new ApiError(409, "NOTHING_DUE", "Tidak ada tagihan yang perlu dibayar.");
+    // Tunggakan: bunga bertambah per detik, jadi nominal yang dikutip beberapa saat lalu (plus penyangga) masih sah.
+    const valid = due.kind === "next" ? amount === due.amount : amount >= due.base && amount <= due.base + due.buffer;
+    if (!valid) throw bad(`Nominal pembayaran harus sesuai tagihan saat ini (${fmtRp(due.kind === "next" ? due.amount : due.base)}). Muat ulang halaman lalu coba lagi.`);
+    if (Number(call.args[2]) !== due.seq) throw bad("Nomor cicilan tidak sesuai tagihan saat ini. Muat ulang halaman lalu coba lagi.");
+  }
 
   // Fee aplikasi: diperiksa SEBELUM pembayaran dikirim supaya debitur tidak bisa membayar tanpa fee.
   const appFee = body.purpose === "pay" ? appFeeConfig() : null;

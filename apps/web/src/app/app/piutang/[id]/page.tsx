@@ -2,11 +2,12 @@
 import Link from "next/link";
 import { use, useState } from "react";
 import { keccak256, toUtf8Bytes } from "ethers";
-import { Avatar, Button, Card, LinkButton, Notice, Spinner, StatusPill, fmtDate, input } from "@/components/ui";
+import { Avatar, Button, Card, LinkButton, Notice, Spinner, StatusPill, fmtDate } from "@/components/ui";
 import { api, forwardAction, payOnchain, short, signTyped } from "@/lib/client";
 import { useApi } from "@/lib/hooks";
-import { fmtRp, rupiahToUnits, unitsToRupiah } from "@/lib/money";
+import { fmtRp } from "@/lib/money";
 import { feeFor, feeLabel } from "@/lib/appFee";
+import { amountDue, type AmountDue } from "@/lib/amountDue";
 import { txUrl } from "@/lib/chain/config";
 import { splitSig } from "@/lib/chain/eip712";
 import RevisionModal from "./RevisionModal";
@@ -114,7 +115,10 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
     const status = n.status === "PAID" || paidPart === BigInt(i.amount) ? "Lunas" : !isLive ? "-" : due < now ? "Terlambat" : paidPart > BigInt(0) ? "Sebagian" : "Belum jatuh tempo";
     return { ...i, paidPart, status };
   });
-  const nextUnpaid = rows.find((r) => r.status !== "Lunas");
+  // Tagihan yang boleh dibayar sekarang (nominal dikunci; server memeriksa ulang angka yang sama).
+  const due = chain
+    ? amountDue({ installments: n.installments.map((i) => BigInt(i.amount)), scheduledPaid, overdue: BigInt(chain.overdue), lateFee: BigInt(chain.lateFee), lateFeeBps: n.lateFeeBps })
+    : null;
   const remaining = chain ? BigInt(chain.remaining) : BigInt(n.totalOwed);
   const paidTotal = BigInt(chain?.paid ?? "0");
   const pct = n.status === "PAID" ? 100 : Number((scheduledPaid * BigInt(100)) / BigInt(n.totalOwed));
@@ -345,7 +349,7 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
           <section aria-label="Ringkasan" className="flex flex-col gap-5 rounded-[22px] bg-brand p-5 sm:p-6">
             <div className="flex flex-wrap items-end justify-between gap-4">
               <div className="flex flex-col gap-1.5">
-                <span className="text-[13px] text-brand-tint">{chain ? "Sisa utang (termasuk denda berjalan)" : "Total yang harus dibayar"}</span>
+                <span className="text-[13px] text-brand-tint">{chain ? "Sisa utang (termasuk bunga keterlambatan)" : "Total yang harus dibayar"}</span>
                 <span className="text-[32px] font-semibold leading-tight tracking-tight tabular-nums [overflow-wrap:anywhere] sm:text-[44px]">{fmtRp(n.status === "PAID" ? "0" : chain ? remaining : n.totalOwed)}</span>
               </div>
               {chain && <span className="text-[13px] text-brand-tint tabular-nums">Terbayar {fmtRp(paidTotal)} dari {fmtRp(n.totalOwed)}</span>}
@@ -356,9 +360,9 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
             <dl className="grid grid-cols-2 gap-4 text-[13px] sm:grid-cols-[repeat(auto-fit,minmax(150px,1fr))]">
               <Stat k="Pokok" v={fmtRp(n.principal)} />
               <Stat k="Bunga" v={n.interestType === "none" ? "Tanpa bunga" : n.interestType === "percent" ? `${n.interestValue}%` : `Rp${Number(n.interestValue).toLocaleString("id-ID")}`} />
-              <Stat k="Denda terlambat" v={n.lateFeeBps ? "2% per bulan" : "Tanpa denda"} />
+              <Stat k="Bunga keterlambatan" v={n.lateFeeBps ? "2% per bulan" : "Tanpa bunga"} />
               <Stat k="Pencairan" v={n.disbursement === "onchain" ? "Escrow stablecoin" : "Transfer sendiri"} />
-              {chain && BigInt(chain.lateFee) > BigInt(0) && <Stat k="Denda belum dibayar" v={fmtRp(chain.lateFee)} />}
+              {chain && BigInt(chain.lateFee) > BigInt(0) && <Stat k="Bunga belum dibayar" v={fmtRp(chain.lateFee)} />}
               {chain && BigInt(chain.overdue) > BigInt(0) && <Stat k="Tunggakan" v={fmtRp(chain.overdue)} />}
             </dl>
             {n.collateralNote && <p className="text-[13px] text-brand-tint">Jaminan: {n.collateralNote}</p>}
@@ -406,13 +410,15 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
           {(isLive || n.status === "PAID") && (
             <Card id="pembayaran" className="flex flex-col gap-4">
               <h2 className="text-lg font-bold">Pembayaran</h2>
-              {role === "debtor" && ["ACTIVE", "OVERDUE", "DISPUTED"].includes(n.status) && remaining > BigInt(0) && (
+              {role === "debtor" && ["ACTIVE", "OVERDUE", "DISPUTED"].includes(n.status) && remaining > BigInt(0) && due && due.kind !== "none" && (
                 <PayBox
                   disabled={!!busy}
                   loading={busy === "pay"}
-                  suggested={chain && BigInt(chain.overdue) > BigInt(0) ? BigInt(chain.overdue) + BigInt(chain.lateFee) : nextUnpaid ? BigInt(nextUnpaid.amount) - nextUnpaid.paidPart : remaining}
+                  due={due}
+                  overdue={BigInt(chain?.overdue ?? "0")}
+                  lateFee={BigInt(chain?.lateFee ?? "0")}
                   remaining={remaining}
-                  installment={nextUnpaid?.seq ?? 1}
+                  total={n.installments.length}
                   appFeeBps={data.appFee?.bps ?? 0}
                   onPay={(amount, inst) => run("pay", () => payOnchain({ noteId: id, chainNoteId: n.chainNoteId, wallet: me.wallet, amount, installment: inst, appFee: data.appFee }), data.appFee ? `Pembayaran tercatat di blockchain. Fee aplikasi ${feeLabel(data.appFee.bps)} sudah dipotong.` : "Pembayaran tercatat di blockchain.")}
                 />
@@ -594,68 +600,46 @@ function PayBox(props: {
   /** Pembayaran dari kotak ini sedang diproses. */
   loading: boolean;
   appFeeBps: number;
-  suggested: bigint;
+  due: AmountDue;
+  overdue: bigint;
+  lateFee: bigint;
   remaining: bigint;
-  installment: number;
+  /** Jumlah cicilan di jadwal. */
+  total: number;
   onPay: (amountUnits: string, installment: number) => void;
 }) {
-  const [amount, setAmount] = useState(unitsToRupiah(props.suggested > BigInt(0) ? props.suggested : props.remaining).toString());
-  const units = (() => { try { return BigInt(rupiahToUnits(amount)); } catch { return BigInt(0); } })();
-  // Fee aplikasi dihitung dari jumlah yang benar-benar terbayar (kelebihan bayar tidak ditarik).
-  const payUnits = units > props.remaining ? props.remaining : units;
+  const { due } = props;
+  const late = due.kind === "overdue";
+  // Kontrak tidak menarik lebih dari sisa utang; fee aplikasi dihitung dari yang benar-benar terbayar.
+  const payUnits = due.amount > props.remaining && !late ? props.remaining : due.amount;
   const fee = feeFor(payUnits, props.appFeeBps);
-  const over = units > props.remaining;
-  // Isi cepat: sisa cicilan berjalan dan pelunasan (tanpa duplikat kalau nilainya sama).
-  const quick = [
-    { label: `Cicilan ke-${props.installment}`, v: props.suggested },
-    { label: "Lunasi semua", v: props.remaining },
-  ].filter((q, i, xs) => q.v > BigInt(0) && (i === 0 || q.v !== xs[0].v));
-  const blocked = props.disabled || units <= BigInt(0);
+  const hasNext = due.seq < props.total;
 
   return (
     <div className="flex flex-col overflow-hidden rounded-2xl border border-line bg-midnight">
-      <div className="flex flex-col gap-5 p-4 sm:p-5">
-        <div className="flex flex-col gap-2">
-          <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-            <label htmlFor="bayar" className="text-[13px] text-soft">Nominal pembayaran (IDRX)</label>
-            <span className="text-xs text-faint tabular-nums">Sisa utang {fmtRp(props.remaining)}</span>
-          </div>
-          <div className="relative">
-            <span aria-hidden className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-base font-medium text-faint">Rp</span>
-            <input
-              id="bayar"
-              inputMode="numeric"
-              autoComplete="off"
-              value={Number(amount || 0).toLocaleString("id-ID")}
-              onChange={(e) => setAmount(e.target.value.replace(/\D/g, ""))}
-              aria-describedby="bayar-hint"
-              className={`${input} min-h-[54px] pl-12 text-lg font-semibold tabular-nums`}
-            />
-          </div>
-          {quick.length > 0 && (
-            <div className="flex flex-wrap gap-2">
-              {quick.map((q) => {
-                const on = units === q.v;
-                return (
-                  <button
-                    key={q.label}
-                    type="button"
-                    aria-pressed={on}
-                    onClick={() => setAmount(unitsToRupiah(q.v).toString())}
-                    className={`min-h-9 rounded-full border px-3 text-xs transition-colors ${on ? "border-brand bg-brand/15 text-ink" : "border-line2 text-soft hover:border-faint hover:text-ink"}`}
-                  >
-                    {q.label} · <span className="tabular-nums">{fmtRp(q.v)}</span>
-                  </button>
-                );
-              })}
-            </div>
-          )}
-          <p id="bayar-hint" className={`text-xs leading-relaxed ${over ? "text-butter" : "text-faint"}`}>
-            {over
-              ? `Melebihi sisa utang. Yang ditarik hanya ${fmtRp(props.remaining)}, kelebihannya tidak dipotong.`
-              : "Kelebihan bayar on-chain otomatis tidak ditarik."}
-          </p>
+      <div className="flex flex-col gap-3 p-4 sm:p-5">
+        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
+          <span className="text-[13px] text-soft">{late ? "Tagihan tertunggak" : `Tagihan cicilan ke-${due.seq} dari ${props.total}`}</span>
+          <span className={`rounded-md px-2 py-0.5 text-[11px] font-semibold ${late ? "bg-rasp text-white" : "bg-line text-soft"}`}>{late ? "Lewat jatuh tempo" : "Bisa dibayar lebih awal"}</span>
         </div>
+        <div className="flex min-w-0 items-baseline gap-2">
+          <span className="truncate text-[28px] font-semibold leading-tight tabular-nums">{fmtRp(payUnits)}</span>
+          <span className="flex-none text-xs text-faint">IDRX</span>
+        </div>
+        {late ? (
+          <dl className="flex flex-col gap-1.5 rounded-xl border border-line px-3.5 py-3 text-[13px] tabular-nums">
+            <div className="flex justify-between gap-4"><dt className="text-muted">Cicilan tertunggak</dt><dd>{fmtRp(props.overdue)}</dd></div>
+            <div className="flex justify-between gap-4"><dt className="text-muted">Bunga keterlambatan berjalan</dt><dd>{fmtRp(props.lateFee)}</dd></div>
+            {due.buffer > BigInt(0) && (
+              <div className="flex justify-between gap-4"><dt className="text-muted">Penyangga bunga 10 menit</dt><dd>{fmtRp(due.buffer)}</dd></div>
+            )}
+          </dl>
+        ) : null}
+        <p className="text-xs leading-relaxed text-faint">
+          {late
+            ? "Bunga keterlambatan terus bertambah setiap hari sampai tunggakan dibayar atau diikhlaskan kreditur. Penyangga dipakai karena bunga dihitung per detik; yang tidak terpakai otomatis masuk ke cicilan berikutnya."
+            : `Nominal mengikuti jadwal dan tidak bisa diubah. Tanggal jatuh tempo hanya patokan: kamu boleh bayar sekarang${hasNext ? `, lalu cicilan ke-${due.seq + 1} langsung bisa dibayar kalau mampu` : ""}. Lewat jatuh tempo dikenai bunga keterlambatan.`}
+        </p>
       </div>
 
       <div className="flex flex-col gap-4 border-t border-line bg-card p-4 sm:p-5">
@@ -678,8 +662,8 @@ function PayBox(props: {
                 : "Kamu menandatangani 2 pesan: izin IDRX dan perintah bayar. Tanpa biaya gas."}
             </span>
           </p>
-          <Button disabled={blocked} aria-busy={props.loading} onClick={() => props.onPay(units.toString(), props.installment)} className="w-full flex-none sm:w-auto sm:min-w-[180px] disabled:aria-busy:opacity-80">
-            {props.loading ? <><Spinner /> Memproses pembayaran…</> : "Bayar sekarang"}
+          <Button disabled={props.disabled} aria-busy={props.loading} onClick={() => props.onPay(due.amount.toString(), due.seq)} className="w-full flex-none sm:w-auto sm:min-w-[180px] disabled:aria-busy:opacity-80">
+            {props.loading ? <><Spinner /> Memproses pembayaran…</> : late ? "Bayar tunggakan" : `Bayar cicilan ke-${due.seq}`}
           </Button>
         </div>
       </div>

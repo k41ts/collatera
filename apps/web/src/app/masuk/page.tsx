@@ -4,9 +4,11 @@ import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button, Logo, Notice, Spinner } from "@/components/ui";
 import { hasWallet, loginWithWallet } from "@/lib/client";
+import { useToast } from "@/components/Toast";
 
 function LoginInner() {
   const router = useRouter();
+  const toast = useToast();
   const next = useSearchParams().get("next");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -21,6 +23,7 @@ function LoginInner() {
     setError(null);
     try {
       await loginWithWallet();
+      toast.success("Berhasil masuk", { description: "Selamat datang di PiutangChain." });
       router.push(next && next.startsWith("/") ? next : "/app");
       router.refresh();
     } catch (e) {

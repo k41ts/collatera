@@ -5,6 +5,7 @@ import { isAddress } from "ethers";
 import { Button, Field, Notice, Spinner, input } from "./ui";
 import { api } from "@/lib/client";
 import { fmtRpWhole } from "@/lib/money";
+import { useToast } from "./Toast";
 
 export type NoteFormValues = {
   role: "creditor" | "debtor";
@@ -43,6 +44,7 @@ export function defaultValues(): NoteFormValues {
 
 export default function NoteForm({ initial, noteId }: { initial?: NoteFormValues; noteId?: string }) {
   const router = useRouter();
+  const toast = useToast();
   const [v, setV] = useState<NoteFormValues>(() => initial ?? defaultValues());
   const [files, setFiles] = useState<File[]>([]);
   const [busy, setBusy] = useState(false);
@@ -84,6 +86,11 @@ export default function NoteForm({ initial, noteId }: { initial?: NoteFormValues
         fd.append("file", f);
         await api(`/api/notes/${id}/documents`, { method: "POST", body: fd });
       }
+      toast.success(noteId ? "Perubahan draft disimpan" : "Draft berhasil disimpan", {
+        description: files.length
+          ? `${files.length} dokumen ikut diunggah. Cek lagi lalu kirim untuk tanda tangan.`
+          : "Cek lagi isinya, lalu kirim untuk tanda tangan.",
+      });
       router.push(`/app/piutang/${id}`);
       router.refresh();
     } catch (err) {

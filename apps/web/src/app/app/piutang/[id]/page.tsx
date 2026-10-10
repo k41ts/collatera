@@ -11,6 +11,7 @@ import { splitSig } from "@/lib/chain/eip712";
 import RevisionModal from "./RevisionModal";
 import { useConfirm } from "@/components/Dialog";
 import { NoteDetailSkeleton } from "@/components/Skeleton";
+import { useToast } from "@/components/Toast";
 
 type Payment = { id: string; method: string; amount: string; installment: number; status: string; proofName: string | null; rejectReason: string | null; txHash: string | null; createdAt: string };
 type Detail = {
@@ -42,6 +43,7 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
   const [msg, setMsg] = useState<{ tone: "ok" | "error" | "info"; text: string; tx?: string } | null>(null);
   const [reviseOpen, setReviseOpen] = useState(false);
   const [confirm, confirmDialog] = useConfirm();
+  const toast = useToast();
 
   if (error) return <Notice tone="error">{error}</Notice>;
   if (!data) return <NoteDetailSkeleton />;
@@ -55,7 +57,10 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
     setMsg({ tone: "info", text: "Memproses… konfirmasi di MetaMask bila diminta, lalu tunggu transaksi masuk blok (±15 detik)." });
     try {
       const r = (await fn()) as { txHash?: string } | undefined;
-      setMsg({ tone: "ok", text: okText, tx: r?.txHash });
+      // Berhasil: pesan "Memproses…" hilang, hasilnya muncul sebagai toast di kanan atas.
+      setMsg(null);
+      const tx = r?.txHash ? txUrl(r.txHash) : null;
+      toast.success(okText, tx ? { link: { href: tx, label: "Lihat transaksi ↗", external: true } } : undefined);
       await refresh();
       return null;
     } catch (e) {

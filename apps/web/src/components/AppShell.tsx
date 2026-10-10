@@ -4,6 +4,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Avatar, Logo } from "./ui";
 import { MenuButton, useDisclosure } from "./MobileMenu";
+import { useToast } from "./Toast";
 import { api } from "@/lib/client";
 import { hasRevisionAlert, needsMySignature, useApi, type NoteSummary } from "@/lib/hooks";
 
@@ -31,6 +32,7 @@ export default function AppShell({ wallet, name, children }: { wallet: string; n
   const revisions = notes.filter(hasRevisionAlert).length;
   const display = name || `${wallet.slice(0, 6)}…${wallet.slice(-4)}`;
   const menu = useDisclosure();
+  const toast = useToast();
   const drawerRef = useRef<HTMLElement>(null);
   const [lastPath, setLastPath] = useState(path);
 
@@ -75,6 +77,7 @@ export default function AppShell({ wallet, name, children }: { wallet: string; n
 
   async function logout() {
     await api("/api/auth/logout", { method: "POST" });
+    toast.success("Kamu sudah keluar", { description: "Sampai jumpa lagi." });
     router.push("/");
     router.refresh();
   }

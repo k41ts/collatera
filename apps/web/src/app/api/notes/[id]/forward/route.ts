@@ -1,12 +1,15 @@
 // Aksi pengguna gasless lewat PiutangForwarder (ERC-2771). Server memeriksa bahwa calldata yang
 // ditandatangani benar-benar untuk aksi & piutang ini sebelum relayer mengirim (BE-13).
-import { Interface, getAddress, keccak256, toUtf8Bytes } from "ethers";
+import { Interface, Signature, getAddress, keccak256, toUtf8Bytes, verifyTypedData } from "ethers";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { ApiError, handler, ok } from "@/lib/api";
 import { audit, displayName, loadNote, roleOf, systemMessage } from "@/lib/notes";
 import { ABI, ADDR } from "@/lib/chain/config";
-import { reader, relay } from "@/lib/chain/relayer";
+import { chain, reader, relay } from "@/lib/chain/relayer";
+import { PERMIT_TYPES, tokenDomain } from "@/lib/chain/eip712";
+import { feeFor } from "@/lib/appFee";
+import { appFeeConfig } from "@/lib/appFeeConfig";
 import { fmtRp } from "@/lib/money";
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -24,6 +27,10 @@ const Body = z.object({
     data: z.string().regex(/^0x[0-9a-fA-F]*$/),
   }),
   signature: z.string().regex(/^0x[0-9a-fA-F]{130}$/),
+  // Izin (permit IDRX) dari debitur agar relayer bisa menarik pajak aplikasi setelah pembayaran berhasil.
+  fee: z
+    .object({ value: z.string().regex(/^\d+$/), deadline: z.number().int(), signature: z.string().regex(/^0x[0-9a-fA-F]{130}$/) })
+    .optional(),
 });
 
 const FN: Record<string, string> = {
@@ -71,8 +78,29 @@ export const POST = handler<Ctx>(async (req, user, { params }) => {
       break;
   }
 
-  const { forwarder } = reader();
+  const { forwarder, idrx } = reader();
   if (!(await forwarder.verify(r, body.signature))) throw bad("Tanda tangan permintaan tidak valid atau kedaluwarsa.");
+
+  // Pajak aplikasi: diperiksa SEBELUM pembayaran dikirim supaya debitur tidak bisa membayar tanpa pajak.
+  const appFee = body.purpose === "pay" ? appFeeConfig() : null;
+  if (appFee) {
+    const maxAmount = BigInt(call.args[1].toString());
+    const maxFee = feeFor(maxAmount, appFee.bps);
+    if (!body.fee) throw bad("Izin pembayaran pajak aplikasi belum ditandatangani. Muat ulang halaman lalu coba lagi.");
+    if (BigInt(body.fee.value) < maxFee) throw bad("Izin pajak aplikasi kurang dari tarif yang berlaku.");
+    if (body.fee.deadline < Math.floor(Date.now() / 1000) + 300) throw bad("Izin pajak aplikasi sudah/hampir kedaluwarsa.");
+    // Permit pembayaran memakai nonce IDRX sekarang; permit pajak memakai nonce berikutnya.
+    const nonce = (await idrx.nonces(user.wallet)) as bigint;
+    const signer = verifyTypedData(
+      tokenDomain,
+      PERMIT_TYPES,
+      { owner: user.wallet, spender: chain().address, value: body.fee.value, nonce: nonce + BigInt(1), deadline: body.fee.deadline },
+      body.fee.signature,
+    );
+    if (getAddress(signer) !== getAddress(user.wallet)) throw bad("Tanda tangan izin pajak aplikasi tidak valid.");
+    const balance = (await idrx.balanceOf(user.wallet)) as bigint;
+    if (balance < maxAmount + maxFee) throw bad(`Saldo IDRX tidak cukup untuk pembayaran + pajak aplikasi ${fmtRp(maxFee)}.`);
+  }
 
   const label = { pay: "Pembayaran", dispute: "Ajukan sengketa", markPaid: "Tandai lunas", refund: "Tarik escrow", closeDispute: "Tutup sengketa", unfreeze: "Buka pembekuan" }[body.purpose];
   const rc = await relay(label, (c) => c.forwarder.execute.populateTransaction(r, body.signature, { gasLimit: BigInt(r.gas) + BigInt(300_000) }));
@@ -87,7 +115,23 @@ export const POST = handler<Ctx>(async (req, user, { params }) => {
     await db.payment.create({
       data: { noteId: n.id, method: "onchain", amount, installment: Number(call.args[2]), status: "CONFIRMED", txHash: rc.hash },
     });
-    await systemMessage(n.id, `${name} membayar ${fmtRp(amount)} dengan stablecoin.`, undefined, user.id);
+    // Tarik pajak aplikasi dari debitur ke wallet pajak, dihitung dari jumlah yang benar-benar terbayar.
+    let feeNote = "";
+    if (appFee && body.fee) {
+      const fee = feeFor(BigInt(amount), appFee.bps);
+      try {
+        const sig = Signature.from(body.fee.signature);
+        await relay("Pajak aplikasi (izin)", (c) => c.idrx.permit.populateTransaction(user.wallet, c.address, body.fee!.value, body.fee!.deadline, sig.v, sig.r, sig.s));
+        const feeRc = await relay("Pajak aplikasi", (c) => c.idrx.transferFrom.populateTransaction(user.wallet, appFee.wallet, fee));
+        await audit(n.id, user.id, "APP_FEE", `${fmtRp(fee.toString())} (${appFee.bps / 100}%) ke ${appFee.wallet}`, feeRc.hash);
+        feeNote = ` (+ pajak aplikasi ${fmtRp(fee.toString())})`;
+      } catch (e) {
+        // Pembayaran ke kreditur sudah sah di blockchain; pajak yang gagal ditarik dicatat untuk ditagih ulang.
+        console.error("APP_FEE gagal", e);
+        await audit(n.id, user.id, "APP_FEE_FAILED", `${fmtRp(fee.toString())}: ${(e as Error).message.slice(0, 200)}`);
+      }
+    }
+    await systemMessage(n.id, `${name} membayar ${fmtRp(amount)} dengan stablecoin${feeNote}.`, undefined, user.id);
   } else if (body.purpose === "dispute") {
     await db.note.update({ where: { id: n.id }, data: { status: "DISPUTED" } });
     await systemMessage(n.id, `${name} mengajukan sengketa: "${body.reason}". Admin akan meninjau.`, undefined, user.id);

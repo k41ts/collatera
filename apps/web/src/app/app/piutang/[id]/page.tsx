@@ -2,10 +2,11 @@
 import Link from "next/link";
 import { use, useState } from "react";
 import { keccak256, toUtf8Bytes } from "ethers";
-import { Avatar, Button, Card, Field, LinkButton, Notice, Spinner, StatusPill, fmtDate, input } from "@/components/ui";
+import { Avatar, Button, Card, LinkButton, Notice, Spinner, StatusPill, fmtDate, input } from "@/components/ui";
 import { api, forwardAction, payOnchain, short, signTyped } from "@/lib/client";
 import { useApi } from "@/lib/hooks";
 import { fmtRp, rupiahToUnits, unitsToRupiah } from "@/lib/money";
+import { feeFor, feeLabel } from "@/lib/appFee";
 import { txUrl } from "@/lib/chain/config";
 import { splitSig } from "@/lib/chain/eip712";
 import RevisionModal from "./RevisionModal";
@@ -29,6 +30,7 @@ type Detail = {
     creditorSigned: boolean; debtorSigned: boolean;
   };
   me: { role: "creditor" | "debtor" | null; isCreator: boolean; isAdmin: boolean; wallet: string; phoneVerified: boolean };
+  appFee: { bps: number; spender: string; wallet: string } | null;
   other: { name: string; wallet: string } | null;
   chain: { status: string; remaining: string; paid: string; scheduledPaid: string; lateFee: string; overdue: string; fullyPaid: boolean } | null;
 };
@@ -407,11 +409,13 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
               {role === "debtor" && ["ACTIVE", "OVERDUE", "DISPUTED"].includes(n.status) && remaining > BigInt(0) && (
                 <PayBox
                   disabled={!!busy}
+                  loading={busy === "pay" || busy === "proof"}
                   allowOffchain={n.status !== "DISPUTED"}
                   suggested={chain && BigInt(chain.overdue) > BigInt(0) ? BigInt(chain.overdue) + BigInt(chain.lateFee) : nextUnpaid ? BigInt(nextUnpaid.amount) - nextUnpaid.paidPart : remaining}
                   remaining={remaining}
                   installment={nextUnpaid?.seq ?? 1}
-                  onOnchain={(amount, inst) => run("pay", () => payOnchain({ noteId: id, chainNoteId: n.chainNoteId, wallet: me.wallet, amount, installment: inst }), "Pembayaran tercatat di blockchain.")}
+                  appFeeBps={data.appFee?.bps ?? 0}
+                  onOnchain={(amount, inst) => run("pay", () => payOnchain({ noteId: id, chainNoteId: n.chainNoteId, wallet: me.wallet, amount, installment: inst, appFee: data.appFee }), data.appFee ? `Pembayaran tercatat di blockchain. Pajak aplikasi ${feeLabel(data.appFee.bps)} sudah dipotong.` : "Pembayaran tercatat di blockchain.")}
                   onOffchain={(fd) => run("proof", () => api(`/api/notes/${id}/payments`, { method: "POST", body: fd }), "Bukti transfer terkirim. Menunggu konfirmasi kreditur.")}
                 />
               )}
@@ -459,7 +463,7 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
                     <span className={`font-semibold tabular-nums ${p.status === "REJECTED" ? "text-faint line-through" : ""}`}>{fmtRp(p.amount)}</span>
                   </li>
                 ))}
-                {n.payments.length === 0 && <li className="text-sm text-muted">Belum ada pembayaran.</li>}
+                {n.payments.length === 0 && <li className="rounded-xl border border-dashed border-line2 px-4 py-5 text-center text-sm text-muted">Belum ada pembayaran.</li>}
               </ul>
             </Card>
           )}
@@ -558,7 +562,7 @@ const EVENT: Record<string, string> = {
   REQUEST_REVISION: "Revisi diminta", PAY: "Pembayaran on-chain", UPLOAD_PAYMENT_PROOF: "Bukti transfer dikirim",
   CONFIRM_PAYMENT: "Pembayaran dikonfirmasi", REJECT_PAYMENT: "Bukti transfer ditolak", DISPUTE: "Sengketa diajukan",
   MARKPAID: "Sisa diikhlaskan", REFUND: "Escrow ditarik", CLOSEDISPUTE: "Sengketa ditutup", UNFREEZE: "Pembekuan dibuka",
-  INTEGRITY_CHECK: "Cek integritas",
+  INTEGRITY_CHECK: "Cek integritas", APP_FEE: "Pajak aplikasi dibayar", APP_FEE_FAILED: "Pajak aplikasi gagal ditarik",
 };
 
 function InstallmentPill({ status }: { status: string }) {
@@ -587,8 +591,16 @@ function SignState({ label, who, done, extra }: { label: string; who: string; do
   );
 }
 
+const PAY_METHODS = {
+  onchain: { title: "Bayar pakai IDRX", sub: "Langsung tercatat di blockchain", icon: <path d="M12 3l8 4.5v9L12 21l-8-4.5v-9zM12 12l8-4.5M12 12v9M12 12L4 7.5" /> },
+  offchain: { title: "Transfer bank", sub: "Upload bukti, dikonfirmasi kreditur", icon: <path d="M3 10l9-6 9 6M5 10v8M19 10v8M9.5 10v8M14.5 10v8M3 20h18" /> },
+} as const;
+
 function PayBox(props: {
   disabled: boolean;
+  /** Pembayaran/kiriman bukti dari kotak ini sedang diproses. */
+  loading: boolean;
+  appFeeBps: number;
   allowOffchain: boolean;
   suggested: bigint;
   remaining: bigint;
@@ -600,43 +612,162 @@ function PayBox(props: {
   const [amount, setAmount] = useState(unitsToRupiah(props.suggested > BigInt(0) ? props.suggested : props.remaining).toString());
   const [file, setFile] = useState<File | null>(null);
   const units = (() => { try { return BigInt(rupiahToUnits(amount)); } catch { return BigInt(0); } })();
+  // Pajak aplikasi hanya untuk pembayaran IDRX (on-chain), dihitung dari jumlah yang benar-benar terbayar.
+  const onchain = method === "onchain";
+  const payUnits = units > props.remaining ? props.remaining : units;
+  const fee = onchain ? feeFor(payUnits, props.appFeeBps) : BigInt(0);
+  const over = units > props.remaining;
+  const methods = (["onchain", "offchain"] as const).filter((m) => m === "onchain" || props.allowOffchain);
+  // Isi cepat: sisa cicilan berjalan dan pelunasan (tanpa duplikat kalau nilainya sama).
+  const quick = [
+    { label: `Cicilan ke-${props.installment}`, v: props.suggested },
+    { label: "Lunasi semua", v: props.remaining },
+  ].filter((q, i, xs) => q.v > BigInt(0) && (i === 0 || q.v !== xs[0].v));
+  const blocked = props.disabled || units <= BigInt(0) || (!onchain && (!file || over));
+
+  function submit() {
+    if (onchain) return props.onOnchain(units.toString(), props.installment);
+    const fd = new FormData();
+    fd.append("amount", amount);
+    fd.append("installment", String(props.installment));
+    fd.append("proof", file!);
+    props.onOffchain(fd);
+  }
+
   return (
-    <div className="flex flex-col gap-3.5 rounded-2xl bg-midnight p-3.5 sm:p-4">
-      <div role="group" aria-label="Cara bayar" className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-        {(["onchain", "offchain"] as const).filter((m) => m === "onchain" || props.allowOffchain).map((m) => (
-          <button key={m} type="button" aria-pressed={method === m} onClick={() => setMethod(m)} className={`min-h-11 rounded-2xl border px-4 py-2 text-left text-[13px] sm:min-h-10 sm:rounded-full sm:py-0 sm:text-center ${method === m ? "border-brand bg-brand font-medium" : "border-line2 text-soft"}`}>
-            {m === "onchain" ? "Bayar dengan IDRX (langsung tercatat)" : "Sudah transfer bank (upload bukti)"}
-          </button>
-        ))}
-      </div>
-      <div className="flex flex-wrap items-end gap-3">
-        <div className="min-w-0 flex-[1_1_200px]">
-          <Field label="Nominal (Rp)" htmlFor="bayar" hint={`Sisa utang ${fmtRp(props.remaining)}. Kelebihan bayar on-chain otomatis dipotong.`}>
-            <input id="bayar" inputMode="numeric" value={Number(amount || 0).toLocaleString("id-ID")} onChange={(e) => setAmount(e.target.value.replace(/\D/g, ""))} className={`${input} tabular-nums`} />
-          </Field>
-        </div>
-        {method === "offchain" && (
-          <div className="min-w-0 flex-[1_1_200px]">
-            <Field label="Bukti transfer" htmlFor="bukti" hint="PDF/JPG/PNG maks 10 MB">
-              <input id="bukti" type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={(e) => setFile(e.target.files?.[0] ?? null)} className="text-sm text-soft file:mr-3 file:rounded-full file:border-0 file:bg-brand-soft file:px-4 file:py-2 file:text-lav" />
-            </Field>
+    <div className="flex flex-col overflow-hidden rounded-2xl border border-line bg-midnight">
+      <div className="flex flex-col gap-5 p-4 sm:p-5">
+        {methods.length > 1 && (
+          <div role="radiogroup" aria-label="Cara bayar" className="grid grid-cols-2 gap-2 sm:gap-3">
+            {methods.map((m) => {
+              const on = method === m;
+              return (
+                <button
+                  key={m}
+                  type="button"
+                  role="radio"
+                  aria-checked={on}
+                  onClick={() => setMethod(m)}
+                  className={`flex min-w-0 flex-col items-start gap-2 rounded-xl border p-3 text-left transition-colors sm:flex-row sm:items-center sm:gap-3 sm:p-3.5 ${on ? "border-brand bg-brand/15" : "border-line2 hover:border-faint"}`}
+                >
+                  <span aria-hidden className={`flex h-9 w-9 flex-none items-center justify-center rounded-lg ${on ? "bg-brand text-white" : "bg-raised text-soft"}`}>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">{PAY_METHODS[m].icon}</svg>
+                  </span>
+                  <span className="flex min-w-0 flex-col gap-0.5">
+                    <span className={`text-sm font-medium leading-snug ${on ? "text-white" : "text-soft"}`}>{PAY_METHODS[m].title}</span>
+                    <span className="text-xs leading-snug text-faint">{PAY_METHODS[m].sub}</span>
+                  </span>
+                </button>
+              );
+            })}
           </div>
         )}
-        <Button
-          disabled={props.disabled || units <= BigInt(0) || (method === "offchain" && (!file || units > props.remaining))}
-          onClick={() => {
-            if (method === "onchain") return props.onOnchain(units.toString(), props.installment);
-            const fd = new FormData();
-            fd.append("amount", amount);
-            fd.append("installment", String(props.installment));
-            fd.append("proof", file!);
-            props.onOffchain(fd);
-          }}
-        >
-          {method === "onchain" ? "Bayar sekarang" : "Kirim bukti"}
-        </Button>
+
+        <div className="flex flex-col gap-2">
+          <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+            <label htmlFor="bayar" className="text-[13px] text-soft">Nominal pembayaran</label>
+            <span className="text-xs text-faint tabular-nums">Sisa utang {fmtRp(props.remaining)}</span>
+          </div>
+          <div className="relative">
+            <span aria-hidden className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-base font-medium text-faint">Rp</span>
+            <input
+              id="bayar"
+              inputMode="numeric"
+              autoComplete="off"
+              value={Number(amount || 0).toLocaleString("id-ID")}
+              onChange={(e) => setAmount(e.target.value.replace(/\D/g, ""))}
+              aria-describedby="bayar-hint"
+              aria-invalid={!onchain && over}
+              className={`${input} min-h-[54px] pl-12 text-lg font-semibold tabular-nums ${!onchain && over ? "border-pink" : ""}`}
+            />
+          </div>
+          {quick.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {quick.map((q) => {
+                const on = units === q.v;
+                return (
+                  <button
+                    key={q.label}
+                    type="button"
+                    aria-pressed={on}
+                    onClick={() => setAmount(unitsToRupiah(q.v).toString())}
+                    className={`min-h-9 rounded-full border px-3 text-xs transition-colors ${on ? "border-brand bg-brand/15 text-white" : "border-line2 text-soft hover:border-faint hover:text-white"}`}
+                  >
+                    {q.label} · <span className="tabular-nums">{fmtRp(q.v)}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+          <p id="bayar-hint" className={`text-xs leading-relaxed ${!onchain && over ? "text-pink" : over ? "text-butter" : "text-faint"}`}>
+            {over
+              ? onchain
+                ? `Melebihi sisa utang. Yang ditarik hanya ${fmtRp(props.remaining)}, kelebihannya tidak dipotong.`
+                : `Nominal melebihi sisa utang ${fmtRp(props.remaining)}.`
+              : onchain
+                ? "Kelebihan bayar on-chain otomatis tidak ditarik."
+                : "Isi sesuai nominal yang kamu transfer."}
+          </p>
+        </div>
+
+        {!onchain && (
+          <div className="flex flex-col gap-2">
+            <span className="text-[13px] text-soft">Bukti transfer</span>
+            <label
+              htmlFor="bukti"
+              className={`flex cursor-pointer items-center gap-3 rounded-xl border border-dashed p-3.5 transition-colors focus-within:border-brand hover:border-faint ${file ? "border-mint/50 bg-mint/5" : "border-line2"}`}
+            >
+              <span aria-hidden className={`flex h-10 w-10 flex-none items-center justify-center rounded-lg ${file ? "bg-mint text-mint-ink" : "bg-raised text-soft"}`}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  {file ? <path d="M5 12.5l4.5 4.5L19 7.5" /> : <path d="M12 16V4M7 9l5-5 5 5M4 16v3a1 1 0 001 1h14a1 1 0 001-1v-3" />}
+                </svg>
+              </span>
+              <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                <span className="truncate text-sm font-medium">{file ? file.name : "Pilih file bukti transfer"}</span>
+                <span className="text-xs text-faint">{file ? `${Math.max(1, Math.round(file.size / 1024))} KB · ketuk untuk ganti` : "PDF, JPG, atau PNG · maks 10 MB"}</span>
+              </span>
+              <input id="bukti" type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={(e) => setFile(e.target.files?.[0] ?? null)} className="sr-only" />
+            </label>
+          </div>
+        )}
       </div>
-      <p className="text-xs text-faint">{method === "onchain" ? "Kamu menandatangani 2 pesan (izin IDRX + perintah bayar). Tanpa gas." : "Pembayaran tercatat setelah kreditur mengonfirmasi bukti."}</p>
+
+      <div className="flex flex-col gap-4 border-t border-line bg-card p-4 sm:p-5">
+        <dl className="flex flex-col gap-2 text-sm tabular-nums">
+          {onchain ? (
+            <>
+              <div className="flex justify-between gap-4"><dt className="text-muted">Pembayaran ke kreditur</dt><dd>{fmtRp(payUnits)}</dd></div>
+              {fee > BigInt(0) && (
+                <div className="flex justify-between gap-4"><dt className="text-muted">Pajak aplikasi {feeLabel(props.appFeeBps)}</dt><dd>{fmtRp(fee)}</dd></div>
+              )}
+              <div className="mt-1 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-0.5 border-t border-dashed border-line2 pt-3">
+                <dt className="font-medium">Total dipotong dari saldo IDRX</dt>
+                <dd className="text-lg font-semibold">{fmtRp(payUnits + fee)}</dd>
+              </div>
+            </>
+          ) : (
+            <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-0.5">
+              <dt className="font-medium">Nominal yang dilaporkan</dt>
+              <dd className="text-lg font-semibold">{fmtRp(units)}</dd>
+            </div>
+          )}
+        </dl>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <p className="flex gap-2 text-xs leading-relaxed text-faint sm:max-w-[60%]">
+            <svg aria-hidden width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="mt-0.5 flex-none"><circle cx="12" cy="12" r="9" /><path d="M12 11v5M12 8h.01" /></svg>
+            <span>
+              {onchain
+                ? fee > BigInt(0)
+                  ? `Kamu menandatangani 3 pesan: izin IDRX, izin pajak aplikasi ${feeLabel(props.appFeeBps)}, dan perintah bayar. Tanpa biaya gas.`
+                  : "Kamu menandatangani 2 pesan: izin IDRX dan perintah bayar. Tanpa biaya gas."
+                : "Pembayaran tercatat setelah kreditur mengonfirmasi bukti. Transfer bank tidak dikenai pajak aplikasi."}
+            </span>
+          </p>
+          <Button disabled={blocked} aria-busy={props.loading} onClick={submit} className="w-full flex-none sm:w-auto sm:min-w-[180px] disabled:aria-busy:opacity-80">
+            {props.loading ? <><Spinner /> {onchain ? "Memproses pembayaran…" : "Mengirim bukti…"}</> : onchain ? "Bayar sekarang" : "Kirim bukti"}
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }

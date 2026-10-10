@@ -87,7 +87,7 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
   async function signNote() {
     const t = await api<{ domain: Record<string, unknown>; types: never; message: Record<string, unknown>; permit: { domain: Record<string, unknown>; types: never; message: Record<string, unknown> } | null; balance: string | null }>(`/api/notes/${id}/sign?kind=note`);
     if (t.permit && t.balance !== null && BigInt(t.balance) < BigInt(n.principal))
-      throw new Error(`Saldo IDRX kamu ${fmtRp(t.balance)}, kurang dari pokok ${fmtRp(n.principal)}. Ambil dulu dari faucet di halaman Profil.`);
+      throw new Error(`Saldo kamu ${fmtRp(t.balance)}, kurang dari pokok ${fmtRp(n.principal)}. Ambil dulu dari faucet di halaman Profil.`);
     const signature = await signTyped(t, me.wallet);
     let permit;
     if (t.permit) {
@@ -359,7 +359,7 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
             </div>
             <dl className="grid grid-cols-2 gap-4 text-[13px] sm:grid-cols-[repeat(auto-fit,minmax(150px,1fr))]">
               <Stat k="Pokok" v={fmtRp(n.principal)} />
-              <Stat k="Bunga" v={n.interestType === "none" ? "Tanpa bunga" : n.interestType === "percent" ? `${n.interestValue}%` : `Rp${Number(n.interestValue).toLocaleString("id-ID")}`} />
+              <Stat k="Bunga" v={n.interestType === "none" ? "Tanpa bunga" : n.interestType === "percent" ? `${n.interestValue}%` : `Rp${Number(n.interestValue).toLocaleString("id-ID")} IDRX`} />
               <Stat k="Bunga keterlambatan" v={n.lateFeeBps ? "2% per bulan" : "Tanpa bunga"} />
               <Stat k="Pencairan" v={n.disbursement === "onchain" ? "Escrow stablecoin" : "Transfer sendiri"} />
               {chain && BigInt(chain.lateFee) > BigInt(0) && <Stat k="Bunga belum dibayar" v={fmtRp(chain.lateFee)} />}
@@ -625,7 +625,6 @@ function PayBox(props: {
         </div>
         <div className="flex min-w-0 items-baseline gap-2">
           <span className="truncate text-[28px] font-semibold leading-tight tabular-nums">{fmtRp(payUnits)}</span>
-          <span className="flex-none text-xs text-faint">IDRX</span>
         </div>
         {late ? (
           <dl className="flex flex-col gap-1.5 rounded-xl border border-line px-3.5 py-3 text-[13px] tabular-nums">

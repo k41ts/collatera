@@ -103,6 +103,7 @@ export default function NoteForm({ initial, noteId }: { initial?: NoteFormValues
 
   // <legend> bawaan browser digambar menumpang di garis border atas kartu; float + w-full menjadikannya judul di dalam kartu.
   const legend = "float-left col-span-full w-full p-0 text-base font-semibold";
+
   const card = (on: boolean) => `flex flex-col items-start gap-1.5 rounded-2xl border-[1.5px] p-4 text-left ${on ? "border-brand bg-brand-soft" : "border-line2 bg-midnight"}`;
 
   return (
@@ -137,18 +138,18 @@ export default function NoteForm({ initial, noteId }: { initial?: NoteFormValues
               <option value="other">Lainnya</option>
             </select>
           </Field>
-          <Field label="Nominal pokok (Rp)" htmlFor="pokok">
+          <Field label="Nominal pokok (Rupiah IDRX)" htmlFor="pokok">
             <input id="pokok" required inputMode="numeric" value={v.principal ? Number(v.principal.replace(/\D/g, "")).toLocaleString("id-ID") : ""} onChange={(e) => set("principal", e.target.value.replace(/\D/g, "").slice(0, 13))} placeholder="5.000.000" className={`${input} tabular-nums`} />
           </Field>
           <Field label="Bunga / fee" htmlFor="bunga">
             <select id="bunga" value={v.interestType} onChange={(e) => set("interestType", e.target.value as NoteFormValues["interestType"])} className={input}>
               <option value="none">Tanpa bunga</option>
               <option value="percent">Persen dari pokok</option>
-              <option value="flat">Nominal tetap (Rp)</option>
+              <option value="flat">Nominal tetap (Rupiah IDRX)</option>
             </select>
           </Field>
           {v.interestType !== "none" && (
-            <Field label={v.interestType === "percent" ? "Bunga (%)" : "Fee (Rp)"} htmlFor="nilai-bunga">
+            <Field label={v.interestType === "percent" ? "Bunga (%)" : "Fee (Rupiah IDRX)"} htmlFor="nilai-bunga">
               <input id="nilai-bunga" inputMode="decimal" value={v.interestValue} onChange={(e) => set("interestValue", e.target.value.replace(v.interestType === "percent" ? /[^\d.]/g : /\D/g, ""))} className={input} />
             </Field>
           )}
@@ -191,17 +192,6 @@ export default function NoteForm({ initial, noteId }: { initial?: NoteFormValues
           <p className="text-xs text-faint">Hash setiap file ikut dikunci di blockchain. File yang diganti setelah tanda tangan akan terdeteksi.</p>
         </fieldset>
 
-        <fieldset className="flex flex-col gap-4 rounded-[20px] border border-line bg-card p-4 sm:p-5">
-          <legend className={legend}>Pencairan dana</legend>
-          <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,220px),1fr))] gap-3">
-            {([["onchain", "Escrow stablecoin (IDRX)", "Kreditur setor saat tanda tangan, dana cair otomatis ke debitur saat aktif."], ["offchain", "Transfer sendiri", "Kreditur transfer bank atau tunai, debitur mengonfirmasi terima dana."]] as const).map(([k, t, b]) => (
-              <button key={k} type="button" aria-pressed={v.disbursement === k} onClick={() => set("disbursement", k)} className={card(v.disbursement === k)}>
-                <span className="font-semibold">{t}</span>
-                <span className="text-[13px] text-soft">{b}</span>
-              </button>
-            ))}
-          </div>
-        </fieldset>
 
         <fieldset className="flex flex-col gap-3 rounded-[20px] border border-line bg-card p-4 sm:p-5">
           <legend className={legend}>Pihak lawan</legend>

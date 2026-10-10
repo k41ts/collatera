@@ -84,6 +84,9 @@ export const PATCH = handler<Ctx>(async (req, user, { params }) => {
   const { fields, installments } = deriveNoteFields(input);
   if (fields.counterpartyWallet.toLowerCase() === user.wallet.toLowerCase())
     throw new ApiError(422, "INVALID_PARTIES", "Pihak lawan tidak boleh wallet kamu sendiri.");
+  // Wallet pihak lawan dikunci sejak draft dibuat (dia mungkin sudah bergabung / membuka surat ini).
+  if (n.counterpartyWallet && fields.counterpartyWallet.toLowerCase() !== n.counterpartyWallet.toLowerCase())
+    throw new ApiError(422, "COUNTERPARTY_LOCKED", "Wallet pihak lawan tidak bisa diubah. Batalkan draft ini lalu buat surat baru.");
   const other = await db.user.findUnique({ where: { wallet: fields.counterpartyWallet } });
   await db.$transaction([
     db.installment.deleteMany({ where: { noteId: n.id } }),

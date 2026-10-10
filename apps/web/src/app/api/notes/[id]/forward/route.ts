@@ -1,4 +1,4 @@
-// Aksi pengguna gasless lewat PiutangForwarder (ERC-2771). Server memeriksa bahwa calldata yang
+// Aksi pengguna gasless lewat CollateraForwarder (ERC-2771). Server memeriksa bahwa calldata yang
 // ditandatangani benar-benar untuk aksi & piutang ini sebelum relayer mengirim (BE-13).
 import { Interface, Signature, getAddress, keccak256, toUtf8Bytes, verifyTypedData } from "ethers";
 import { z } from "zod";
@@ -27,7 +27,7 @@ const Body = z.object({
     data: z.string().regex(/^0x[0-9a-fA-F]*$/),
   }),
   signature: z.string().regex(/^0x[0-9a-fA-F]{130}$/),
-  // Izin (permit IDRX) dari debitur agar relayer bisa menarik pajak aplikasi setelah pembayaran berhasil.
+  // Izin (permit IDRX) dari debitur agar relayer bisa menarik fee aplikasi setelah pembayaran berhasil.
   fee: z
     .object({ value: z.string().regex(/^\d+$/), deadline: z.number().int(), signature: z.string().regex(/^0x[0-9a-fA-F]{130}$/) })
     .optional(),
@@ -50,7 +50,7 @@ export const POST = handler<Ctx>(async (req, user, { params }) => {
   const bad = (msg: string) => new ApiError(422, "FORWARD_REQUEST_INVALID", msg);
 
   if (getAddress(r.from) !== getAddress(user.wallet)) throw bad("Permintaan harus ditandatangani wallet kamu sendiri.");
-  if (getAddress(r.to) !== getAddress(ADDR.DebtManager)) throw bad("Tujuan permintaan bukan kontrak PiutangChain.");
+  if (getAddress(r.to) !== getAddress(ADDR.DebtManager)) throw bad("Tujuan permintaan bukan kontrak Collatera.");
   if (BigInt(r.gas) > BigInt(2_000_000)) throw bad("Batas gas terlalu besar.");
   const call = iface.parseTransaction({ data: r.data });
   if (!call || call.name !== FN[body.purpose]) throw bad("Aksi yang ditandatangani tidak sesuai.");
@@ -81,15 +81,15 @@ export const POST = handler<Ctx>(async (req, user, { params }) => {
   const { forwarder, idrx } = reader();
   if (!(await forwarder.verify(r, body.signature))) throw bad("Tanda tangan permintaan tidak valid atau kedaluwarsa.");
 
-  // Pajak aplikasi: diperiksa SEBELUM pembayaran dikirim supaya debitur tidak bisa membayar tanpa pajak.
+  // Fee aplikasi: diperiksa SEBELUM pembayaran dikirim supaya debitur tidak bisa membayar tanpa fee.
   const appFee = body.purpose === "pay" ? appFeeConfig() : null;
   if (appFee) {
     const maxAmount = BigInt(call.args[1].toString());
     const maxFee = feeFor(maxAmount, appFee.bps);
-    if (!body.fee) throw bad("Izin pembayaran pajak aplikasi belum ditandatangani. Muat ulang halaman lalu coba lagi.");
-    if (BigInt(body.fee.value) < maxFee) throw bad("Izin pajak aplikasi kurang dari tarif yang berlaku.");
-    if (body.fee.deadline < Math.floor(Date.now() / 1000) + 300) throw bad("Izin pajak aplikasi sudah/hampir kedaluwarsa.");
-    // Permit pembayaran memakai nonce IDRX sekarang; permit pajak memakai nonce berikutnya.
+    if (!body.fee) throw bad("Izin pembayaran fee aplikasi belum ditandatangani. Muat ulang halaman lalu coba lagi.");
+    if (BigInt(body.fee.value) < maxFee) throw bad("Izin fee aplikasi kurang dari tarif yang berlaku.");
+    if (body.fee.deadline < Math.floor(Date.now() / 1000) + 300) throw bad("Izin fee aplikasi sudah/hampir kedaluwarsa.");
+    // Permit pembayaran memakai nonce IDRX sekarang; permit fee memakai nonce berikutnya.
     const nonce = (await idrx.nonces(user.wallet)) as bigint;
     const signer = verifyTypedData(
       tokenDomain,
@@ -97,9 +97,9 @@ export const POST = handler<Ctx>(async (req, user, { params }) => {
       { owner: user.wallet, spender: chain().address, value: body.fee.value, nonce: nonce + BigInt(1), deadline: body.fee.deadline },
       body.fee.signature,
     );
-    if (getAddress(signer) !== getAddress(user.wallet)) throw bad("Tanda tangan izin pajak aplikasi tidak valid.");
+    if (getAddress(signer) !== getAddress(user.wallet)) throw bad("Tanda tangan izin fee aplikasi tidak valid.");
     const balance = (await idrx.balanceOf(user.wallet)) as bigint;
-    if (balance < maxAmount + maxFee) throw bad(`Saldo IDRX tidak cukup untuk pembayaran + pajak aplikasi ${fmtRp(maxFee)}.`);
+    if (balance < maxAmount + maxFee) throw bad(`Saldo IDRX tidak cukup untuk pembayaran + fee aplikasi ${fmtRp(maxFee)}.`);
   }
 
   const label = { pay: "Pembayaran", dispute: "Ajukan sengketa", markPaid: "Tandai lunas", refund: "Tarik escrow", closeDispute: "Tutup sengketa", unfreeze: "Buka pembekuan" }[body.purpose];
@@ -115,18 +115,18 @@ export const POST = handler<Ctx>(async (req, user, { params }) => {
     await db.payment.create({
       data: { noteId: n.id, method: "onchain", amount, installment: Number(call.args[2]), status: "CONFIRMED", txHash: rc.hash },
     });
-    // Tarik pajak aplikasi dari debitur ke wallet pajak, dihitung dari jumlah yang benar-benar terbayar.
+    // Tarik fee aplikasi dari debitur ke wallet fee, dihitung dari jumlah yang benar-benar terbayar.
     let feeNote = "";
     if (appFee && body.fee) {
       const fee = feeFor(BigInt(amount), appFee.bps);
       try {
         const sig = Signature.from(body.fee.signature);
-        await relay("Pajak aplikasi (izin)", (c) => c.idrx.permit.populateTransaction(user.wallet, c.address, body.fee!.value, body.fee!.deadline, sig.v, sig.r, sig.s));
-        const feeRc = await relay("Pajak aplikasi", (c) => c.idrx.transferFrom.populateTransaction(user.wallet, appFee.wallet, fee));
+        await relay("Fee aplikasi (izin)", (c) => c.idrx.permit.populateTransaction(user.wallet, c.address, body.fee!.value, body.fee!.deadline, sig.v, sig.r, sig.s));
+        const feeRc = await relay("Fee aplikasi", (c) => c.idrx.transferFrom.populateTransaction(user.wallet, appFee.wallet, fee));
         await audit(n.id, user.id, "APP_FEE", `${fmtRp(fee.toString())} (${appFee.bps / 100}%) ke ${appFee.wallet}`, feeRc.hash);
-        feeNote = ` (+ pajak aplikasi ${fmtRp(fee.toString())})`;
+        feeNote = ` (+ fee aplikasi ${fmtRp(fee.toString())})`;
       } catch (e) {
-        // Pembayaran ke kreditur sudah sah di blockchain; pajak yang gagal ditarik dicatat untuk ditagih ulang.
+        // Pembayaran ke kreditur sudah sah di blockchain; fee yang gagal ditarik dicatat untuk ditagih ulang.
         console.error("APP_FEE gagal", e);
         await audit(n.id, user.id, "APP_FEE_FAILED", `${fmtRp(fee.toString())}: ${(e as Error).message.slice(0, 200)}`);
       }

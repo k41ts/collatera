@@ -244,12 +244,12 @@ describe("Validasi jadwal dan tarif denda", () => {
   });
 });
 
-describe("PiutangForwarder: gas dari relayer", () => {
+describe("CollateraForwarder: gas dari relayer", () => {
   it("relayer yang memberi gas kurang dari req.gas membuat seluruh transaksi gagal (nonce tidak terpakai)", async () => {
     const ctx = await loadFixture(f.deployAll);
     const target = await ethers.deployContract("MockGasBurner");
     // forwarder hanya boleh ke manager (T5): pakai forwarder khusus yang manager-nya adalah mock ini
-    const fwd = await ethers.deployContract("PiutangForwarder");
+    const fwd = await ethers.deployContract("CollateraForwarder");
     await fwd.setManager(target.target);
     const r = {
       from: ctx.debtor.address,

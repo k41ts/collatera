@@ -28,13 +28,13 @@ export default function Dashboard() {
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div className="flex flex-col gap-1.5">
           <span className="text-[13px] text-faint">{new Date().toLocaleDateString("id-ID", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "Asia/Jakarta" })}</span>
-          <h1 className="text-[26px] font-semibold tracking-tight sm:text-[32px]">Halo{name ? `, ${name}` : ""}</h1>
+          <h1 className="text-[26px] font-extrabold tracking-[-0.035em] sm:text-[32px]">Halo{name ? `, ${name}` : ""}</h1>
         </div>
         <LinkButton href="/app/piutang/baru" className="max-sm:hidden">+ Buat surat piutang</LinkButton>
       </div>
 
       {me && !me.user.phoneVerifiedAt && (
-        <Link href="/app/profil" className="rounded-2xl border border-butter/40 bg-[#3a3017] px-4 py-3 text-sm leading-relaxed text-butter no-underline">
+        <Link href="/app/profil" className="rounded-2xl border border-butter/40 bg-raised px-4 py-3 text-sm leading-relaxed text-butter no-underline">
           Verifikasi nomor HP dulu sebelum membuat atau menandatangani surat piutang → <span className="underline">ke Profil</span>
         </Link>
       )}
@@ -58,7 +58,7 @@ export default function Dashboard() {
       <div className="flex flex-wrap items-start gap-5">
         <section aria-labelledby="judul-daftar" className="flex min-w-0 flex-[999_1_560px] flex-col gap-4 rounded-[20px] border border-line bg-card p-4 sm:p-5">
           <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 sm:justify-start">
-            <h2 id="judul-daftar" className="text-lg font-semibold">Surat piutang terbaru</h2>
+            <h2 id="judul-daftar" className="text-lg font-bold">Surat piutang terbaru</h2>
             <Link href="/app/piutang" className="text-[13px] font-medium text-lav">Lihat semua →</Link>
           </div>
           {loading ? (
@@ -74,7 +74,7 @@ export default function Dashboard() {
             <ul className="-mx-1 flex flex-col md:hidden">
               {notes.slice(0, 6).map((n) => (
                 <li key={n.id} className="border-t border-line first:border-t-0">
-                  <Link href={`/app/piutang/${n.id}`} className="flex flex-col gap-2 rounded-xl px-1 py-3.5 text-white no-underline active:bg-raised">
+                  <Link href={`/app/piutang/${n.id}`} className="flex flex-col gap-2 rounded-xl px-1 py-3.5 text-ink no-underline active:bg-raised">
                     <span className="flex items-start justify-between gap-3">
                       <span className="min-w-0">
                         <span className="block font-medium leading-snug [overflow-wrap:anywhere]">{n.title}</span>
@@ -108,7 +108,7 @@ export default function Dashboard() {
                   {notes.slice(0, 6).map((n) => (
                     <tr key={n.id} className="border-t border-line">
                       <td className="px-3 py-3.5">
-                        <Link href={`/app/piutang/${n.id}`} className="font-medium text-white no-underline hover:text-lav">{n.title}</Link>
+                        <Link href={`/app/piutang/${n.id}`} className="font-medium text-ink no-underline hover:text-lav">{n.title}</Link>
                         <div className="mt-0.5 text-xs text-faint">{n.code} · {n.party}</div>
                       </td>
                       <td className="px-3 py-3.5 text-soft">{n.role === "creditor" ? "Kreditur" : n.role === "debtor" ? "Debitur" : "-"}</td>
@@ -125,7 +125,7 @@ export default function Dashboard() {
         </section>
 
         <section aria-labelledby="judul-tindakan" className="flex min-w-0 flex-[1_1_300px] flex-col gap-3">
-          <h2 id="judul-tindakan" className="text-lg font-semibold">Perlu tindakan</h2>
+          <h2 id="judul-tindakan" className="text-lg font-bold">Perlu tindakan</h2>
           {loading && (
             <Loading label="Memuat tindakan…" className="flex flex-col gap-3">
               <ActionCardSkeleton />
@@ -160,7 +160,7 @@ function Tile({ title, value, sub, big, alert, wide }: { title: string; value: s
 
 function ActionCard({ href, tag, tagCls, title, sub, cta }: { href: string; tag: string; tagCls: string; title: string; sub: string; cta: string }) {
   return (
-    <Link href={href} className="flex flex-col gap-2 rounded-2xl border border-line bg-card p-4 text-white no-underline hover:border-line2">
+    <Link href={href} className="flex flex-col gap-2 rounded-2xl border border-line bg-card p-4 text-ink no-underline hover:border-line2">
       <span className={`self-start rounded-md px-2 py-1 text-[11px] font-semibold ${tagCls}`}>{tag}</span>
       <span className="text-sm font-medium [overflow-wrap:anywhere]">{title}</span>
       <span className="text-xs text-muted [overflow-wrap:anywhere]">{sub}</span>

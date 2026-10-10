@@ -76,7 +76,7 @@ export default function AppShell({ wallet, name, children }: { wallet: string; n
         {
           description: (
             <>
-              <span className="line-clamp-2 text-white/90">{preview}</span>
+              <span className="line-clamp-2 text-ink/90">{preview}</span>
               <span className="mt-0.5 block truncate text-xs text-faint">{n.code} · {n.title}</span>
             </>
           ),
@@ -142,16 +142,16 @@ export default function AppShell({ wallet, name, children }: { wallet: string; n
   return (
     <div className="min-h-screen lg:flex">
       {/* Top bar khusus layar kecil */}
-      <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-[#24262f] bg-board/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-board/80 sm:px-6 lg:hidden">
-        <Link href="/app" className="flex min-w-0 items-center gap-2.5 text-white no-underline">
+      <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-line bg-board/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-board/80 sm:px-6 lg:hidden">
+        <Link href="/app" className="flex min-w-0 items-center gap-2.5 text-ink no-underline">
           <Logo size={28} />
-          <span className="truncate text-base font-semibold">{current || "piutangchain"}</span>
+          <span className="truncate text-base font-semibold">{current || "Collatera"}</span>
         </Link>
         <div className="ml-auto flex items-center gap-2">
           <Link
             href="/app/piutang/baru"
             aria-label="Buat surat piutang"
-            className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand text-white no-underline hover:bg-[#8d35ea]"
+            className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand text-white no-underline hover:bg-[#2a2a2a]"
           >
             <Icon size={20}>{I.plus}</Icon>
           </Link>
@@ -171,7 +171,7 @@ export default function AppShell({ wallet, name, children }: { wallet: string; n
         id="menu-aplikasi"
         ref={drawerRef}
         aria-label="Menu aplikasi"
-        className={`fixed inset-y-0 left-0 z-50 box-border flex w-[min(86vw,300px)] flex-col gap-7 overflow-y-auto overscroll-contain border-r border-[#24262f] bg-board px-4 py-5 lg:sticky lg:top-0 lg:z-auto lg:h-screen lg:w-[260px] lg:flex-none lg:translate-x-0 lg:py-6 xl:w-[280px] ${
+        className={`fixed inset-y-0 left-0 z-50 box-border flex w-[min(86vw,300px)] flex-col gap-7 overflow-y-auto overscroll-contain border-r border-line bg-board px-4 py-5 lg:sticky lg:top-0 lg:z-auto lg:h-screen lg:w-[260px] lg:flex-none lg:translate-x-0 lg:py-6 xl:w-[280px] ${
           // Buka: langsung terlihat (bisa difokus). Tutup: sembunyikan setelah animasi geser selesai.
           menu.open
             ? "translate-x-0 shadow-[0_0_60px_rgba(0,0,0,0.6)] [transition:transform_200ms_ease]"
@@ -179,15 +179,15 @@ export default function AppShell({ wallet, name, children }: { wallet: string; n
         }`}
       >
         <div className="flex items-center justify-between gap-2">
-          <Link href="/" className="flex items-center gap-2.5 px-2 text-white no-underline">
+          <Link href="/" className="flex items-center gap-2.5 px-2 text-ink no-underline">
             <Logo />
-            <span className="text-lg font-semibold">piutangchain</span>
+            <span className="text-[21px] font-bold tracking-[-0.03em]">Collatera</span>
           </Link>
           <button
             type="button"
             onClick={menu.close}
             aria-label="Tutup menu"
-            className="flex h-11 w-11 items-center justify-center rounded-xl text-soft hover:bg-raised hover:text-white lg:hidden"
+            className="flex h-11 w-11 items-center justify-center rounded-xl text-soft hover:bg-raised hover:text-ink lg:hidden"
           >
             <Icon size={20}><path d="M6 6l12 12M18 6L6 18" /></Icon>
           </button>
@@ -202,13 +202,13 @@ export default function AppShell({ wallet, name, children }: { wallet: string; n
                 onClick={menu.close}
                 aria-current={active ? "page" : undefined}
                 className={`flex min-h-12 items-center gap-3 rounded-[10px] px-3 no-underline transition-colors lg:min-h-11 ${
-                  active ? "bg-brand font-medium text-white" : "text-soft hover:bg-raised hover:text-white"
+                  active ? "bg-brand font-medium text-white" : "text-soft hover:bg-raised hover:text-ink"
                 }`}
               >
                 <Icon>{it.icon}</Icon>
                 {it.label}
                 {!!it.badge && (
-                  <span className={`ml-auto rounded-full px-2 py-0.5 text-[11px] font-semibold ${active ? "bg-white/20 text-white" : it.badgeCls}`}>{it.badge}</span>
+                  <span className={`ml-auto rounded-full px-2 py-0.5 text-[11px] font-semibold ${active ? "bg-white/20 text-ink" : it.badgeCls}`}>{it.badge}</span>
                 )}
               </Link>
             );
@@ -219,15 +219,15 @@ export default function AppShell({ wallet, name, children }: { wallet: string; n
             href="/app/profil"
             onClick={menu.close}
             aria-current={path === "/app/profil" ? "page" : undefined}
-            className={`flex items-center gap-3 rounded-[14px] p-3 no-underline ${path === "/app/profil" ? "bg-brand" : "bg-raised hover:bg-[#262938]"}`}
+            className={`flex items-center gap-3 rounded-[14px] p-3 no-underline ${path === "/app/profil" ? "bg-brand" : "bg-raised hover:bg-bubble"}`}
           >
             <Avatar name={name || wallet.slice(2, 4)} seed={wallet} />
             <span className="flex min-w-0 flex-col">
-              <span className="truncate text-sm font-semibold text-white">{display}</span>
+              <span className="truncate text-sm font-semibold">{display}</span>
               <span className={`text-xs ${path === "/app/profil" ? "text-brand-tint" : "text-faint"}`}>Profil &amp; pengaturan</span>
             </span>
           </Link>
-          <button type="button" onClick={logout} className="min-h-11 rounded-full text-sm text-faint hover:text-white">
+          <button type="button" onClick={logout} className="min-h-11 rounded-full text-sm text-faint hover:text-ink">
             Keluar
           </button>
         </div>

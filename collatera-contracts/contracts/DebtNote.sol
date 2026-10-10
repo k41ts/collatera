@@ -24,8 +24,8 @@ contract DebtNote {
     error NonexistentToken(uint256 tokenId);
     error AlreadyMinted(uint256 tokenId);
 
-    string public constant name = "PiutangChain Debt Note";
-    string public constant symbol = "PCDN";
+    string public constant name = "Collatera Debt Note";
+    string public constant symbol = "CLDN";
 
     address public immutable initializer;
     address public manager;
@@ -115,7 +115,7 @@ contract DebtNote {
         ownerOf(tokenId);
         IDebtManager.NoteView memory n = IDebtManager(manager).getNote(bytes32(tokenId));
         string memory head = string.concat(
-            'data:application/json;utf8,{"name":"PiutangChain Debt Note","attributes":[',
+            'data:application/json;utf8,{"name":"Collatera Debt Note","attributes":[',
             _attr("noteId", Strings.toHexString(n.noteId), true),
             _attr("docHash", Strings.toHexString(n.docHash), true)
         );

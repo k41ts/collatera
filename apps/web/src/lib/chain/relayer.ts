@@ -8,9 +8,9 @@ import { ABI, ADDR, CHAIN_ID } from "./config";
 function relayerKey(): string {
   const k = process.env.RELAYER_PRIVATE_KEY?.trim();
   if (k) return k;
-  // Dev: pakai deployer dari piutangchain-contracts/.env (owner MockIDRX + ADMIN_ROLE) tanpa menyalin key.
+  // Dev: pakai deployer dari collatera-contracts/.env (owner MockIDRX + ADMIN_ROLE) tanpa menyalin key.
   if (process.env.NODE_ENV !== "production") {
-    const p = path.resolve(process.cwd(), "../../piutangchain-contracts/.env");
+    const p = path.resolve(process.cwd(), "../../collatera-contracts/.env");
     if (fs.existsSync(p)) {
       const m = fs.readFileSync(p, "utf8").match(/^DEPLOYER_PRIVATE_KEY=\s*([^\s#]+)/m);
       if (m) return m[1];
@@ -45,7 +45,7 @@ export function chain(): Chain {
     address: signer.address,
     manager: new Contract(ADDR.DebtManager, ABI.DebtManager, signer),
     idrx: new Contract(ADDR.MockIDRX, ABI.MockIDRX, signer),
-    forwarder: new Contract(ADDR.PiutangForwarder, ABI.PiutangForwarder, signer),
+    forwarder: new Contract(ADDR.CollateraForwarder, ABI.CollateraForwarder, signer),
     debtNote: new Contract(ADDR.DebtNote, ABI.DebtNote, provider),
     queue: Promise.resolve(),
   };
@@ -61,7 +61,7 @@ export function reader() {
     provider,
     manager: new Contract(ADDR.DebtManager, ABI.DebtManager, provider),
     idrx: new Contract(ADDR.MockIDRX, ABI.MockIDRX, provider),
-    forwarder: new Contract(ADDR.PiutangForwarder, ABI.PiutangForwarder, provider),
+    forwarder: new Contract(ADDR.CollateraForwarder, ABI.CollateraForwarder, provider),
   };
 }
 
@@ -129,7 +129,7 @@ function decodeRevert(e: unknown): string {
   if (err?.revert?.name) return err.revert.name;
   const data = err?.data ?? err?.info?.error?.data;
   if (typeof data === "string" && data.length >= 10) {
-    for (const abi of [ABI.DebtManager, ABI.PiutangForwarder, ABI.MockIDRX]) {
+    for (const abi of [ABI.DebtManager, ABI.CollateraForwarder, ABI.MockIDRX]) {
       try {
         const parsed = new Contract(ADDR.DebtManager, abi).interface.parseError(data);
         if (parsed) return parsed.name;

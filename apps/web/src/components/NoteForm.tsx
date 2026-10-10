@@ -178,7 +178,7 @@ export default function NoteForm({ initial, noteId }: { initial?: NoteFormValues
 
         <fieldset className="flex flex-col gap-4 rounded-[20px] border border-line bg-card p-4 sm:p-5">
           <legend className={legend}>Dokumen pendukung</legend>
-          <label htmlFor="dokumen" className="relative flex cursor-pointer flex-col items-center gap-1.5 rounded-2xl border-[1.5px] border-dashed border-[#4a3a7a] bg-[#1a1730] p-5 text-center sm:p-6">
+          <label htmlFor="dokumen" className="relative flex cursor-pointer flex-col items-center gap-1.5 rounded-2xl border-[1.5px] border-dashed border-line2 bg-raised p-5 text-center sm:p-6">
             <span className="text-sm font-medium">Upload kuitansi, invoice, atau kontrak</span>
             <span className="text-xs text-faint">PDF, JPG, atau PNG · maks 10 MB per file · maks 5 file</span>
             <input id="dokumen" type="file" multiple accept=".pdf,.jpg,.jpeg,.png" className="sr-only" onChange={(e) => setFiles(Array.from(e.target.files ?? []).slice(0, 5))} />

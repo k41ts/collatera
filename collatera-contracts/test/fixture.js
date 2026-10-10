@@ -16,7 +16,7 @@ const Status = { NONE: 0, ACTIVE: 1, OVERDUE: 2, PAID: 3, DISPUTED: 4, FROZEN: 5
 async function deployAll() {
   const [admin, creditor, debtor, relayer, freezer, stranger] = await ethers.getSigners();
   const idrx = await ethers.deployContract("MockIDRX", [DECIMALS, admin.address, IDR(10_000_000)]);
-  const forwarder = await ethers.deployContract("PiutangForwarder");
+  const forwarder = await ethers.deployContract("CollateraForwarder");
   const debtNote = await ethers.deployContract("DebtNote");
   const manager = await ethers.deployContract("DebtManager", [
     debtNote.target,

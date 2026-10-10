@@ -1,25 +1,26 @@
 import Link from "next/link";
 import type { ComponentProps, ReactNode } from "react";
 
+// Tanpa warna: status dibedakan dari bentuk pill (isi hitam = mendesak, outline = menunggu, abu = berjalan/selesai).
 export const STATUS: Record<string, { label: string; cls: string }> = {
-  DRAFT: { label: "Draft", cls: "bg-line text-soft" },
-  PENDING_SIGNATURE: { label: "Tanda tangan", cls: "bg-peach text-peach-ink" },
-  AWAITING_DISBURSEMENT: { label: "Pencairan", cls: "bg-butter text-butter-ink" },
-  ACTIVE: { label: "Aktif", cls: "bg-mint text-mint-ink" },
-  OVERDUE: { label: "Terlambat", cls: "bg-rasp text-white" },
-  DISPUTED: { label: "Sengketa", cls: "bg-pink text-pink-ink" },
-  FROZEN: { label: "Dibekukan", cls: "bg-cyan text-cyan-ink" },
-  PAID: { label: "Lunas", cls: "bg-lav text-lav-ink" },
-  REJECTED: { label: "Ditolak", cls: "bg-rasp-soft text-pink" },
-  CANCELLED: { label: "Dibatalkan", cls: "bg-rasp-soft text-pink" },
+  DRAFT: { label: "Draft", cls: "bg-raised text-muted" },
+  PENDING_SIGNATURE: { label: "Tanda tangan", cls: "border-[1.5px] border-ink text-ink" },
+  AWAITING_DISBURSEMENT: { label: "Pencairan", cls: "border-[1.5px] border-dashed border-ink text-ink" },
+  ACTIVE: { label: "Aktif", cls: "bg-bubble text-ink" },
+  OVERDUE: { label: "Terlambat", cls: "bg-ink text-white" },
+  DISPUTED: { label: "Sengketa", cls: "bg-[#3a3a3a] text-white" },
+  FROZEN: { label: "Dibekukan", cls: "border-[1.5px] border-[#3a3a3a] bg-[#3a3a3a]/10 text-ink" },
+  PAID: { label: "Lunas", cls: "bg-raised text-muted" },
+  REJECTED: { label: "Ditolak", cls: "bg-raised text-muted line-through" },
+  CANCELLED: { label: "Dibatalkan", cls: "bg-raised text-muted line-through" },
 };
 
 export function StatusPill({ status }: { status: string }) {
-  const s = STATUS[status] ?? { label: status, cls: "bg-line text-soft" };
-  return <span className={`inline-block whitespace-nowrap rounded-md px-2.5 py-1 text-[11px] font-semibold tracking-wide ${s.cls}`}>{s.label}</span>;
+  const s = STATUS[status] ?? { label: status, cls: "bg-raised text-muted" };
+  return <span className={`inline-block whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-bold tracking-wide ${s.cls}`}>{s.label}</span>;
 }
 
-const AV = ["bg-lav text-lav-ink", "bg-mint text-mint-ink", "bg-butter text-butter-ink", "bg-cyan text-cyan-ink", "bg-pink text-pink-ink", "bg-peach text-peach-ink"];
+const AV = ["bg-ink text-white ring-1 ring-white/40", "bg-bubble text-ink", "bg-[#3a3a3a] text-white", "bg-raised text-ink border border-line2"];
 
 export function Avatar({ name, seed, size = "md" }: { name: string; seed?: string; size?: "sm" | "md" | "lg" }) {
   const initials = name.replace(/^0x/, "").split(/\s+/).map((w) => w[0]).slice(0, 2).join("").toUpperCase() || "?";
@@ -30,14 +31,14 @@ export function Avatar({ name, seed, size = "md" }: { name: string; seed?: strin
 
 type BtnVariant = "primary" | "secondary" | "danger" | "rasp" | "ghost";
 const BTN: Record<BtnVariant, string> = {
-  primary: "bg-brand text-white hover:bg-[#8d35ea]",
-  secondary: "border border-line2 text-white hover:border-faint",
-  danger: "bg-rasp-soft text-pink hover:bg-[#3a1626]",
-  rasp: "bg-rasp text-white hover:bg-[#ff1f80]",
-  ghost: "text-lav hover:text-white",
+  primary: "bg-brand text-white hover:bg-[#2a2a2a]",
+  secondary: "border-[1.5px] border-line2 bg-card text-ink hover:border-ink",
+  danger: "border-[1.5px] border-ink text-ink hover:bg-ink hover:text-white",
+  rasp: "bg-rasp text-white hover:bg-[#2a2a2a]",
+  ghost: "text-ink underline-offset-4 hover:underline",
 };
 export const btn = (v: BtnVariant = "primary", extra = "") =>
-  `inline-flex min-h-11 items-center justify-center gap-2 rounded-full px-5 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${BTN[v]} ${extra}`;
+  `inline-flex min-h-11 items-center justify-center gap-2 rounded-full px-5 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${BTN[v]} ${extra}`;
 
 export function Button({ variant = "primary", className = "", ...p }: ComponentProps<"button"> & { variant?: BtnVariant }) {
   return <button type="button" {...p} className={btn(variant, className)} />;
@@ -49,7 +50,7 @@ export function LinkButton({ variant = "primary", className = "", ...p }: Compon
 
 export function Card({ className = "", children, ...p }: ComponentProps<"section">) {
   return (
-    <section {...p} className={`rounded-[20px] border border-line bg-card p-5 ${className}`}>
+    <section {...p} className={`rounded-[22px] bg-card p-5 ${className}`}>
       {children}
     </section>
   );
@@ -60,7 +61,7 @@ export function Chip({ children, className = "" }: { children: ReactNode; classN
 }
 
 export const input =
-  "w-full min-h-[46px] rounded-xl border border-line2 bg-midnight px-3.5 text-[15px] text-white focus:border-brand outline-none";
+  "w-full min-h-[46px] rounded-[14px] border border-line2 bg-[#f6f6f6] px-3.5 text-[15px] text-ink focus:border-ink focus:bg-card outline-none";
 
 export function Field({ label, htmlFor, hint, children }: { label: string; htmlFor: string; hint?: string; children: ReactNode }) {
   return (
@@ -75,7 +76,7 @@ export function Field({ label, htmlFor, hint, children }: { label: string; htmlF
 }
 
 export function Notice({ tone = "info", children }: { tone?: "info" | "ok" | "error" | "warn"; children: ReactNode }) {
-  const cls = { info: "bg-raised text-muted", ok: "bg-[#1e3324] text-mint", error: "bg-rasp-soft text-pink", warn: "bg-[#3a3017] text-butter" }[tone];
+  const cls = { info: "bg-raised text-muted", ok: "border border-line2 bg-card text-ink", error: "border-[1.5px] border-ink bg-card text-ink", warn: "border-[1.5px] border-dashed border-ink bg-card text-ink" }[tone];
   return (
     <div role={tone === "error" ? "alert" : "status"} className={`rounded-xl px-3.5 py-3 text-sm leading-relaxed ${cls}`}>
       {children}
@@ -83,18 +84,18 @@ export function Notice({ tone = "info", children }: { tone?: "info" | "ok" | "er
   );
 }
 
+/** Logo Collatera: dua mata rantai miring yang saling mengunci. Mengikuti warna teks (currentColor). */
 export function Logo({ size = 30 }: { size?: number }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 36 36" aria-hidden>
-      <rect x="3" y="9" width="18" height="18" rx="7" fill="none" stroke="#7F24DD" strokeWidth="4" />
-      <rect x="15" y="9" width="18" height="18" rx="7" fill="none" stroke="#FB006D" strokeWidth="4" />
-      <circle cx="18" cy="18" r="3" fill="#F4C842" />
+    <svg width={size} height={size} viewBox="0 0 48 48" fill="none" aria-hidden>
+      <path d="M7 17 L24 8.5 L24 26 L7 34.5 Z" stroke="currentColor" strokeWidth="6" strokeLinejoin="round" />
+      <path d="M24 22 L41 13.5 L41 31 L24 39.5 Z" stroke="currentColor" strokeWidth="6" strokeLinejoin="round" />
     </svg>
   );
 }
 
 export function Spinner() {
-  return <span aria-hidden className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />;
+  return <span aria-hidden className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-current/30 border-t-current" />;
 }
 
 export const fmtDate = (d: string | Date | null | undefined, withTime = false) =>

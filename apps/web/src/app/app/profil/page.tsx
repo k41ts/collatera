@@ -1,11 +1,12 @@
 "use client";
 import { useEffect, useState } from "react";
-import { Avatar, Button, Card, Field, Notice, Spinner, fmtDate, input } from "@/components/ui";
+import { Avatar, Button, Card, Field, Spinner, fmtDate, input } from "@/components/ui";
 import { api } from "@/lib/client";
 import { useApi, type Me } from "@/lib/hooks";
 import { fmtRp } from "@/lib/money";
 import { ADDR, txUrl } from "@/lib/chain/config";
 import { ProfileSkeleton } from "@/components/Skeleton";
+import { useToast } from "@/components/Toast";
 
 export default function ProfilePage() {
   const { data, refresh } = useApi<Me>("/api/me");
@@ -15,8 +16,7 @@ export default function ProfilePage() {
   const [code, setCode] = useState("");
   const [otpSent, setOtpSent] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
-  const [msg, setMsg] = useState<{ tone: "ok" | "error" | "info"; text: string; tx?: string } | null>(null);
-  const [copied, setCopied] = useState(false);
+  const toast = useToast();
 
   useEffect(() => {
     if (!data) return;
@@ -30,13 +30,14 @@ export default function ProfilePage() {
 
   async function run(key: string, fn: () => Promise<unknown>, ok: string, tx?: (r: unknown) => string | undefined) {
     setBusy(key);
-    setMsg(null);
     try {
       const r = await fn();
-      setMsg({ tone: "ok", text: ok, tx: tx?.(r) });
+      const hash = tx?.(r);
+      const link = hash ? txUrl(hash) : null;
+      toast.success(ok, link ? { link: { href: link, label: "Lihat transaksi ↗", external: true } } : undefined);
       await refresh();
     } catch (e) {
-      setMsg({ tone: "error", text: (e as Error).message });
+      toast.error("Gagal menyimpan", { description: (e as Error).message });
     } finally {
       setBusy(null);
     }
@@ -71,7 +72,6 @@ export default function ProfilePage() {
         </dl>
       </section>
 
-      {msg && <Notice tone={msg.tone}>{msg.text} {msg.tx && txUrl(msg.tx) && <a href={txUrl(msg.tx)!} target="_blank" rel="noreferrer" className="underline">Lihat transaksi ↗</a>}</Notice>}
 
       <div className="flex flex-wrap items-start gap-5">
         <div className="flex min-w-0 flex-[999_1_480px] flex-col gap-5">
@@ -121,7 +121,7 @@ export default function ProfilePage() {
                 <span className="text-xs text-faint">Alamat wallet login</span>
                 <span className="font-mono text-sm [overflow-wrap:anywhere]">{u.wallet}</span>
               </div>
-              <Button variant="secondary" className="w-full sm:w-auto" onClick={async () => { try { await navigator.clipboard.writeText(u.wallet); } catch { /* abaikan */ } setCopied(true); }}>{copied ? "Tersalin" : "Salin alamat"}</Button>
+              <Button variant="secondary" className="w-full sm:w-auto" onClick={async () => { try { await navigator.clipboard.writeText(u.wallet); toast.success("Alamat wallet disalin", { description: `${u.wallet.slice(0, 6)}…${u.wallet.slice(-4)}` }); } catch { toast.error("Gagal menyalin alamat", { description: "Salin manual dari teks di atas." }); } }}>Salin alamat</Button>
             </div>
             <dl className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,180px),1fr))] gap-3 text-[13px]">
               <div><dt className="text-xs text-faint">Saldo IDRX uji</dt><dd className="mt-0.5 font-medium tabular-nums">{fmtRp(data.balance)}</dd></div>

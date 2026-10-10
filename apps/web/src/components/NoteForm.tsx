@@ -2,9 +2,10 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { isAddress } from "ethers";
-import { Button, Field, Notice, Spinner, input } from "./ui";
+import { Button, Field, Spinner, input } from "./ui";
 import { api } from "@/lib/client";
 import { fmtRpWhole } from "@/lib/money";
+import { useToast } from "./Toast";
 
 export type NoteFormValues = {
   role: "creditor" | "debtor";
@@ -43,10 +44,10 @@ export function defaultValues(): NoteFormValues {
 
 export default function NoteForm({ initial, noteId }: { initial?: NoteFormValues; noteId?: string }) {
   const router = useRouter();
+  const toast = useToast();
   const [v, setV] = useState<NoteFormValues>(() => initial ?? defaultValues());
   const [files, setFiles] = useState<File[]>([]);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const set = <K extends keyof NoteFormValues>(k: K, val: NoteFormValues[K]) => setV((p) => ({ ...p, [k]: val }));
 
   const principal = BigInt(v.principal.replace(/\D/g, "") || "0");
@@ -71,8 +72,11 @@ export default function NoteForm({ initial, noteId }: { initial?: NoteFormValues
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    setError(null);
-    if (!walletOk) return setError("Alamat wallet pihak lawan tidak valid (0x… 42 karakter).");
+    if (!walletOk) {
+      toast.error("Alamat wallet tidak valid", { description: "Isi alamat wallet pihak lawan dengan format 0x… (42 karakter)." });
+      document.getElementById("wallet")?.focus();
+      return;
+    }
     setBusy(true);
     try {
       const body = { ...v, principal: v.principal.replace(/\D/g, ""), interestValue: v.interestType === "flat" ? v.interestValue.replace(/\D/g, "") || "0" : v.interestValue || "0", counterpartyWallet: v.counterpartyWallet.trim() };
@@ -84,10 +88,15 @@ export default function NoteForm({ initial, noteId }: { initial?: NoteFormValues
         fd.append("file", f);
         await api(`/api/notes/${id}/documents`, { method: "POST", body: fd });
       }
+      toast.success(noteId ? "Perubahan draft disimpan" : "Draft berhasil disimpan", {
+        description: files.length
+          ? `${files.length} dokumen ikut diunggah. Cek lagi lalu kirim untuk tanda tangan.`
+          : "Cek lagi isinya, lalu kirim untuk tanda tangan.",
+      });
       router.push(`/app/piutang/${id}`);
       router.refresh();
     } catch (err) {
-      setError((err as Error).message);
+      toast.error(noteId ? "Perubahan draft gagal disimpan" : "Draft gagal disimpan", { description: (err as Error).message });
       setBusy(false);
     }
   }
@@ -240,7 +249,6 @@ export default function NoteForm({ initial, noteId }: { initial?: NoteFormValues
           </ol>
           <span className="text-xs text-brand-tint">{v.lateFee ? "Denda 2% per bulan dari cicilan yang terlambat." : "Tanpa denda keterlambatan."}</span>
         </section>
-        {error && <Notice tone="error">{error}</Notice>}
         <Button type="submit" variant="rasp" disabled={busy} className="min-h-[52px] flex-none font-semibold max-xl:hidden">
           {busy && <Spinner />} {noteId ? "Simpan perubahan" : "Simpan draft"}
         </Button>

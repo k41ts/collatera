@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { JetBrains_Mono, Poppins } from "next/font/google";
 import "./globals.css";
+import { ToastProvider } from "@/components/Toast";
 
 const poppins = Poppins({ subsets: ["latin"], weight: ["400", "500", "600"], variable: "--font-poppins" });
 const mono = JetBrains_Mono({ subsets: ["latin"], weight: ["400"], variable: "--font-mono-face" });
@@ -13,7 +14,9 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="id">
-      <body className={`${poppins.variable} ${mono.variable} font-sans antialiased`}>{children}</body>
+      <body className={`${poppins.variable} ${mono.variable} font-sans antialiased`}>
+        <ToastProvider>{children}</ToastProvider>
+      </body>
     </html>
   );
 }

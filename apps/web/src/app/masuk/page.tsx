@@ -4,12 +4,13 @@ import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button, Logo, Notice, Spinner } from "@/components/ui";
 import { hasWallet, loginWithWallet } from "@/lib/client";
+import { useToast } from "@/components/Toast";
 
 function LoginInner() {
   const router = useRouter();
+  const toast = useToast();
   const next = useSearchParams().get("next");
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [walletPresent, setWalletPresent] = useState(true);
 
   useEffect(() => {
@@ -18,14 +19,15 @@ function LoginInner() {
 
   async function login() {
     setBusy(true);
-    setError(null);
     try {
       await loginWithWallet();
+      toast.success("Berhasil masuk", { description: "Selamat datang di PiutangChain." });
       router.push(next && next.startsWith("/") ? next : "/app");
       router.refresh();
     } catch (e) {
       const msg = (e as { code?: string | number; message: string });
-      setError(msg.code === 4001 || msg.code === "ACTION_REJECTED" ? "Tanda tangan login dibatalkan." : msg.message);
+      if (msg.code === 4001 || msg.code === "ACTION_REJECTED") toast.info("Login dibatalkan", { description: "Tanda tangan login ditolak di MetaMask." });
+      else toast.error("Gagal masuk", { description: msg.message });
     } finally {
       setBusy(false);
     }
@@ -54,7 +56,6 @@ function LoginInner() {
             <a href="https://metamask.io/download/" target="_blank" rel="noreferrer" className="underline">metamask.io</a>, lalu muat ulang halaman.
           </Notice>
         )}
-        {error && <Notice tone="error">{error}</Notice>}
         <p className="text-xs leading-relaxed text-faint">Login email/Google (embedded wallet) menyusul. Belum punya Sepolia ETH tidak masalah: semua transaksi dibayar relayer.</p>
       </div>
     </div>
